@@ -11,9 +11,10 @@
 
 (function() {
     'use strict';
-    console.log("My Tamper Script v0.0.2 loaded");
+    console.log("My Tamper Script v0.0.5 loaded");
     // ТВОЙ КОД ЗДЕСЬ
 })();
+
 
 
 
