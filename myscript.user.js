@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.2
+// $10.0.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -14,3 +14,4 @@
     console.log("My Tamper Script v0.0.2 loaded");
     // ТВОЙ КОД ЗДЕСЬ
 })();
+
