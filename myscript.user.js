@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.12
+// @version      0.0.13
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -37,12 +37,28 @@
     const autoScrollDebounceMap = new Map();
 
     // Стоп-слова для строгого режима фраз
-    const STOPWORDS = new Set(['в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про']);
+    // Стоп-слова для строгого режима фраз и автоматического переключения в strict
+    const STOPWORDS = new Set([
+        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
+        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
+        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'что', 'чем', 'тем', 'все', 'всё',
+        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та'
+    ]);
 
-    // Окончания для стеммера
-    const ENDINGS_3 = ['ами', 'ами', 'ями', 'ией', 'его', 'ого', 'ему', 'ому', 'ими', 'ыми', 'ать', 'ить', 'еть', 'ать', 'ешь', 'ишь', 'ете', 'ите', 'ают', 'ют', 'ешь', 'ишь'];
-    const ENDINGS_2 = ['ам', 'ем', 'ом', 'ах', 'ях', 'ах', 'ах', 'ой', 'ей', 'ий', 'ый', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ми', 'ть', 'ют', 'ут', 'ет', 'ат', 'ят', 'ит', 'ла', 'ло', 'ли'];
-    const ENDINGS_1 = ['а', 'е', 'и', 'о', 'у', 'ы', 'я', 'й', 'ь'];
+    // Regex patterns for Porter Stemmer
+    const RE_PERFECTIVEGERUND = /((ив|ивши|ившись|ыв|ывши|ывшись)|((?<=[ая])(в|вши|вшись)))$/;
+    const RE_REFLEXIVE = /(с[яь])$/;
+    const RE_ADJECTIVE = /((ее|ие|ые|ое|ими|ыми|ей|ий|ый|ой|ем|им|ым|ом|его|ого|ему|ому|их|ых|ую|юю|ая|яя|ою|ею)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
+    const RE_PARTICIPLE = /((ивш|ывш|ующ)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
+    const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
+    const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
+    const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
+    const RE_DERIVATIONAL = /[^аеиоуыэюя][аеиоуыэюя]+[^аеиоуыэюя]+[аеиоуыэюя].*(?<=о)сть?$/;
+    const RE_DERIVATIONAL_SIMPLE = /ость?$/;
+    const RE_SUPERLATIVE = /(ейше|ейш)$/;
+    const RE_I = /и$/;
+    const RE_P = /ь$/;
+    const RE_NN = /нн$/;
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
@@ -141,18 +157,56 @@
         return params.get('cid') || 'unknown';
     }
 
-    function stemWord(raw) {
-        let word = raw.toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]/gi, '');
-        if (word.length <= 3) return word;
+    function stemWord(word) {
+        word = word.toLowerCase().replace(/ё/g, 'е');
+        // RV region extraction
+        const match = RE_RVRE.exec(word);
+        if (!match || match.length < 3) {
+            return word;
+        }
 
-        for (const endings of [ENDINGS_3, ENDINGS_2, ENDINGS_1]) {
-            for (const end of endings) {
-                if (word.endsWith(end) && word.length > end.length + 2) {
-                    return word.slice(0, -end.length);
+        const head = match[1];
+        let rv = match[2];
+
+        // Step 1: Perfective Gerund
+        const tempRv = rv.replace(RE_PERFECTIVEGERUND, '');
+        if (tempRv !== rv) {
+            rv = tempRv;
+        } else {
+            // Step 2: Reflexive
+            rv = rv.replace(RE_REFLEXIVE, '');
+
+            // Step 3: Adjective or Verb
+            const tempRv2 = rv.replace(RE_ADJECTIVE, '');
+            if (tempRv2 !== rv) {
+                rv = tempRv2;
+                rv = rv.replace(RE_PARTICIPLE, '');
+            } else {
+                const tempRv3 = rv.replace(RE_VERB, '');
+                if (tempRv3 !== rv) {
+                    rv = tempRv3;
+                } else {
+                    rv = rv.replace(RE_NOUN, '');
                 }
             }
         }
-        return word;
+
+        // Step 4: I
+        rv = rv.replace(RE_I, '');
+
+        // Step 5: Derivational
+        rv = rv.replace(RE_DERIVATIONAL_SIMPLE, '');
+
+        // Step 6: NN
+        rv = rv.replace(RE_NN, 'н');
+
+        // Step 7: Superlative
+        rv = rv.replace(RE_SUPERLATIVE, '');
+
+        // Step 8: P
+        rv = rv.replace(RE_P, '');
+
+        return head + rv;
     }
 
     function getTextContent(node) {
@@ -258,11 +312,8 @@
                             span.dataset.stem = stemWord(word);
                             span.dataset.rowId = rowId;
 
-                            span.addEventListener('click', onWordClick);
-                            span.addEventListener('dblclick', onWordDoubleClick);
-                            span.addEventListener('mouseenter', onWordHover);
-                            span.addEventListener('mouseleave', onWordHoverOut);
-
+                            span.dataset.rowId = rowId;
+                            // Listeners removed for delegation
                             wordSpans.push(span);
                             fragment.appendChild(span);
                         } else {
@@ -316,11 +367,11 @@
 
     // ==================== ВЗАИМОДЕЙСТВИЕ С СЛОВАМИ ====================
 
-    function onWordClick(e) {
+    function onWordClick(e, targetSpan) {
         e.stopPropagation();
-        e.stopImmediatePropagation();
+        // e.stopImmediatePropagation(); // Не нужно при делегировании
 
-        const span = e.currentTarget;
+        const span = targetSpan;
         const stem = span.dataset.stem;
         const wordLower = span.dataset.wordLower;
         const word = span.dataset.word;
@@ -346,11 +397,11 @@
         debounceAutoScroll(rowId, 180);
     }
 
-    function onWordDoubleClick(e) {
+    function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
-        e.stopImmediatePropagation();
+        // e.stopImmediatePropagation();
 
-        const span = e.currentTarget;
+        const span = targetSpan;
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
 
@@ -421,6 +472,13 @@
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
+        // Если слово является стоп-словом, принудительно используем строгий режим
+        const wordLower = word.toLowerCase();
+        if (STOPWORDS.has(wordLower)) {
+            toggleStrictWord(span, wordLower, word, rowId);
+            return;
+        }
+
         const key = `soft:${stem}`;
 
         if (selections.has(key)) {
@@ -498,8 +556,8 @@
 
     // ==================== TOOLTIP ====================
 
-    function onWordHover(e) {
-        const span = e.currentTarget;
+    function onWordHover(e, targetSpan) {
+        const span = targetSpan;
         tooltipTimeout = setTimeout(() => {
             const tooltip = createTooltip(span);
             if (tooltip) {
@@ -512,7 +570,7 @@
         }, 500);
     }
 
-    function onWordHoverOut(e) {
+    function onWordHoverOut(e, targetSpan) {
         clearTimeout(tooltipTimeout);
         const existing = document.querySelector('.yd-tooltip');
         if (existing) existing.remove();
@@ -1320,6 +1378,38 @@
 
     // ==================== ОТПРАВКА ====================
 
+    function waitForElement(target, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            const check = () => {
+                if (typeof target === 'string') {
+                    const el = document.querySelector(target);
+                    if (el) return el;
+                } else if (typeof target === 'function') {
+                    return target();
+                }
+                return null;
+            };
+
+            const res = check();
+            if (res) return resolve(res);
+
+            const observer = new MutationObserver(() => {
+                const res = check();
+                if (res) {
+                    observer.disconnect();
+                    resolve(res);
+                }
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            setTimeout(() => {
+                observer.disconnect();
+                reject(new Error('Timeout waiting for element'));
+            }, timeout);
+        });
+    }
+
     async function sendToMinusPhrases() {
         if (selections.size === 0) {
             showYdsqNotification('Список минусов пуст', 'warn');
@@ -1328,8 +1418,6 @@
 
         if (isSending) return;
         isSending = true;
-
-        await new Promise(resolve => setTimeout(resolve, 150));
 
         const values = [];
         const unassigned = [];
@@ -1362,7 +1450,14 @@
 
         addButton.click();
 
-        await waitForMinusModal(values);
+        try {
+            const modal = await waitForElement(findMinusModal, 5000);
+            await fillMinusModal(modal, values);
+        } catch (err) {
+            console.error('[YD-SQ]', err);
+            showYdsqNotification('Окно добавления не появилось', 'error');
+            isSending = false;
+        }
     }
 
     function findAddToMinusPhrasesButton() {
@@ -1374,21 +1469,6 @@
             }
         }
         return null;
-    }
-
-    async function waitForMinusModal(values, attempt = 0) {
-        if (attempt >= 50) {
-            showYdsqNotification('Окно не обнаружено', 'error');
-            isSending = false;
-            return;
-        }
-
-        const modal = findMinusModal();
-        if (modal) {
-            await fillMinusModal(modal, values);
-        } else {
-            setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        }
     }
 
     function findMinusModal() {
@@ -1418,30 +1498,20 @@
             }
         }
 
-        await waitForInputFields(modal, values, 0);
-    }
+        try {
+            const inputs = await waitForElement(() => {
+                const textareas = Array.from(modal.querySelectorAll('textarea'));
+                const textInputs = Array.from(modal.querySelectorAll('input[type="text"]'));
+                const contentEditables = Array.from(modal.querySelectorAll('[contenteditable="true"]'));
+                const all = [...textareas, ...textInputs, ...contentEditables];
+                const visible = all.filter(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                });
+                return visible.length > 0 ? visible : null;
+            }, 3000);
 
-    async function waitForInputFields(modal, values, attempt) {
-        if (attempt > 12) {
-            showYdsqNotification('Поля ввода не найдены', 'error');
-            isSending = false;
-            return;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        const textareas = Array.from(modal.querySelectorAll('textarea'));
-        const textInputs = Array.from(modal.querySelectorAll('input[type="text"]'));
-        const contentEditables = Array.from(modal.querySelectorAll('[contenteditable="true"]'));
-
-        const allInputs = [...textareas, ...textInputs, ...contentEditables];
-        const visible = allInputs.filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-        });
-
-        if (visible.length > 0) {
-            fillFields(visible, values);
+            fillFields(inputs, values);
 
             setTimeout(() => {
                 tryCloseResultPopup();
@@ -1457,8 +1527,11 @@
 
                 isSending = false;
             }, 1200);
-        } else {
-            await waitForInputFields(modal, values, attempt + 1);
+
+        } catch (err) {
+            console.error('[YD-SQ]', err);
+            showYdsqNotification('Поля ввода не найдены', 'error');
+            isSending = false;
         }
     }
 
@@ -1617,6 +1690,35 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && phraseInProgress) {
                 finalizePhraseBuilding(false);
+            }
+        });
+
+        // Делегирование событий для слов
+        document.body.addEventListener('click', (e) => {
+            const target = e.target.closest('.yd-word');
+            if (target) {
+                onWordClick(e, target);
+            }
+        });
+
+        document.body.addEventListener('dblclick', (e) => {
+            const target = e.target.closest('.yd-word');
+            if (target) {
+                onWordDoubleClick(e, target);
+            }
+        });
+
+        document.body.addEventListener('mouseover', (e) => {
+            const target = e.target.closest('.yd-word');
+            if (target) {
+                onWordHover(e, target);
+            }
+        });
+
+        document.body.addEventListener('mouseout', (e) => {
+            const target = e.target.closest('.yd-word');
+            if (target) {
+                onWordHoverOut(e, target);
             }
         });
     }
