@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.8
+// @version      0.0.9
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -187,8 +187,14 @@
             rows = Array.from(table.querySelectorAll('tr, [role="row"]'));
         }
 
-        // Фильтруем шапку: исключаем thead и строки с th
-        rows = rows.filter(row => !row.closest('thead') && !row.querySelector('th'));
+        // Фильтруем шапку: исключаем thead, строки с th и строки с текстом заголовка
+        rows = rows.filter(row => {
+            if (row.closest('thead')) return false;
+            if (row.querySelector('th')) return false;
+            // Дополнительная проверка: если текст строки содержит "Поисковый запрос", считаем её шапкой
+            if ((row.textContent || '').toLowerCase().includes('поисковый запрос')) return false;
+            return true;
+        });
 
         let rowCounter = 0;
 
