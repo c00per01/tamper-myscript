@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.10
+// @version      0.0.11
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1968,18 +1968,11 @@
             }
 
             .yd-imported-minus {
-                background: #fafafa !important;
-                border-bottom: 1px dashed #ccc;
-                opacity: 0.7;
-                position: relative;
-            }
-
-            .yd-imported-minus::after {
-                content: '📥';
-                position: absolute;
-                right: -8px;
-                top: -2px;
-                font-size: 9px;
+                background: rgba(0, 0, 0, 0.04) !important;
+                color: #aaa !important;
+                text-decoration: line-through;
+                text-decoration-color: rgba(0, 0, 0, 0.1);
+                opacity: 0.8;
             }
 
             /* COPY КНОПКА */
