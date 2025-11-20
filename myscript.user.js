@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.9
+// @version      0.0.10
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -285,7 +285,7 @@
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>`;
-        btn.title = 'Скопировать весь запрос';
+        btn.title = 'Скопировать запрос';
 
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -1984,10 +1984,11 @@
 
             /* COPY КНОПКА */
             .yd-copy-query-btn {
-                position: absolute;
-                right: 4px;
-                top: 50%;
-                transform: translateY(-50%);
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                margin-left: 8px;
+                vertical-align: middle;
                 background: rgba(255, 255, 255, 0.9);
                 border: 1px solid #ddd;
                 border-radius: 4px;
@@ -1996,9 +1997,6 @@
                 opacity: 0;
                 transition: opacity 0.2s, background 0.2s, border-color 0.2s;
                 z-index: 10;
-                display: flex;
-                align-items: center;
-                justify-content: center;
                 color: #666;
                 width: 24px;
                 height: 24px;
