@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.5
+// @version      0.0.6
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -9,9 +9,9 @@
 // @downloadURL  https://raw.githubusercontent.com/c00per01/tamper-myscript/main/myscript.user.js
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
-    console.log("My Tamper Script v0.0.5 loaded");
+    console.log("Antigravity deployment confirmed! New Feature Test.");
     // ТВОЙ КОД ЗДЕСЬ
 })();
 
