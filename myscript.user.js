@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.13
+// @version      0.0.14
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -877,72 +877,197 @@
         syncLocalToGlobal();
     }
 
-    function parseMinusesFromText(text) {
-        const results = [];
-        const usedRanges = [];
+    // ==================== SMART DATA PIPELINE ====================
 
-        const patterns = [
-            { regex: /-\[([^\]]+)\]/g, type: 'bracket' },
-            { regex: /-"([^"]+)"/g, type: 'quote' },
-            { regex: /-!([^\s]+)/g, type: 'strict' },
-            { regex: /-([^\s-]+)/g, type: null }
-        ];
+    function normalizeMinusInput(rawInput) {
+        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+        // Разделители: новая строка, табуляция, запятая, точка с запятой
+        const parts = rawString.split(/[\n\t,;]+/);
+        const normalized = new Set();
 
-        for (const pattern of patterns) {
-            const regex = new RegExp(pattern.regex);
-            let match;
+        for (let part of parts) {
+            part = part.trim();
+            if (!part) continue;
 
-            while ((match = regex.exec(text)) !== null) {
-                const start = match.index;
-                const end = start + match[0].length;
+            // Удаляем ведущий дефис, если он есть (формат Яндекса: -слово)
+            // Но сохраняем структуру фразы
+            if (part.startsWith('-')) {
+                part = part.substring(1);
+            }
 
-                const overlaps = usedRanges.some(range =>
-                    (start >= range.start && start < range.end) ||
-                    (end > range.start && end <= range.end)
-                );
+            part = part.trim();
+            if (!part) continue;
 
-                if (!overlaps) {
-                    results.push({
-                        raw: match[1].trim(),
-                        matchType: pattern.type
-                    });
-                    usedRanges.push({ start, end });
+            normalized.add(part);
+        }
+        return normalized;
+    }
+
+    function validateMinusSet(newSet, existingSet) {
+        const result = {
+            valid: true,
+            filteredSet: new Set(),
+            warnings: [],
+            clipboardCopyNeeded: false
+        };
+
+        // 1. Дубликаты
+        for (const item of newSet) {
+            if (!existingSet.has(item)) {
+                result.filteredSet.add(item);
+            }
+        }
+
+        if (result.filteredSet.size === 0) {
+            return result;
+        }
+
+        // 2. Лимит длины (4000 символов)
+        const currentContent = Array.from(existingSet).join('\n');
+        const newContent = Array.from(result.filteredSet).join('\n');
+
+        if ((currentContent.length + newContent.length + 10) > 4000) {
+            result.valid = false;
+            result.clipboardCopyNeeded = true;
+            result.warnings.push('Превышен лимит поля (4000 симв).');
+            return result;
+        }
+
+        // 3. Вложенность
+        const allItems = new Set([...existingSet, ...result.filteredSet]);
+
+        for (const phrase of result.filteredSet) {
+            // Разбиваем фразу на слова
+            const words = phrase.split(/[\s+]+/);
+            if (words.length > 1) {
+                for (const word of words) {
+                    const cleanWord = word.replace(/[!\[\]""]/g, '').toLowerCase();
+                    // Проверяем, есть ли это слово как отдельный минус
+                    if (allItems.has(cleanWord) || allItems.has('!' + cleanWord)) {
+                        result.warnings.push(`Конфликт: фраза "${phrase}" содержит минус "${cleanWord}"`);
+                    }
                 }
             }
         }
 
-        return results;
+        return result;
+    }
+
+    async function smartAppendToField(input, newPhrasesSet) {
+        const currentVal = input.value || '';
+        const existingSet = normalizeMinusInput(currentVal);
+
+        const validation = validateMinusSet(newPhrasesSet, existingSet);
+
+        if (!validation.valid) {
+            if (validation.clipboardCopyNeeded) {
+                const textToCopy = Array.from(validation.filteredSet).join('\n');
+                await navigator.clipboard.writeText(textToCopy);
+                showYdsqNotification(validation.warnings.join('\n') + '\nСкопировано в буфер!', 'warn');
+            }
+            return false;
+        }
+
+        if (validation.warnings.length > 0) {
+            const proceed = confirm(`Обнаружены предупреждения:\n${validation.warnings.join('\n')}\n\nВсё равно добавить?`);
+            if (!proceed) return false;
+        }
+
+        if (validation.filteredSet.size === 0) {
+            return true; // Уже есть
+        }
+
+        // Слияние
+        const finalSet = new Set([...existingSet, ...validation.filteredSet]);
+        const separator = input.tagName === 'TEXTAREA' ? '\n' : ', ';
+        input.value = Array.from(finalSet).join(separator);
+
+        // События
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+        return true;
+    }
+
+    function reverseVisualSync(addedPhrasesSet) {
+        let addedCount = 0;
+
+        for (const raw of addedPhrasesSet) {
+            let type = 'soft-word';
+            let clean = raw;
+
+            if (raw.startsWith('!')) {
+                type = 'strict-word';
+                clean = raw.substring(1);
+            } else if (raw.startsWith('[') && raw.endsWith(']')) {
+                type = 'phrase';
+                clean = raw.slice(1, -1);
+            } else if (raw.startsWith('"') && raw.endsWith('"')) {
+                type = 'phrase';
+                clean = raw.slice(1, -1);
+            }
+
+            const stem = stemWord(clean);
+            const lower = clean.toLowerCase();
+
+            // Ищем в таблице
+            const span = wordSpans.find(s => {
+                if (type === 'strict-word') return s.dataset.wordLower === lower;
+                if (type === 'soft-word') return s.dataset.stem === stem;
+                return false;
+            });
+
+            if (span) {
+                const rowId = span.dataset.rowId;
+                // Проверяем, не выбрано ли уже
+                const key = type === 'strict-word' ? `strict:${lower}` : `soft:${stem}`;
+                if (!selections.has(key)) {
+                    if (type === 'strict-word') {
+                        toggleStrictWord(span, lower, clean, rowId);
+                    } else {
+                        toggleSoftWord(span, stem, clean, rowId);
+                    }
+                    addedCount++;
+                }
+            }
+        }
+
+        if (addedCount > 0) {
+            updateUI();
+        }
     }
 
     async function importMinusesFromClipboard() {
         try {
             const text = await navigator.clipboard.readText();
-            const items = parseMinusesFromText(text);
+            const newPhrases = normalizeMinusInput(text);
 
-            if (items.length === 0) {
+            if (newPhrases.size === 0) {
                 showYdsqNotification('В буфере не найдено минусов', 'warn');
                 return;
             }
 
-            const confirmed = confirm(`Загрузить ${items.length} минусов?\nЭто заменит текущие импортированные минусы.`);
+            const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены к текущему выбору.`);
             if (!confirmed) return;
 
-            importedMinuses = items.map(i => ({
-                id: `imp:${Date.now()}_${Math.random()}`,
-                raw: i.raw,
-                matchType: i.matchType,
-                source: 'manual_paste',
-                importedAt: Date.now(),
-                lastUpdated: Date.now(),
-                count: null
-            }));
+            reverseVisualSync(newPhrases);
 
-            pushUndo('import', `Загружено ${items.length} минусов из буфера`);
+            // Также добавляем в историю импорта (для отображения в списке "В кампании")
+            // Но теперь мы используем selections как основной источник правды
+            // Можно добавить в importedMinuses для истории
+            for (const phrase of newPhrases) {
+                importedMinuses.push({
+                    id: `imp:${Date.now()}_${Math.random()}`,
+                    raw: phrase,
+                    matchType: phrase.startsWith('!') ? 'strict' : null,
+                    importedAt: Date.now()
+                });
+            }
             syncLocalToGlobal();
-            updateHighlights();
-            updateUI();
+            updateHighlights(); // Обновить стили (серый цвет для imported)
 
-            showYdsqNotification(`Загружено ${items.length} минусов`, 'success');
+            showYdsqNotification(`Импортировано ${newPhrases.size} минусов`, 'success');
         } catch (err) {
             console.error('[YD-SQ] Ошибка импорта:', err);
             showYdsqNotification('Ошибка чтения буфера обмена', 'error');
@@ -1434,12 +1559,6 @@
             showYdsqNotification(`Внимание: ${unassigned.length} элементов не найдены на странице`, 'warn');
         }
 
-        if (values.length === 0) {
-            showYdsqNotification('Нет элементов для отправки', 'warn');
-            isSending = false;
-            return;
-        }
-
         // Найти кнопку "Добавить в минус-фразы"
         const addButton = findAddToMinusPhrasesButton();
         if (!addButton) {
@@ -1452,53 +1571,23 @@
 
         try {
             const modal = await waitForElement(findMinusModal, 5000);
-            await fillMinusModal(modal, values);
-        } catch (err) {
-            console.error('[YD-SQ]', err);
-            showYdsqNotification('Окно добавления не появилось', 'error');
-            isSending = false;
-        }
-    }
 
-    function findAddToMinusPhrasesButton() {
-        const buttons = document.querySelectorAll('button, [role="button"]');
-        for (const btn of buttons) {
-            const text = btn.textContent || '';
-            if (text.includes('минус-фраз') || text.includes('Минус-фраз')) {
-                return btn;
+            // Установить "на кампанию"
+            const selects = modal.querySelectorAll('select');
+            for (const select of selects) {
+                const options = Array.from(select.options);
+                const campaignOption = options.find(opt =>
+                    opt.textContent.includes('на кампанию') || opt.textContent.includes('кампани')
+                );
+
+                if (campaignOption) {
+                    select.value = campaignOption.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             }
-        }
-        return null;
-    }
 
-    function findMinusModal() {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        for (const dialog of dialogs) {
-            const text = dialog.textContent || '';
-            if (text.includes('Добавление минус-фраз') || text.includes('Добавление минус')) {
-                return dialog;
-            }
-        }
-        return null;
-    }
-
-    async function fillMinusModal(modal, values) {
-        // Установить "на кампанию"
-        const selects = modal.querySelectorAll('select');
-        for (const select of selects) {
-            const options = Array.from(select.options);
-            const campaignOption = options.find(opt =>
-                opt.textContent.includes('на кампанию') || opt.textContent.includes('кампани')
-            );
-
-            if (campaignOption) {
-                select.value = campaignOption.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                select.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        }
-
-        try {
+            // Ждем поля ввода
             const inputs = await waitForElement(() => {
                 const textareas = Array.from(modal.querySelectorAll('textarea'));
                 const textInputs = Array.from(modal.querySelectorAll('input[type="text"]'));
@@ -1511,10 +1600,13 @@
                 return visible.length > 0 ? visible : null;
             }, 3000);
 
-            fillFields(inputs, values);
+            const targetInput = inputs[0];
+            const newPhrases = normalizeMinusInput(values);
 
-            setTimeout(() => {
-                tryCloseResultPopup();
+            const success = await smartAppendToField(targetInput, newPhrases);
+
+            if (success) {
+                reverseVisualSync(newPhrases);
 
                 // Добавить в историю
                 const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
@@ -1522,44 +1614,17 @@
                     addToSentHistory(val, null, [currentPage]);
                 }
 
-                showYdsqNotification(`Отправлено ${values.length} минусов`, 'success');
-                pushUndo('send', `Отправлено ${values.length} минусов`);
+                showYdsqNotification(`Обработано ${newPhrases.size} минусов`, 'success');
+                pushUndo('send', `Отправлено ${newPhrases.size} минусов`);
 
-                isSending = false;
-            }, 1200);
+                setTimeout(() => tryCloseResultPopup(), 1000);
+            }
 
         } catch (err) {
             console.error('[YD-SQ]', err);
-            showYdsqNotification('Поля ввода не найдены', 'error');
+            showYdsqNotification('Ошибка при отправке: ' + err.message, 'error');
+        } finally {
             isSending = false;
-        }
-    }
-
-    function fillFields(inputs, values) {
-        // Очистить
-        for (const input of inputs) {
-            input.value = '';
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-
-        // Заполнить
-        for (let i = 0; i < Math.min(inputs.length, values.length); i++) {
-            const input = inputs[i];
-            input.value = values[i];
-
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            input.dispatchEvent(new Event('blur', { bubbles: true }));
-
-            if (input.hasAttribute('contenteditable')) {
-                input.textContent = values[i];
-                input.dispatchEvent(new Event('keyup', { bubbles: true }));
-            }
-        }
-
-        if (values.length > inputs.length) {
-            showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
         }
     }
 
