@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.7
+// @version      0.0.8
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -65,6 +65,140 @@
         const table = findSearchQueryTable();
         if (table && !inited) {
             console.log('[YD-SQ] Таблица найдена, инициализация...');
+            initWithTable(table);
+        } else {
+            setTimeout(() => waitForTableAndInit(attempt + 1), 250);
+        }
+    }
+
+    function findSearchQueryTable() {
+        // Ищем конкретную ячейку заголовка, чтобы найти именно таблицу данных, а не обертку
+        const headers = document.querySelectorAll('th, [role="columnheader"]');
+        for (const h of headers) {
+            if ((h.textContent || '').toLowerCase().includes('поисковый запрос')) {
+                return h.closest('table, [role="table"]');
+            }
+        }
+
+        // Fallback: ищем в td, если заголовки сделаны через них
+        const cells = document.querySelectorAll('td, [role="cell"]');
+        for (const c of cells) {
+            const txt = (c.textContent || '').toLowerCase();
+            // Проверяем длину, чтобы не сработать на ячейку-обертку, содержащую таблицу
+            if (txt.length < 100 && txt.includes('поисковый запрос')) {
+                return c.closest('table, [role="table"]');
+            }
+        }
+        return null;
+    }
+
+    function initWithTable(table) {
+        try {
+            inited = true;
+            wrapTableWords(table);
+            injectStyles();
+            createPanel();
+            setupResultPopupObserver();
+            setupGlobalListeners();
+            loadGlobalSelectionsToLocal();
+            restoreVisualMarkers();
+            updateUI();
+            console.log('[YD-SQ] Инициализация завершена');
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка инициализации:', err);
+        }
+    }
+
+    function detectPageChange() {
+        setInterval(() => {
+            const newPageKey = getCurrentPageKey();
+            if (newPageKey !== currentPageKey) {
+                console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
+                currentPageKey = newPageKey;
+
+                if (phraseInProgress) {
+                    finalizePhraseBuilding(true);
+                }
+
+                inited = false;
+                wordSpans = [];
+                waitForTableAndInit();
+            }
+        }, 500);
+    }
+
+    // ==================== УТИЛИТЫ ====================
+
+    function getCurrentPageKey() {
+        const params = new URLSearchParams(window.location.search);
+        const page = params.get('page') || '1';
+        const tab = params.get('tab') || 'default';
+        return `page:${page}:${tab}`;
+    }
+
+    function getCampaignId() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('cid') || 'unknown';
+    }
+
+    function stemWord(raw) {
+        let word = raw.toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]/gi, '');
+        if (word.length <= 3) return word;
+
+        for (const endings of [ENDINGS_3, ENDINGS_2, ENDINGS_1]) {
+            for (const end of endings) {
+                if (word.endsWith(end) && word.length > end.length + 2) {
+                    return word.slice(0, -end.length);
+                }
+            }
+        }
+        return word;
+    }
+
+    function getTextContent(node) {
+        if (!node) return '';
+        if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+        if (['INPUT', 'BUTTON', 'SVG'].includes(node.nodeName)) return '';
+
+        let text = '';
+        for (const child of node.childNodes) {
+            text += getTextContent(child);
+        }
+        return text;
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ==================== ОБЕРТЫВАНИЕ СЛОВ ====================
+
+    function wrapTableWords(table) {
+        let rows;
+        // Используем .rows для стандартных таблиц, чтобы избежать захвата строк вложенных таблиц
+        if (table.rows) {
+            rows = Array.from(table.rows);
+        } else {
+            rows = Array.from(table.querySelectorAll('tr, [role="row"]'));
+        }
+
+        // Фильтруем шапку: исключаем thead и строки с th
+        rows = rows.filter(row => !row.closest('thead') && !row.querySelector('th'));
+
+        let rowCounter = 0;
+
+        for (const row of rows) {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (!checkbox) continue;
+
+            rowCounter++;
+            const rowId = `${currentPageKey}:${rowCounter}`;
+            row.dataset.ydRowId = rowId;
 
             let queryCell = null;
 
