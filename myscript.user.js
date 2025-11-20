@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.14
+// @version      0.0.15
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -466,81 +466,6 @@
             span.classList.remove('yd-phrase-building');
             delete span.dataset.phraseId;
         }
-
-        phraseInProgress = null;
-        updateUI();
-    }
-
-    function toggleSoftWord(span, stem, word, rowId) {
-        // Если слово является стоп-словом, принудительно используем строгий режим
-        const wordLower = word.toLowerCase();
-        if (STOPWORDS.has(wordLower)) {
-            toggleStrictWord(span, wordLower, word, rowId);
-            return;
-        }
-
-        const key = `soft:${stem}`;
-
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                selections.delete(key);
-            } else {
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = word;
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'soft-word',
-                stem: stem,
-                raw: word,
-                display: word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: null,
-                unassignedOnThisPage: false
-            });
-        }
-    }
-
-    function toggleStrictWord(span, wordLower, word, rowId) {
-        const key = `strict:${wordLower}`;
-
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                selections.delete(key);
-            } else {
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = '!' + word;
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'strict-word',
-                wordLower: wordLower,
-                raw: word,
-                display: '!' + word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: 'strict',
-                unassignedOnThisPage: false
-            });
-        }
-    }
-
-    function removeSelectionById(id) {
-        const sel = selections.get(id);
-        if (!sel) return;
-
-        selections.delete(id);
-
-        const { rowId, pageKey } = sel;
         const otherSelsOnRow = Array.from(selections.values()).some(
             s => s.pageKey === pageKey && s.rowId === rowId
         );
@@ -1074,6 +999,22 @@
         }
     }
 
+    function clearImportedMinuses() {
+        if (importedMinuses.length === 0) {
+            showYdsqNotification('Список импортированных пуст', 'info');
+            return;
+        }
+
+        const confirmed = confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`);
+        if (!confirmed) return;
+
+        importedMinuses = [];
+        syncLocalToGlobal();
+        updateHighlights();
+        updateUI();
+        showYdsqNotification('Список импортированных очищен', 'success');
+    }
+
     // ==================== UI ПАНЕЛЬ ====================
 
     function createPanel() {
@@ -1116,8 +1057,8 @@
                 </div>
 
                 <div class="yd-sq-section yd-sq-controls">
-                    <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary">📋 Загрузить из буфера</button>
-                    <button id="yd-sq-update-imported" class="yd-sq-btn-secondary">↻ Обновить</button>
+                    <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary" style="flex-grow: 1;">📋 Загрузить из буфера</button>
+                    <button id="yd-sq-clear-imported" class="yd-sq-btn-secondary" title="Очистить импортированные" style="width: 40px;">🗑️</button>
                 </div>
 
                 <div class="yd-sq-section yd-sq-footer-buttons">
@@ -1184,13 +1125,7 @@
 
         document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
 
-        document.getElementById('yd-sq-update-imported').addEventListener('click', () => {
-            importedMinuses = [];
-            syncLocalToGlobal();
-            updateHighlights();
-            updateUI();
-            showYdsqNotification('Импортированные минусы очищены', 'info');
-        });
+        document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
 
         document.getElementById('yd-sq-undo-btn').addEventListener('click', undo);
         document.getElementById('yd-sq-redo-btn').addEventListener('click', redo);
