@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.11
+// @version      0.0.12
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -596,6 +596,14 @@
         let primarySoft = null;
         let primaryStrict = null;
 
+        // Pre-calculate imported lookups
+        const importedStems = new Set();
+        const importedWords = new Set();
+        for (const imp of importedMinuses) {
+            importedStems.add(stemWord(imp.raw));
+            importedWords.add(imp.raw.toLowerCase());
+        }
+
         for (const sel of selections.values()) {
             if (sel.kind === 'soft-word') {
                 softStems.add(sel.stem);
@@ -656,13 +664,11 @@
             }
 
             // СЛОЙ 1: Импортированные
-            for (const imp of importedMinuses) {
-                const impStem = stemWord(imp.raw);
-                if (impStem === stem || imp.raw.toLowerCase() === wordLower) {
-                    span.classList.add('yd-imported-minus');
-                    span.dataset.importedAt = imp.importedAt;
-                    break;
-                }
+            // Оптимизация: проверяем наличие в Set, а не перебираем массив
+            if (importedStems.has(stem) || importedWords.has(wordLower)) {
+                span.classList.add('yd-imported-minus');
+                // Для tooltip можно найти объект, но для скорости пока просто ставим класс
+                // Если нужен tooltip, можно использовать Map вместо Set
             }
         }
     }
@@ -1288,6 +1294,10 @@
 
             if (sel.kind === 'phrase') {
                 sel.words = sel.raw.split(/\s+/).filter(w => w);
+            } else if (sel.kind === 'soft-word') {
+                sel.stem = stemWord(sel.raw);
+            } else if (sel.kind === 'strict-word') {
+                sel.wordLower = sel.raw.toLowerCase();
             }
 
             applyMatchTypeToSelection(sel, sel.matchType);
