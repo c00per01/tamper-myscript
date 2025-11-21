@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.114
+// @version      0.0.115
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -858,6 +858,66 @@
                 // Простая проверка на совпадение
                 if (stem === sentStem || wordLower === sentLower) {
                     span.classList.add('yd-sent-history');
+                }
+            }
+        }
+
+        // 3. СЛОЙ 3: ТЕКУЩИЕ ВЫДЕЛЕНИЯ (selections) - отдельная подсветка
+        const softStems = new Set();
+        const strictWords = new Set();
+        const phrases = [];
+        let primarySoft = null;
+        let primaryStrict = null;
+
+        for (const sel of selections.values()) {
+            // Учитываем matchType при определении типа выделения
+            let effectiveKind = sel.kind;
+            if (sel.matchType === 'strict') effectiveKind = 'strict-word';
+
+            if (effectiveKind === 'soft-word') {
+                softStems.add(sel.stem);
+                if (sel.pageKey === currentPageKey) {
+                    primarySoft = { stem: sel.stem, rowId: sel.rowId };
+                }
+            } else if (effectiveKind === 'strict-word') {
+                const wLower = sel.wordLower || sel.raw.toLowerCase();
+                strictWords.add(wLower);
+                if (sel.pageKey === currentPageKey) {
+                    primaryStrict = { wordLower: wLower, rowId: sel.rowId };
+                }
+            } else if (sel.kind === 'phrase' && sel.pageKey === currentPageKey) {
+                phrases.push(sel);
+            }
+        }
+
+        for (const span of wordSpans) {
+            const stem = span.dataset.stem;
+            const wordLower = span.dataset.wordLower;
+            const word = span.dataset.word;
+            const rowId = span.dataset.rowId;
+
+            if (softStems.has(stem)) {
+                span.classList.add('yd-selected-soft');
+                if (primarySoft && primarySoft.stem === stem && primarySoft.rowId === rowId) {
+                    span.classList.add('yd-primary-soft');
+                }
+            }
+
+            if (strictWords.has(wordLower)) {
+                span.classList.add('yd-selected-strict');
+                if (primaryStrict && primaryStrict.wordLower === wordLower && primaryStrict.rowId === rowId) {
+                    span.classList.add('yd-primary-strict');
+                }
+            }
+
+            for (const phrase of phrases) {
+                if (phrase.words.includes(word) && phrase.rowId === rowId) {
+                    span.classList.add('yd-selected-phrase');
+                    span.dataset.phraseId = phrase.id;
+
+                    if (phrase._building) {
+                        span.classList.add('yd-phrase-building');
+                    }
                 }
             }
         }
