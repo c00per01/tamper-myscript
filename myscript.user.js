@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.107
+// @version      0.0.108
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -21,6 +21,7 @@
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let wordSpans = [];
+    let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
 
     // Undo/Redo
     let undoStack = {
@@ -1095,10 +1096,31 @@
                 return;
             }
 
-            const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены к текущему выбору.`);
+            const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены в список "В кампании".`);
             if (!confirmed) return;
 
-            reverseVisualSync(newPhrases);
+            let addedCount = 0;
+            for (const phrase of newPhrases) {
+                // Check if already exists in importedMinuses
+                if (!importedMinuses.some(imp => imp.raw === phrase)) {
+                    importedMinuses.push({
+                        id: `imp:${Date.now()}_${Math.random()}`,
+                        raw: phrase,
+                        importedAt: Date.now()
+                    });
+                    addedCount++;
+                }
+            }
+
+            if (addedCount > 0) {
+                syncLocalToGlobal();
+                rebuildCampaignMinusList();
+                updateHighlights();
+                updateUI();
+                showYdsqNotification(`Добавлено ${addedCount} минусов в "В кампании"`, 'success');
+            } else {
+                showYdsqNotification('Все минусы уже есть в списке', 'info');
+            }
 
             // Также добавляем в историю импорта (для отображения в списке "В кампании")
             // Но теперь мы используем selections как основной источник правды
@@ -1646,13 +1668,31 @@
             const success = await smartAppendToField(targetInput, newPhrases);
 
             if (success) {
-                reverseVisualSync(newPhrases);
+                // Add to "In Campaign" list
+                let addedCount = 0;
+                for (const val of values) {
+                    if (!importedMinuses.some(imp => imp.raw === val)) {
+                        importedMinuses.push({
+                            id: `imp:${Date.now()}_${Math.random()}`,
+                            raw: val,
+                            importedAt: Date.now()
+                        });
+                        addedCount++;
+                    }
+                }
 
-                // Добавить в историю
+                // Clear selections that were sent
+                selections.clear();
+
+                // Add to history
                 const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
                 for (const val of values) {
                     addToSentHistory(val, null, [currentPage]);
                 }
+
+                syncLocalToGlobal();
+                rebuildCampaignMinusList();
+                updateUI();
 
                 showYdsqNotification(`Обработано ${newPhrases.size} минусов`, 'success');
                 pushUndo('send', `Отправлено ${newPhrases.size} минусов`);
@@ -1723,6 +1763,8 @@
                         selections.set(key, val);
                     }
                 }
+
+                rebuildCampaignMinusList();
             }
         } catch (err) {
             console.error('[YD-SQ] Ошибка загрузки состояния:', err);
@@ -1750,6 +1792,13 @@
             localStorage.setItem(key, JSON.stringify(data));
         } catch (err) {
             console.error('[YD-SQ] Ошибка сохранения состояния:', err);
+        }
+    }
+
+    function rebuildCampaignMinusList() {
+        campaignMinusList.clear();
+        for (const imp of importedMinuses) {
+            campaignMinusList.add(imp.raw);
         }
     }
 
