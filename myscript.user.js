@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.16
+// @version      0.0.18
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -479,19 +479,22 @@
         }
     }
 
-
     // ==================== SMART CHECKBOX LOGIC ====================
 
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
-        if (cb && !cb.checked) {
-            clickCheckbox(cb, false);
-            cb.dataset.ydAuto = 'true';
+        if (cb) {
+            if (!cb.checked) {
+                cb.click();
+                cb.dataset.ydAuto = 'true';
+                console.log(`[YD-SQ] Smart Check: Checked row ${rowId}`);
+            }
+        } else {
+            console.warn(`[YD-SQ] Smart Check: Checkbox not found for row ${rowId}`);
         }
     }
 
     function checkRowAutoState(rowId) {
-        // Проверяем, остались ли выделения в этой строке
         let hasSelections = false;
         for (const sel of selections.values()) {
             if (sel.rowId === rowId) {
@@ -504,13 +507,13 @@
 
         const cb = getRowCheckbox(rowId);
         if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-            clickCheckbox(cb, false);
+            cb.click();
             delete cb.dataset.ydAuto;
+            console.log(`[YD-SQ] Smart Check: Unchecked row ${rowId}`);
         }
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
-        // Если слово является стоп-словом, принудительно используем строгий режим
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
             toggleStrictWord(span, wordLower, word, rowId);
@@ -524,7 +527,6 @@
             if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
                 removeSelectionById(key);
             } else {
-                // Перемещение выделения на другую строку
                 const oldRowId = sel.rowId;
 
                 sel.rowId = rowId;
@@ -564,7 +566,6 @@
             if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
                 removeSelectionById(key);
             } else {
-                // Перемещение выделения на другую строку
                 const oldRowId = sel.rowId;
 
                 sel.rowId = rowId;
