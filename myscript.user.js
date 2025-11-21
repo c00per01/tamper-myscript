@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.18
+// @version      0.0.19
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -53,7 +53,7 @@
     const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
     const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
     const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
-    const RE_DERIVATIONAL = /[^аеиоуыэюя][аеиоуыэюя]+[^аеиоуыэюя]+[аеиоуыэюя].*(?<=о)сть?$/;
+
     const RE_DERIVATIONAL_SIMPLE = /ость?$/;
     const RE_SUPERLATIVE = /(ейше|ейш)$/;
     const RE_I = /и$/;
@@ -116,8 +116,7 @@
             createPanel();
             setupResultPopupObserver();
             setupGlobalListeners();
-            loadGlobalSelectionsToLocal();
-            restoreVisualMarkers();
+            updateHighlights();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -313,7 +312,7 @@
                             span.dataset.rowId = rowId;
 
                             span.dataset.rowId = rowId;
-                            // Listeners removed for delegation
+
                             wordSpans.push(span);
                             fragment.appendChild(span);
                         } else {
@@ -369,7 +368,7 @@
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
-        // e.stopImmediatePropagation(); // Не нужно при делегировании
+
 
         const span = targetSpan;
         const stem = span.dataset.stem;
@@ -399,7 +398,7 @@
 
     function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
-        // e.stopImmediatePropagation();
+
 
         const span = targetSpan;
         const word = span.dataset.word;
@@ -513,6 +512,40 @@
         }
     }
 
+    function handleWordSelection(key, data, rowId, undoMsgPrefix) {
+        if (selections.has(key)) {
+            const sel = selections.get(key);
+            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
+                removeSelectionById(key);
+            } else {
+                const oldRowId = sel.rowId;
+
+                // Update existing selection
+                Object.assign(sel, data);
+                sel.rowId = rowId;
+                sel.pageKey = currentPageKey;
+
+                checkRowAutoState(oldRowId);
+                ensureRowChecked(rowId);
+
+                pushUndo(undoMsgPrefix.type, `${undoMsgPrefix.moveMsg}: ${data.display}`);
+                updateUI();
+            }
+        } else {
+            selections.set(key, {
+                id: key,
+                rowId: rowId,
+                pageKey: currentPageKey,
+                matchType: null,
+                unassignedOnThisPage: false,
+                ...data
+            });
+            ensureRowChecked(rowId);
+            pushUndo(undoMsgPrefix.type, `${undoMsgPrefix.addMsg}: ${data.display}`);
+            updateUI();
+        }
+    }
+
     function toggleSoftWord(span, stem, word, rowId) {
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
@@ -521,81 +554,23 @@
         }
 
         const key = `soft:${stem}`;
-
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
-            } else {
-                const oldRowId = sel.rowId;
-
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = word;
-
-                checkRowAutoState(oldRowId);
-                ensureRowChecked(rowId);
-
-                pushUndo('toggle_soft', `Перемещено: ${word}`);
-                updateUI();
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'soft-word',
-                stem: stem,
-                raw: word,
-                display: word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: null,
-                unassignedOnThisPage: false
-            });
-            ensureRowChecked(rowId);
-            pushUndo('toggle_soft', `Добавлено: ${word}`);
-            updateUI();
-        }
+        handleWordSelection(key, {
+            kind: 'soft-word',
+            stem: stem,
+            raw: word,
+            display: word
+        }, rowId, { type: 'toggle_soft', addMsg: 'Добавлено', moveMsg: 'Перемещено' });
     }
 
     function toggleStrictWord(span, wordLower, word, rowId) {
         const key = `strict:${wordLower}`;
-
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
-            } else {
-                const oldRowId = sel.rowId;
-
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = '!' + word;
-
-                checkRowAutoState(oldRowId);
-                ensureRowChecked(rowId);
-
-                pushUndo('toggle_strict', `Перемещено: !${word}`);
-                updateUI();
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'strict-word',
-                stem: null,
-                wordLower: wordLower,
-                raw: word,
-                display: '!' + word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: null,
-                unassignedOnThisPage: false
-            });
-            ensureRowChecked(rowId);
-            pushUndo('toggle_strict', `Добавлено: !${word}`);
-            updateUI();
-        }
+        handleWordSelection(key, {
+            kind: 'strict-word',
+            stem: null,
+            wordLower: wordLower,
+            raw: word,
+            display: '!' + word
+        }, rowId, { type: 'toggle_strict', addMsg: 'Добавлено', moveMsg: 'Перемещено' });
     }
 
     function removeSelectionById(id) {
@@ -789,9 +764,7 @@
         }
     }
 
-    function restoreVisualMarkers() {
-        updateHighlights();
-    }
+
 
     // ==================== UNDO/REDO ====================
 
@@ -1729,6 +1702,27 @@
         return null;
     }
 
+    function findAddToMinusPhrasesButton() {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+            if ((btn.textContent || '').toLowerCase().includes('добавить в минус-фразы')) {
+                return btn;
+            }
+        }
+        return null;
+    }
+
+    function findMinusModal() {
+        const dialogs = document.querySelectorAll('[role="dialog"], .Modal');
+        for (const dialog of dialogs) {
+            const text = (dialog.textContent || '').toLowerCase();
+            if (text.includes('минус-фразы') || (text.includes('добавление') && text.includes('минус'))) {
+                return dialog;
+            }
+        }
+        return null;
+    }
+
     // ==================== PERSISTENCE ====================
 
     function loadGlobalState() {
@@ -1781,9 +1775,7 @@
         }
     }
 
-    function loadGlobalSelectionsToLocal() {
-        // Selections уже загружены в loadGlobalState
-    }
+
 
     // ==================== УВЕДОМЛЕНИЯ ====================
 
