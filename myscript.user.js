@@ -155,11 +155,11 @@
         return params.get('cid') || 'unknown';
     }
 
-    function addDelegatedListener(type, selector, handler, options) {
+    function addDelegatedListener(type, selector, handler, useCapture = false) {
         document.body.addEventListener(type, (e) => {
             const target = e.target.closest(selector);
             if (target) handler(e, target);
-        }, options);
+        }, useCapture);
     }
 
     function addClickListener(container, selector, handler) {
@@ -488,7 +488,7 @@
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
         if (cb && !cb.checked) {
-            clickCheckbox(cb, true);
+            setCheckboxState(cb, true);
             cb.dataset.ydAuto = 'true';
         }
     }
@@ -572,7 +572,7 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb, true);
+                setCheckboxState(cb, false);
                 delete cb.dataset.ydAuto;
             }
         }
@@ -826,12 +826,16 @@
         return row ? row.querySelector('input[type="checkbox"]') : null;
     }
 
-    function clickCheckbox(cb, silent = false) {
-        if (!silent) {
-            cb.click();
-        } else {
-            cb.checked = !cb.checked;
+    function setCheckboxState(cb, targetState) {
+        if (cb.checked === targetState) return;
+
+        cb.click();
+
+        // Если клик не сработал (например, из-за особенностей React или UI), форсируем состояние
+        if (cb.checked !== targetState) {
+            cb.checked = targetState;
             cb.dispatchEvent(new Event('change', { bubbles: true }));
+            cb.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1773,11 +1777,11 @@
             }
         });
 
-        // Делегирование событий для слов
+        // Делегирование событий для слов (используем capture, чтобы перехватить до Yandex обработчиков)
         addDelegatedListener('click', '.yd-word', onWordClick, true);
         addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick, true);
-        addDelegatedListener('mouseover', '.yd-word', onWordHover);
-        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
+        addDelegatedListener('mouseover', '.yd-word', onWordHover, true);
+        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut, true);
     }
 
     function setupResultPopupObserver() {
