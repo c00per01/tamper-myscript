@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.21
+// @version      0.0.23
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -507,6 +507,99 @@
         const cb = getRowCheckbox(rowId);
         if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
             cb.click();
+            delete cb.dataset.ydAuto;
+            console.log(`[YD-SQ] Smart Check: Unchecked row ${rowId}`);
+        }
+    }
+
+    function toggleSoftWord(span, stem, word, rowId) {
+        const wordLower = word.toLowerCase();
+        if (STOPWORDS.has(wordLower)) {
+            toggleStrictWord(span, wordLower, word, rowId);
+            return;
+        }
+
+        const key = `soft:${stem}`;
+
+        if (selections.has(key)) {
+            const sel = selections.get(key);
+            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
+                removeSelectionById(key);
+            } else {
+                const oldRowId = sel.rowId;
+
+                sel.rowId = rowId;
+                sel.pageKey = currentPageKey;
+                sel.raw = word;
+                sel.display = word;
+
+                checkRowAutoState(oldRowId);
+                ensureRowChecked(rowId);
+
+                pushUndo('toggle_soft', `Перемещено: ${word}`);
+                updateUI();
+            }
+        } else {
+            selections.set(key, {
+                id: key,
+                kind: 'soft-word',
+                stem: stem,
+                raw: word,
+                display: word,
+                rowId: rowId,
+                pageKey: currentPageKey,
+                matchType: null,
+                unassignedOnThisPage: false
+            });
+            ensureRowChecked(rowId);
+            pushUndo('toggle_soft', `Добавлено: ${word}`);
+            updateUI();
+        }
+    }
+
+    function toggleStrictWord(span, wordLower, word, rowId) {
+        const key = `strict:${wordLower}`;
+
+        if (selections.has(key)) {
+            const sel = selections.get(key);
+            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
+                removeSelectionById(key);
+            } else {
+                const oldRowId = sel.rowId;
+
+                sel.rowId = rowId;
+                sel.pageKey = currentPageKey;
+                sel.raw = word;
+                sel.display = '!' + word;
+
+                checkRowAutoState(oldRowId);
+                ensureRowChecked(rowId);
+
+                pushUndo('toggle_strict', `Перемещено: !${word}`);
+                updateUI();
+            }
+        } else {
+            selections.set(key, {
+                id: key,
+                kind: 'strict-word',
+                stem: null,
+                wordLower: wordLower,
+                raw: word,
+                display: '!' + word,
+                rowId: rowId,
+                pageKey: currentPageKey,
+                matchType: null,
+                unassignedOnThisPage: false
+            });
+            ensureRowChecked(rowId);
+            pushUndo('toggle_strict', `Добавлено: !${word}`);
+            updateUI();
+        }
+    }
+
+    function removeSelectionById(id) {
+        const sel = selections.get(id);
+        if (sel) {
             const rowId = sel.rowId;
             selections.delete(id);
 
