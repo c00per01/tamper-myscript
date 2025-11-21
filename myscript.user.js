@@ -155,11 +155,11 @@
         return params.get('cid') || 'unknown';
     }
 
-    function addDelegatedListener(type, selector, handler, useCapture = false) {
+    function addDelegatedListener(type, selector, handler) {
         document.body.addEventListener(type, (e) => {
             const target = e.target.closest(selector);
             if (target) handler(e, target);
-        }, useCapture);
+        });
     }
 
     function addClickListener(container, selector, handler) {
@@ -483,17 +483,6 @@
 
         phraseInProgress = null;
         updateUI();
-    }
-
-    function ensureRowChecked(rowId) {
-        const cb = getRowCheckbox(rowId);
-        if (cb && !cb.checked) {
-            setRowCheckboxState(cb, true);
-            cb.dataset.ydAuto = 'true';
-        }
-    }
-
-    function toggleSoftWord(span, stem, word, rowId) {
         // Если слово является стоп-словом, принудительно используем строгий режим
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
@@ -572,7 +561,7 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                setRowCheckboxState(cb, false);
+                clickCheckbox(cb);
                 delete cb.dataset.ydAuto;
             }
         }
@@ -826,11 +815,13 @@
         return row ? row.querySelector('input[type="checkbox"]') : null;
     }
 
-    function setRowCheckboxState(cb, state) {
-        if (cb.checked !== state) {
-            cb.checked = state;
-            cb.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+    function clickCheckbox(cb, newState) {
+        // Если чекбокс уже в нужном состоянии, ничего не делаем
+        if (cb.checked === newState) return;
+
+        // Устанавливаем новое состояние
+        cb.checked = newState;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     function getAllRowsOnPage() {
@@ -1772,8 +1763,8 @@
         });
 
         // Делегирование событий для слов
-        addDelegatedListener('click', '.yd-word', onWordClick, true);
-        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick, true);
+        addDelegatedListener('click', '.yd-word', onWordClick);
+        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
         addDelegatedListener('mouseover', '.yd-word', onWordHover);
         addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
