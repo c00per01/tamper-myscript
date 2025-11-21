@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.23
+// @version      0.0.15
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -53,7 +53,7 @@
     const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
     const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
     const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
-
+    const RE_DERIVATIONAL = /[^аеиоуыэюя][аеиоуыэюя]+[^аеиоуыэюя]+[аеиоуыэюя].*(?<=о)сть?$/;
     const RE_DERIVATIONAL_SIMPLE = /ость?$/;
     const RE_SUPERLATIVE = /(ейше|ейш)$/;
     const RE_I = /и$/;
@@ -116,7 +116,8 @@
             createPanel();
             setupResultPopupObserver();
             setupGlobalListeners();
-            updateHighlights();
+            loadGlobalSelectionsToLocal();
+            restoreVisualMarkers();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -312,7 +313,7 @@
                             span.dataset.rowId = rowId;
 
                             span.dataset.rowId = rowId;
-
+                            // Listeners removed for delegation
                             wordSpans.push(span);
                             fragment.appendChild(span);
                         } else {
@@ -368,7 +369,7 @@
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
-
+        // e.stopImmediatePropagation(); // Не нужно при делегировании
 
         const span = targetSpan;
         const stem = span.dataset.stem;
@@ -398,7 +399,7 @@
 
     function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
-
+        // e.stopImmediatePropagation();
 
         const span = targetSpan;
         const word = span.dataset.word;
@@ -465,54 +466,21 @@
             span.classList.remove('yd-phrase-building');
             delete span.dataset.phraseId;
         }
-        const otherSelsOnRow = Array.from(selections.values()).some(
-            s => s.pageKey === pageKey && s.rowId === rowId
-        );
 
-        if (!otherSelsOnRow && pageKey === currentPageKey) {
-            const cb = getRowCheckbox(rowId);
-            if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb, true);
-                delete cb.dataset.ydAuto;
-            }
-        }
+        phraseInProgress = null;
+        updateUI();
     }
-
-    // ==================== SMART CHECKBOX LOGIC ====================
 
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
-        if (cb) {
-            if (!cb.checked) {
-                cb.click();
-                cb.dataset.ydAuto = 'true';
-                console.log(`[YD-SQ] Smart Check: Checked row ${rowId}`);
-            }
-        } else {
-            console.warn(`[YD-SQ] Smart Check: Checkbox not found for row ${rowId}`);
-        }
-    }
-
-    function checkRowAutoState(rowId) {
-        let hasSelections = false;
-        for (const sel of selections.values()) {
-            if (sel.rowId === rowId) {
-                hasSelections = true;
-                break;
-            }
-        }
-
-        if (hasSelections) return;
-
-        const cb = getRowCheckbox(rowId);
-        if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-            cb.click();
-            delete cb.dataset.ydAuto;
-            console.log(`[YD-SQ] Smart Check: Unchecked row ${rowId}`);
+        if (cb && !cb.checked) {
+            clickCheckbox(cb);
+            cb.dataset.ydAuto = 'true';
         }
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
+        // Если слово является стоп-словом, принудительно используем строгий режим
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
             toggleStrictWord(span, wordLower, word, rowId);
@@ -524,20 +492,12 @@
         if (selections.has(key)) {
             const sel = selections.get(key);
             if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
+                selections.delete(key);
             } else {
-                const oldRowId = sel.rowId;
-
                 sel.rowId = rowId;
                 sel.pageKey = currentPageKey;
                 sel.raw = word;
                 sel.display = word;
-
-                checkRowAutoState(oldRowId);
-                ensureRowChecked(rowId);
-
-                pushUndo('toggle_soft', `Перемещено: ${word}`);
-                updateUI();
             }
         } else {
             selections.set(key, {
@@ -552,8 +512,6 @@
                 unassignedOnThisPage: false
             });
             ensureRowChecked(rowId);
-            pushUndo('toggle_soft', `Добавлено: ${word}`);
-            updateUI();
         }
     }
 
@@ -563,51 +521,46 @@
         if (selections.has(key)) {
             const sel = selections.get(key);
             if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
+                selections.delete(key);
             } else {
-                const oldRowId = sel.rowId;
-
                 sel.rowId = rowId;
                 sel.pageKey = currentPageKey;
                 sel.raw = word;
                 sel.display = '!' + word;
-
-                checkRowAutoState(oldRowId);
-                ensureRowChecked(rowId);
-
-                pushUndo('toggle_strict', `Перемещено: !${word}`);
-                updateUI();
             }
         } else {
             selections.set(key, {
                 id: key,
                 kind: 'strict-word',
-                stem: null,
                 wordLower: wordLower,
                 raw: word,
                 display: '!' + word,
                 rowId: rowId,
                 pageKey: currentPageKey,
-                matchType: null,
+                matchType: 'strict',
                 unassignedOnThisPage: false
             });
             ensureRowChecked(rowId);
-            pushUndo('toggle_strict', `Добавлено: !${word}`);
-            updateUI();
         }
     }
 
     function removeSelectionById(id) {
         const sel = selections.get(id);
-        if (sel) {
-            const rowId = sel.rowId;
-            selections.delete(id);
+        if (!sel) return;
 
-            if (rowId) {
-                checkRowAutoState(rowId);
+        selections.delete(id);
+
+        const { rowId, pageKey } = sel;
+        const otherSelsOnRow = Array.from(selections.values()).some(
+            s => s.pageKey === pageKey && s.rowId === rowId
+        );
+
+        if (!otherSelsOnRow && pageKey === currentPageKey) {
+            const cb = getRowCheckbox(rowId);
+            if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+                clickCheckbox(cb);
+                delete cb.dataset.ydAuto;
             }
-
-            updateUI();
         }
     }
 
@@ -788,7 +741,9 @@
         }
     }
 
-
+    function restoreVisualMarkers() {
+        updateHighlights();
+    }
 
     // ==================== UNDO/REDO ====================
 
@@ -1726,27 +1681,6 @@
         return null;
     }
 
-    function findAddToMinusPhrasesButton() {
-        const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-            if ((btn.textContent || '').toLowerCase().includes('добавить в минус-фразы')) {
-                return btn;
-            }
-        }
-        return null;
-    }
-
-    function findMinusModal() {
-        const dialogs = document.querySelectorAll('[role="dialog"], .Modal');
-        for (const dialog of dialogs) {
-            const text = (dialog.textContent || '').toLowerCase();
-            if (text.includes('минус-фразы') || (text.includes('добавление') && text.includes('минус'))) {
-                return dialog;
-            }
-        }
-        return null;
-    }
-
     // ==================== PERSISTENCE ====================
 
     function loadGlobalState() {
@@ -1799,7 +1733,9 @@
         }
     }
 
-
+    function loadGlobalSelectionsToLocal() {
+        // Selections уже загружены в loadGlobalState
+    }
 
     // ==================== УВЕДОМЛЕНИЯ ====================
 
