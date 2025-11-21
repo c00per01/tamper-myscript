@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.115
+// @version      0.0.116
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -572,6 +572,8 @@
         const sel = selections.get(id);
         if (!sel) return;
 
+        console.log('[YD-SQ] removeSelectionById:', { id, rowId: sel.rowId, pageKey: sel.pageKey });
+
         selections.delete(id);
 
         const { rowId, pageKey } = sel;
@@ -579,12 +581,28 @@
             s => s.pageKey === pageKey && s.rowId === rowId
         );
 
+        console.log('[YD-SQ] Checking other selections on row:', {
+            rowId,
+            pageKey,
+            currentPageKey,
+            otherSelsOnRow,
+            totalSelections: selections.size
+        });
+
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
+            console.log('[YD-SQ] No other selections, unchecking:', {
+                rowId,
+                hasCheckbox: !!cb,
+                isChecked: cb?.checked,
+                isAuto: cb?.dataset.ydAuto
+            });
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
                 clickCheckbox(cb, false);  // Явно выключаем чекбокс
                 delete cb.dataset.ydAuto;
             }
+        } else {
+            console.log('[YD-SQ] Keeping checkbox checked - other selections exist');
         }
         syncLocalToGlobal();
     }
