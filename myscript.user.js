@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.111
+// @version      0.0.112
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1327,8 +1327,20 @@
 
         document.getElementById('yd-sq-clear-all').addEventListener('click', () => {
             if (confirm('Очистить все выделения?')) {
+                // Снять чекбоксы для текущей страницы
+                for (const sel of selections.values()) {
+                    if (sel.pageKey === currentPageKey && sel.rowId) {
+                        const cb = getRowCheckbox(sel.rowId);
+                        if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+                            clickCheckbox(cb, false);
+                            delete cb.dataset.ydAuto;
+                        }
+                    }
+                }
+
                 selections.clear();
                 pushUndo('clear_all', 'Очищены все выделения');
+                syncLocalToGlobal();
                 updateUI();
             }
         });
