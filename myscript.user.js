@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.105
+// @version      0.0.104
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -488,7 +488,7 @@
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
         if (cb && !cb.checked) {
-            setCheckboxState(cb, true);
+            setRowCheckboxState(cb, true);
             cb.dataset.ydAuto = 'true';
         }
     }
@@ -572,7 +572,7 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                setCheckboxState(cb, false);
+                setRowCheckboxState(cb, false);
                 delete cb.dataset.ydAuto;
             }
         }
@@ -826,16 +826,10 @@
         return row ? row.querySelector('input[type="checkbox"]') : null;
     }
 
-    function setCheckboxState(cb, targetState) {
-        if (cb.checked === targetState) return;
-
-        cb.click();
-
-        // Если клик не сработал (например, из-за особенностей React или UI), форсируем состояние
-        if (cb.checked !== targetState) {
-            cb.checked = targetState;
+    function setRowCheckboxState(cb, state) {
+        if (cb.checked !== state) {
+            cb.checked = state;
             cb.dispatchEvent(new Event('change', { bubbles: true }));
-            cb.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1777,11 +1771,11 @@
             }
         });
 
-        // Делегирование событий для слов (используем capture, чтобы перехватить до Yandex обработчиков)
+        // Делегирование событий для слов
         addDelegatedListener('click', '.yd-word', onWordClick, true);
         addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick, true);
-        addDelegatedListener('mouseover', '.yd-word', onWordHover, true);
-        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut, true);
+        addDelegatedListener('mouseover', '.yd-word', onWordHover);
+        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
 
     function setupResultPopupObserver() {
