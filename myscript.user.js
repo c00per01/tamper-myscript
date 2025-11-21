@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.108
+// @version      0.0.109
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -679,45 +679,154 @@
             delete sp.dataset.importedAt;
         }
 
-        // Собрать данные
+        // 1. СЛОЙ 1: В КАМПАНИИ (campaignMinusList)
+        const campaignStrict = new Set();
+        const campaignSoft = new Set();
+        const campaignPhrases = [];
+
+        for (const raw of campaignMinusList) {
+            if (raw.startsWith('!')) {
+                campaignStrict.add(raw.substring(1).toLowerCase());
+            } else if (raw.startsWith('"') && raw.endsWith('"')) {
+                const content = raw.slice(1, -1).toLowerCase();
+                const words = content.split(/[\s+]+/).filter(w => w);
+                campaignPhrases.push({ words, type: 'quote', raw });
+            } else if (raw.startsWith('[') && raw.endsWith(']')) {
+                const content = raw.slice(1, -1).toLowerCase();
+                const words = content.split(/[\s+]+/).filter(w => w);
+                campaignPhrases.push({ words, type: 'bracket', raw });
+            } else {
+                const words = raw.toLowerCase().split(/[\s+]+/).filter(w => w);
+                if (words.length === 1) {
+                    campaignSoft.add(stemWord(words[0]));
+                } else {
+                    campaignPhrases.push({ words, type: 'broad', raw });
+                }
+            }
+        }
+
+        // Применение выделения для одиночных слов (быстро)
+        for (const span of wordSpans) {
+            const stem = span.dataset.stem;
+            const wordLower = span.dataset.wordLower;
+
+            if (campaignSoft.has(stem)) {
+                span.classList.add('yd-imported-minus');
+            }
+            if (campaignStrict.has(wordLower)) {
+                span.classList.add('yd-imported-minus');
+            }
+        }
+
+        // Применение выделения для фраз (построчно)
+        if (campaignPhrases.length > 0) {
+            const rows = getAllRowsOnPage();
+            for (const row of rows) {
+                const rowId = row.dataset.ydRowId;
+                const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
+                if (rowSpans.length === 0) continue;
+
+                const rowWordsLower = rowSpans.map(s => s.dataset.wordLower);
+                const rowStems = rowSpans.map(s => s.dataset.stem);
+
+                for (const phrase of campaignPhrases) {
+                    let isMatch = false;
+                    let matchedIndices = [];
+
+                    if (phrase.type === 'bracket') {
+                        const pWords = phrase.words;
+                        for (let i = 0; i <= rowWordsLower.length - pWords.length; i++) {
+                            let subMatch = true;
+                            for (let j = 0; j < pWords.length; j++) {
+                                if (rowWordsLower[i + j] !== pWords[j]) {
+                                    subMatch = false;
+                                    break;
+                                }
+                            }
+                            if (subMatch) {
+                                isMatch = true;
+                                for (let k = 0; k < pWords.length; k++) matchedIndices.push(i + k);
+                            }
+                        }
+                    } else if (phrase.type === 'quote') {
+                        const pWords = phrase.words;
+                        const rowWordsSet = new Set(rowWordsLower);
+                        if (pWords.every(w => rowWordsSet.has(w))) {
+                            isMatch = true;
+                            rowWordsLower.forEach((w, idx) => {
+                                if (pWords.includes(w)) matchedIndices.push(idx);
+                            });
+                        }
+                    } else if (phrase.type === 'broad') {
+                        const pStems = phrase.words.map(w => stemWord(w));
+                        const rowStemsSet = new Set(rowStems);
+                        if (pStems.every(s => rowStemsSet.has(s))) {
+                            isMatch = true;
+                            rowStems.forEach((s, idx) => {
+                                if (pStems.includes(s)) matchedIndices.push(idx);
+                            });
+                        }
+                    }
+
+                    if (isMatch) {
+                        for (const idx of matchedIndices) {
+                            if (rowSpans[idx]) rowSpans[idx].classList.add('yd-imported-minus');
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. СЛОЙ 2: ИСТОРИЯ ОТПРАВЛЕНИЙ (sentHistory)
+        for (const sent of sentHistory) {
+            const sentStem = stemWord(sent.raw);
+            const sentLower = sent.raw.toLowerCase();
+
+            for (const span of wordSpans) {
+                const stem = span.dataset.stem;
+                const wordLower = span.dataset.wordLower;
+
+                if (sentStem === stem || sentLower === wordLower) {
+                    span.classList.add('yd-sent-history');
+                    span.dataset.sentAt = sent.lastSentAt;
+                }
+            }
+        }
+
+        // 3. СЛОЙ 3: ТЕКУЩИЕ ВЫДЕЛЕНИЯ (selections)
         const softStems = new Set();
         const strictWords = new Set();
         const phrases = [];
         let primarySoft = null;
         let primaryStrict = null;
 
-        // Pre-calculate imported lookups
-        const importedStems = new Set();
-        const importedWords = new Set();
-        for (const imp of importedMinuses) {
-            importedStems.add(stemWord(imp.raw));
-            importedWords.add(imp.raw.toLowerCase());
-        }
-
         for (const sel of selections.values()) {
-            if (sel.kind === 'soft-word') {
+            // Учитываем matchType при определении типа выделения
+            let effectiveKind = sel.kind;
+            if (sel.matchType === 'strict') effectiveKind = 'strict-word';
+
+            if (effectiveKind === 'soft-word') {
                 softStems.add(sel.stem);
                 if (sel.pageKey === currentPageKey) {
                     primarySoft = { stem: sel.stem, rowId: sel.rowId };
                 }
-            } else if (sel.kind === 'strict-word') {
-                strictWords.add(sel.wordLower);
+            } else if (effectiveKind === 'strict-word') {
+                const wLower = sel.wordLower || sel.raw.toLowerCase();
+                strictWords.add(wLower);
                 if (sel.pageKey === currentPageKey) {
-                    primaryStrict = { wordLower: sel.wordLower, rowId: sel.rowId };
+                    primaryStrict = { wordLower: wLower, rowId: sel.rowId };
                 }
             } else if (sel.kind === 'phrase' && sel.pageKey === currentPageKey) {
                 phrases.push(sel);
             }
         }
 
-        // Применить выделение
         for (const span of wordSpans) {
             const stem = span.dataset.stem;
             const wordLower = span.dataset.wordLower;
             const word = span.dataset.word;
             const rowId = span.dataset.rowId;
 
-            // СЛОЙ 3: Текущие выделения
             if (softStems.has(stem)) {
                 span.classList.add('yd-selected-soft');
                 if (primarySoft && primarySoft.stem === stem && primarySoft.rowId === rowId) {
@@ -741,24 +850,6 @@
                         span.classList.add('yd-phrase-building');
                     }
                 }
-            }
-
-            // СЛОЙ 2: История отправлений
-            for (const sent of sentHistory) {
-                const sentStem = stemWord(sent.raw);
-                if (sentStem === stem || sent.raw.toLowerCase() === wordLower) {
-                    span.classList.add('yd-sent-history');
-                    span.dataset.sentAt = sent.lastSentAt;
-                    break;
-                }
-            }
-
-            // СЛОЙ 1: Импортированные
-            // Оптимизация: проверяем наличие в Set, а не перебираем массив
-            if (importedStems.has(stem) || importedWords.has(wordLower)) {
-                span.classList.add('yd-imported-minus');
-                // Для tooltip можно найти объект, но для скорости пока просто ставим класс
-                // Если нужен tooltip, можно использовать Map вместо Set
             }
         }
     }
@@ -1038,53 +1129,7 @@
         return true;
     }
 
-    function reverseVisualSync(addedPhrasesSet) {
-        let addedCount = 0;
 
-        for (const raw of addedPhrasesSet) {
-            let type = 'soft-word';
-            let clean = raw;
-
-            if (raw.startsWith('!')) {
-                type = 'strict-word';
-                clean = raw.substring(1);
-            } else if (raw.startsWith('[') && raw.endsWith(']')) {
-                type = 'phrase';
-                clean = raw.slice(1, -1);
-            } else if (raw.startsWith('"') && raw.endsWith('"')) {
-                type = 'phrase';
-                clean = raw.slice(1, -1);
-            }
-
-            const stem = stemWord(clean);
-            const lower = clean.toLowerCase();
-
-            // Ищем в таблице
-            const span = wordSpans.find(s => {
-                if (type === 'strict-word') return s.dataset.wordLower === lower;
-                if (type === 'soft-word') return s.dataset.stem === stem;
-                return false;
-            });
-
-            if (span) {
-                const rowId = span.dataset.rowId;
-                // Проверяем, не выбрано ли уже
-                const key = type === 'strict-word' ? `strict:${lower}` : `soft:${stem}`;
-                if (!selections.has(key)) {
-                    if (type === 'strict-word') {
-                        toggleStrictWord(span, lower, clean, rowId);
-                    } else {
-                        toggleSoftWord(span, stem, clean, rowId);
-                    }
-                    addedCount++;
-                }
-            }
-        }
-
-        if (addedCount > 0) {
-            updateUI();
-        }
-    }
 
     async function importMinusesFromClipboard() {
         try {
