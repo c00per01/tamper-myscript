@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.104
+// @version      0.0.105
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -483,6 +483,17 @@
 
         phraseInProgress = null;
         updateUI();
+    }
+
+    function ensureRowChecked(rowId) {
+        const cb = getRowCheckbox(rowId);
+        if (cb && !cb.checked) {
+            clickCheckbox(cb, true);  // Явно включаем чекбокс
+            cb.dataset.ydAuto = 'true';
+        }
+    }
+
+    function toggleSoftWord(span, stem, word, rowId) {
         // Если слово является стоп-словом, принудительно используем строгий режим
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
@@ -561,7 +572,7 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb);
+                clickCheckbox(cb, false);  // Явно выключаем чекбокс
                 delete cb.dataset.ydAuto;
             }
         }
