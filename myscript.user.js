@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.106
+// @version      0.0.107
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -487,9 +487,16 @@
 
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
+        console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
+
         if (cb && !cb.checked) {
             clickCheckbox(cb, true);  // Явно включаем чекбокс
             cb.dataset.ydAuto = 'true';
+            console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
+        } else if (cb && cb.checked) {
+            console.log('[YD-SQ] Чекбокс уже включен для rowId:', rowId);
+        } else {
+            console.warn('[YD-SQ] Чекбокс не найден для rowId:', rowId);
         }
     }
 
@@ -827,12 +834,28 @@
     }
 
     function clickCheckbox(cb, newState) {
-        // Если чекбокс уже в нужном состоянии, ничего не делаем
-        if (cb.checked === newState) return;
+        console.log('[YD-SQ] clickCheckbox вызван:', {
+            currentState: cb.checked,
+            targetState: newState,
+            hasYdAuto: cb.dataset.ydAuto
+        });
 
-        // Устанавливаем новое состояние
-        cb.checked = newState;
-        cb.dispatchEvent(new Event('change', { bubbles: true }));
+        if (cb.checked !== newState) {
+            cb.click();
+            console.log('[YD-SQ] Выполнен клик по чекбоксу');
+
+            // Проверка и fallback
+            setTimeout(() => {
+                if (cb.checked !== newState) {
+                    console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
+                    cb.checked = newState;
+                    cb.dispatchEvent(new Event('input', { bubbles: true }));
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }, 50);
+        } else {
+            console.log('[YD-SQ] Чекбокс уже в нужном состоянии');
+        }
     }
 
     function getAllRowsOnPage() {
