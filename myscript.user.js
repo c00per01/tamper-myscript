@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.19
+// @version      0.0.21
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -507,75 +507,6 @@
         const cb = getRowCheckbox(rowId);
         if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
             cb.click();
-            delete cb.dataset.ydAuto;
-            console.log(`[YD-SQ] Smart Check: Unchecked row ${rowId}`);
-        }
-    }
-
-    function handleWordSelection(key, data, rowId, undoMsgPrefix) {
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
-            } else {
-                const oldRowId = sel.rowId;
-
-                // Update existing selection
-                Object.assign(sel, data);
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-
-                checkRowAutoState(oldRowId);
-                ensureRowChecked(rowId);
-
-                pushUndo(undoMsgPrefix.type, `${undoMsgPrefix.moveMsg}: ${data.display}`);
-                updateUI();
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: null,
-                unassignedOnThisPage: false,
-                ...data
-            });
-            ensureRowChecked(rowId);
-            pushUndo(undoMsgPrefix.type, `${undoMsgPrefix.addMsg}: ${data.display}`);
-            updateUI();
-        }
-    }
-
-    function toggleSoftWord(span, stem, word, rowId) {
-        const wordLower = word.toLowerCase();
-        if (STOPWORDS.has(wordLower)) {
-            toggleStrictWord(span, wordLower, word, rowId);
-            return;
-        }
-
-        const key = `soft:${stem}`;
-        handleWordSelection(key, {
-            kind: 'soft-word',
-            stem: stem,
-            raw: word,
-            display: word
-        }, rowId, { type: 'toggle_soft', addMsg: 'Добавлено', moveMsg: 'Перемещено' });
-    }
-
-    function toggleStrictWord(span, wordLower, word, rowId) {
-        const key = `strict:${wordLower}`;
-        handleWordSelection(key, {
-            kind: 'strict-word',
-            stem: null,
-            wordLower: wordLower,
-            raw: word,
-            display: '!' + word
-        }, rowId, { type: 'toggle_strict', addMsg: 'Добавлено', moveMsg: 'Перемещено' });
-    }
-
-    function removeSelectionById(id) {
-        const sel = selections.get(id);
-        if (sel) {
             const rowId = sel.rowId;
             selections.delete(id);
 
