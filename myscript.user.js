@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.110
+// @version      0.0.111
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -857,6 +857,13 @@
 
     function restoreVisualMarkers() {
         updateHighlights();
+
+        // Восстановить чекбоксы для сохраненных выделений
+        for (const sel of selections.values()) {
+            if (sel.pageKey === currentPageKey && sel.rowId) {
+                ensureRowChecked(sel.rowId);
+            }
+        }
     }
 
     // ==================== UNDO/REDO ====================
