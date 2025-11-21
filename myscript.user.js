@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.103
+// @version      0.0.105
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -155,11 +155,11 @@
         return params.get('cid') || 'unknown';
     }
 
-    function addDelegatedListener(type, selector, handler) {
+    function addDelegatedListener(type, selector, handler, options) {
         document.body.addEventListener(type, (e) => {
             const target = e.target.closest(selector);
             if (target) handler(e, target);
-        });
+        }, options);
     }
 
     function addClickListener(container, selector, handler) {
@@ -488,7 +488,7 @@
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
         if (cb && !cb.checked) {
-            clickCheckbox(cb);
+            clickCheckbox(cb, true);
             cb.dataset.ydAuto = 'true';
         }
     }
@@ -572,7 +572,7 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb);
+                clickCheckbox(cb, true);
                 delete cb.dataset.ydAuto;
             }
         }
@@ -1774,8 +1774,8 @@
         });
 
         // Делегирование событий для слов
-        addDelegatedListener('click', '.yd-word', onWordClick);
-        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
+        addDelegatedListener('click', '.yd-word', onWordClick, true);
+        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick, true);
         addDelegatedListener('mouseover', '.yd-word', onWordHover);
         addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
