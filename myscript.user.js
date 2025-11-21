@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.109
+// @version      0.0.110
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -115,6 +115,7 @@
             injectStyles();
             createPanel();
             setupResultPopupObserver();
+            setupMinusModalObserver();
             setupGlobalListeners();
             restoreVisualMarkers();
             updateUI();
@@ -483,21 +484,18 @@
         }
 
         phraseInProgress = null;
+        syncLocalToGlobal();
         updateUI();
     }
 
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
-        console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
+        // console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
 
         if (cb && !cb.checked) {
             clickCheckbox(cb, true);  // Явно включаем чекбокс
             cb.dataset.ydAuto = 'true';
-            console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
-        } else if (cb && cb.checked) {
-            console.log('[YD-SQ] Чекбокс уже включен для rowId:', rowId);
-        } else {
-            console.warn('[YD-SQ] Чекбокс не найден для rowId:', rowId);
+            // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
         }
     }
 
@@ -535,6 +533,7 @@
             });
             ensureRowChecked(rowId);
         }
+        syncLocalToGlobal();
     }
 
     function toggleStrictWord(span, wordLower, word, rowId) {
@@ -564,6 +563,7 @@
             });
             ensureRowChecked(rowId);
         }
+        syncLocalToGlobal();
     }
 
     function removeSelectionById(id) {
@@ -584,6 +584,7 @@
                 delete cb.dataset.ydAuto;
             }
         }
+        syncLocalToGlobal();
     }
 
     // ==================== TOOLTIP ====================
@@ -892,6 +893,7 @@
 
             updateUI();
             updateUndoRedoButtons();
+            syncLocalToGlobal();
         }
     }
 
@@ -907,6 +909,7 @@
 
             updateUI();
             updateUndoRedoButtons();
+            syncLocalToGlobal();
         }
     }
 
@@ -926,27 +929,21 @@
     }
 
     function clickCheckbox(cb, newState) {
-        console.log('[YD-SQ] clickCheckbox вызван:', {
-            currentState: cb.checked,
-            targetState: newState,
-            hasYdAuto: cb.dataset.ydAuto
-        });
+        // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
 
         if (cb.checked !== newState) {
             cb.click();
-            console.log('[YD-SQ] Выполнен клик по чекбоксу');
+            // console.log('[YD-SQ] Выполнен клик по чекбоксу');
 
             // Проверка и fallback
             setTimeout(() => {
                 if (cb.checked !== newState) {
-                    console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
+                    // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
                     cb.checked = newState;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }, 50);
-        } else {
-            console.log('[YD-SQ] Чекбокс уже в нужном состоянии');
         }
     }
 
@@ -1537,6 +1534,7 @@
         }
 
         applyMatchTypeToSelection(sel, sel.matchType);
+        syncLocalToGlobal();
         updateUI();
     }
 
@@ -1591,6 +1589,7 @@
             }
 
             applyMatchTypeToSelection(sel, sel.matchType);
+            syncLocalToGlobal();
             updateUI();
         };
 
@@ -1909,6 +1908,74 @@
             childList: true,
             subtree: true
         });
+    }
+
+    function setupMinusModalObserver() {
+        const observer = new MutationObserver(() => {
+            const textarea = findMinusPhrasesTextarea();
+            if (textarea && !textarea.dataset.ydSqObserved) {
+                textarea.dataset.ydSqObserved = 'true';
+                syncCampaignDataFromTextarea(textarea);
+
+                textarea.addEventListener('input', () => {
+                    syncCampaignDataFromTextarea(textarea);
+                });
+
+                textarea.addEventListener('change', () => {
+                    syncCampaignDataFromTextarea(textarea);
+                });
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    function findMinusPhrasesTextarea() {
+        const dialogs = document.querySelectorAll('[role="dialog"]');
+        for (const dialog of dialogs) {
+            const title = dialog.querySelector('h3, .title, [class*="Title"]');
+            if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
+                return dialog.querySelector('textarea');
+            }
+        }
+        return null;
+    }
+
+    function syncCampaignDataFromTextarea(textarea) {
+        const text = textarea.value || '';
+        const phrases = normalizeMinusInput(text);
+
+        const existingMap = new Map(importedMinuses.map(m => [m.raw, m]));
+        const newImported = [];
+        let changed = false;
+
+        for (const phrase of phrases) {
+            if (existingMap.has(phrase)) {
+                newImported.push(existingMap.get(phrase));
+            } else {
+                newImported.push({
+                    id: `imp:${Date.now()}_${Math.random()}`,
+                    raw: phrase,
+                    importedAt: Date.now()
+                });
+                changed = true;
+            }
+        }
+
+        if (newImported.length !== importedMinuses.length) {
+            changed = true;
+        }
+
+        if (changed) {
+            importedMinuses = newImported;
+            syncLocalToGlobal();
+            rebuildCampaignMinusList();
+            updateHighlights();
+            updateUI();
+        }
     }
 
     // ==================== CSS СТИЛИ ====================
