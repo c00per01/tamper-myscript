@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.102
+// @version      0.0.103
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -53,7 +53,6 @@
     const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
     const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
     const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
-    const RE_DERIVATIONAL = /[^аеиоуыэюя][аеиоуыэюя]+[^аеиоуыэюя]+[аеиоуыэюя].*(?<=о)сть?$/;
     const RE_DERIVATIONAL_SIMPLE = /ость?$/;
     const RE_SUPERLATIVE = /(ейше|ейш)$/;
     const RE_I = /и$/;
@@ -116,7 +115,6 @@
             createPanel();
             setupResultPopupObserver();
             setupGlobalListeners();
-            loadGlobalSelectionsToLocal();
             restoreVisualMarkers();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
@@ -155,6 +153,22 @@
     function getCampaignId() {
         const params = new URLSearchParams(window.location.search);
         return params.get('cid') || 'unknown';
+    }
+
+    function addDelegatedListener(type, selector, handler) {
+        document.body.addEventListener(type, (e) => {
+            const target = e.target.closest(selector);
+            if (target) handler(e, target);
+        });
+    }
+
+    function addClickListener(container, selector, handler) {
+        container.querySelectorAll(selector).forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handler(e, btn);
+            });
+        });
     }
 
     function stemWord(word) {
@@ -1324,28 +1338,17 @@
         }).join('');
 
         // Обработчики
-        container.querySelectorAll('.type-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.selId;
-                const type = btn.dataset.type;
-                toggleMatchType(id, type);
-            });
+        addClickListener(container, '.type-btn', (e, btn) => {
+            toggleMatchType(btn.dataset.selId, btn.dataset.type);
         });
 
-        container.querySelectorAll('.yd-sq-edit').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                startInlineEdit(btn.dataset.selId);
-            });
+        addClickListener(container, '.yd-sq-edit', (e, btn) => {
+            startInlineEdit(btn.dataset.selId);
         });
 
-        container.querySelectorAll('.yd-sq-item-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                removeSelectionById(btn.dataset.selId);
-                updateUI();
-            });
+        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+            removeSelectionById(btn.dataset.selId);
+            updateUI();
         });
 
         container.scrollTop = container.scrollHeight;
@@ -1384,14 +1387,11 @@
             `;
         }).join('');
 
-        container.querySelectorAll('.yd-sq-item-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.dataset.sentIdx);
-                sentHistory.splice(idx, 1);
-                syncLocalToGlobal();
-                updateUI();
-            });
+        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+            const idx = parseInt(btn.dataset.sentIdx);
+            sentHistory.splice(idx, 1);
+            syncLocalToGlobal();
+            updateUI();
         });
     }
 
@@ -1425,15 +1425,12 @@
             `;
         }).join('');
 
-        container.querySelectorAll('.yd-sq-item-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.dataset.impIdx);
-                importedMinuses.splice(idx, 1);
-                syncLocalToGlobal();
-                updateHighlights();
-                renderImportedMinuses();
-            });
+        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+            const idx = parseInt(btn.dataset.impIdx);
+            importedMinuses.splice(idx, 1);
+            syncLocalToGlobal();
+            updateHighlights();
+            renderImportedMinuses();
         });
     }
 
@@ -1733,9 +1730,7 @@
         }
     }
 
-    function loadGlobalSelectionsToLocal() {
-        // Selections уже загружены в loadGlobalState
-    }
+
 
     // ==================== УВЕДОМЛЕНИЯ ====================
 
@@ -1779,33 +1774,10 @@
         });
 
         // Делегирование событий для слов
-        document.body.addEventListener('click', (e) => {
-            const target = e.target.closest('.yd-word');
-            if (target) {
-                onWordClick(e, target);
-            }
-        });
-
-        document.body.addEventListener('dblclick', (e) => {
-            const target = e.target.closest('.yd-word');
-            if (target) {
-                onWordDoubleClick(e, target);
-            }
-        });
-
-        document.body.addEventListener('mouseover', (e) => {
-            const target = e.target.closest('.yd-word');
-            if (target) {
-                onWordHover(e, target);
-            }
-        });
-
-        document.body.addEventListener('mouseout', (e) => {
-            const target = e.target.closest('.yd-word');
-            if (target) {
-                onWordHoverOut(e, target);
-            }
-        });
+        addDelegatedListener('click', '.yd-word', onWordClick);
+        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
+        addDelegatedListener('mouseover', '.yd-word', onWordHover);
+        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
 
     function setupResultPopupObserver() {
