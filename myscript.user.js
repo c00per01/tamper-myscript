@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.118
+// @version      0.0.115
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -572,8 +572,6 @@
         const sel = selections.get(id);
         if (!sel) return;
 
-        console.log('[YD-SQ] removeSelectionById:', { id, rowId: sel.rowId, pageKey: sel.pageKey });
-
         selections.delete(id);
 
         const { rowId, pageKey } = sel;
@@ -581,28 +579,12 @@
             s => s.pageKey === pageKey && s.rowId === rowId
         );
 
-        console.log('[YD-SQ] Checking other selections on row:', {
-            rowId,
-            pageKey,
-            currentPageKey,
-            otherSelsOnRow,
-            totalSelections: selections.size
-        });
-
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
-            console.log('[YD-SQ] No other selections, unchecking:', {
-                rowId,
-                hasCheckbox: !!cb,
-                isChecked: cb?.checked,
-                isAuto: cb?.dataset.ydAuto
-            });
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
                 clickCheckbox(cb, false);  // Явно выключаем чекбокс
                 delete cb.dataset.ydAuto;
             }
-        } else {
-            console.log('[YD-SQ] Keeping checkbox checked - other selections exist');
         }
         syncLocalToGlobal();
     }
@@ -682,6 +664,7 @@
             return tooltip;
         }
 
+        return null;
     }
 
     // ==================== HIGHLIGHTS ====================
@@ -704,13 +687,17 @@
 
         // 1. Из "В кампании" (importedMinuses)
         for (const imp of importedMinuses) {
-            rules.push(parseMinusRule(imp.raw));
+            const rule = parseMinusRule(imp.raw);
+            rule.source = 'imported';
+            rules.push(rule);
         }
 
         // 2. Из "Выбранные сейчас" (selections)
         for (const sel of selections.values()) {
             if (sel.display) {
-                rules.push(parseMinusRule(sel.display));
+                const rule = parseMinusRule(sel.display);
+                rule.source = 'selection';
+                rules.push(rule);
             }
         }
 
@@ -732,6 +719,13 @@
             for (const rule of rules) {
                 let isMatch = false;
                 let matchedIndices = new Set();
+                let strictIndices = new Set();
+
+                // Determine base class
+                let baseClass = 'yd-imported-minus';
+                if (rule.source === 'selection') {
+                    baseClass = 'yd-selected-soft';
+                }
 
                 if (rule.type === 'quote') {
                     if (rowWordsData.length === rule.words.length) {
@@ -758,9 +752,8 @@
 
                         if (allRuleWordsFound) {
                             isMatch = true;
-                            for (let i = 0; i < rowWordsData.length; i++) {
-                                rowWordsData[i].span.classList.add('yd-selected-phrase');
-                            }
+                            for (let i = 0; i < rowWordsData.length; i++) matchedIndices.add(i);
+                            baseClass = 'yd-selected-phrase';
                         }
                     }
 
@@ -784,32 +777,30 @@
 
                             if (subMatch) {
                                 isMatch = true;
-                                for (let k = 0; k < pLen; k++) {
-                                    rowWordsData[i + k].span.classList.add('yd-selected-phrase');
-                                }
+                                for (let k = 0; k < pLen; k++) matchedIndices.add(i + k);
                             }
                         }
                     }
+                    if (isMatch) baseClass = 'yd-selected-strict';
 
                 } else if (rule.type === 'broad') {
-                    // Широкое соответствие
-                    const usedIndicesMap = new Map(); // idx -> isStrictMatch
-                    const tempIndices = new Set();
+                    const indicesFound = [];
                     let allFound = true;
 
                     for (const rWord of rule.words) {
-                        const foundIdx = rowWordsData.findIndex((d, idx) => {
-                            if (tempIndices.has(idx)) return false;
-                            if (rWord.isStrict) {
-                                return d.lower === rWord.text;
-                            } else {
-                                return d.stem === stemWord(rWord.text);
+                        const foundForThisWord = [];
+                        rowWordsData.forEach((d, idx) => {
+                            const match = rWord.isStrict
+                                ? (d.lower === rWord.text)
+                                : (d.stem === stemWord(rWord.text));
+                            if (match) {
+                                foundForThisWord.push(idx);
+                                if (rWord.isStrict) strictIndices.add(idx);
                             }
                         });
 
-                        if (foundIdx !== -1) {
-                            tempIndices.add(foundIdx);
-                            usedIndicesMap.set(foundIdx, rWord.isStrict);
+                        if (foundForThisWord.length > 0) {
+                            indicesFound.push(...foundForThisWord);
                         } else {
                             allFound = false;
                             break;
@@ -818,16 +809,24 @@
 
                     if (allFound) {
                         isMatch = true;
-                        for (const [idx, isStrict] of usedIndicesMap) {
-                            const className = isStrict ? 'yd-selected-strict' : 'yd-selected-soft';
-                            rowWordsData[idx].span.classList.add(className);
+                        indicesFound.forEach(idx => matchedIndices.add(idx));
+                    }
+                }
+
+                if (isMatch) {
+                    for (const idx of matchedIndices) {
+                        const span = rowWordsData[idx].span;
+                        if (rule.type === 'broad' && strictIndices.has(idx)) {
+                            span.classList.add('yd-selected-strict');
+                        } else {
+                            span.classList.add(baseClass);
                         }
                     }
                 }
             }
         }
 
-        // 2. СЛОЙ 2: ИСТОРИЯ ОТПРАВЛЕНИЙ
+        // --- ИСТОРИЯ ---
         for (const sent of sentHistory) {
             const sentStem = stemWord(sent.raw);
             const sentLower = sent.raw.toLowerCase();
@@ -837,25 +836,6 @@
                 const wordLower = span.dataset.wordLower;
                 if (stem === sentStem || wordLower === sentLower) {
                     span.classList.add('yd-sent-history');
-                }
-            }
-        }
-
-        // 3. СЛОЙ 3: Маркеры текущих выделений (подчеркивание)
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId) {
-                const rowSpans = wordSpans.filter(s => s.dataset.rowId === sel.rowId);
-                for (const span of rowSpans) {
-                    let isTarget = false;
-                    if (sel.kind === 'soft-word' && span.dataset.stem === sel.stem) isTarget = true;
-                    if (sel.kind === 'strict-word' && span.dataset.wordLower === (sel.wordLower || sel.raw.toLowerCase())) isTarget = true;
-                    if (sel.kind === 'phrase' && sel.words && sel.words.includes(span.dataset.word)) isTarget = true;
-
-                    if (isTarget) {
-                        if (sel.kind === 'soft-word') span.classList.add('yd-primary-soft');
-                        if (sel.kind === 'strict-word') span.classList.add('yd-primary-strict');
-                        if (sel.kind === 'phrase' && sel._building) span.classList.add('yd-phrase-building');
-                    }
                 }
             }
         }
@@ -875,6 +855,7 @@
             content = raw.slice(1, -1);
         }
 
+        // Разбиваем на слова
         const rawWords = content.split(/[\s+]+/).filter(w => w);
         const words = rawWords.map(w => {
             let text = w.toLowerCase();
@@ -889,8 +870,11 @@
         return { type, words, raw };
     }
 
+
     function restoreVisualMarkers() {
         updateHighlights();
+
+        // Восстановить чекбоксы для сохраненных выделений
         for (const sel of selections.values()) {
             if (sel.pageKey === currentPageKey && sel.rowId) {
                 ensureRowChecked(sel.rowId);
@@ -902,17 +886,21 @@
 
     function pushUndo(actionType, description) {
         undoStack.stack = undoStack.stack.slice(0, undoStack.currentIndex + 1);
+
         undoStack.stack.push({
             timestamp: Date.now(),
             type: actionType,
             description: description,
             snapshot: new Map(selections)
         });
+
         undoStack.currentIndex++;
+
         if (undoStack.stack.length > undoStack.maxSize) {
             undoStack.stack.shift();
             undoStack.currentIndex--;
         }
+
         updateUndoRedoButtons();
     }
 
@@ -920,10 +908,12 @@
         if (undoStack.currentIndex > 0) {
             undoStack.currentIndex--;
             selections.clear();
+
             const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
             for (const [key, val] of snapshot) {
                 selections.set(key, { ...val });
             }
+
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
@@ -934,10 +924,12 @@
         if (undoStack.currentIndex < undoStack.stack.length - 1) {
             undoStack.currentIndex++;
             selections.clear();
+
             const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
             for (const [key, val] of snapshot) {
                 selections.set(key, { ...val });
             }
+
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
@@ -947,6 +939,7 @@
     function updateUndoRedoButtons() {
         const undoBtn = document.getElementById('yd-sq-undo-btn');
         const redoBtn = document.getElementById('yd-sq-redo-btn');
+
         if (undoBtn) undoBtn.disabled = (undoStack.currentIndex <= 0);
         if (redoBtn) redoBtn.disabled = (undoStack.currentIndex >= undoStack.stack.length - 1);
     }
@@ -959,10 +952,16 @@
     }
 
     function clickCheckbox(cb, newState) {
+        // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
+
         if (cb.checked !== newState) {
             cb.click();
+            // console.log('[YD-SQ] Выполнен клик по чекбоксу');
+
+            // Проверка и fallback
             setTimeout(() => {
                 if (cb.checked !== newState) {
+                    // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
                     cb.checked = newState;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -974,6 +973,8 @@
     function getAllRowsOnPage() {
         return Array.from(document.querySelectorAll(`[data-yd-row-id^="${currentPageKey}:"]`));
     }
+
+    // ==================== AUTO-SCROLL ====================
 
     function debounceAutoScroll(rowId, delay) {
         if (autoScrollDebounceMap.has(rowId)) {
@@ -2299,6 +2300,72 @@
                 cursor: pointer;
                 transition: background 0.15s ease, box-shadow 0.15s ease;
                 border-radius: 2px;
+                padding: 1px 0;
+                position: relative;
+                display: inline-block;
+            }
+
+            .yd-word:hover {
+                background: rgba(74, 144, 226, 0.1);
+            }
+
+            .yd-selected-soft {
+                background: #fff3bf !important;
+            }
+
+            .yd-selected-strict {
+                background: #ffd6d6 !important;
+            }
+
+            .yd-selected-phrase {
+                background: #cce5ff !important;
+            }
+
+            .yd-phrase-building {
+                background: #e2f0ff !important;
+                outline: 2px dashed #7da9ff;
+                outline-offset: 1px;
+            }
+
+            .yd-primary-soft {
+                box-shadow: 0 0 0 2px #f0c200 inset;
+                font-weight: 600;
+            }
+
+            .yd-primary-strict {
+                box-shadow: 0 0 0 2px #d90000 inset;
+                background: #ffd6d6 !important;
+                font-weight: 600;
+            }
+
+            .yd-sent-history {
+                background: #f5f5f5 !important;
+                opacity: 0.65;
+                border-bottom: 1px solid #28a745;
+                position: relative;
+            }
+
+            .yd-sent-history::after {
+                content: '✓';
+                position: absolute;
+                right: -6px;
+                top: -4px;
+                font-size: 10px;
+                color: #28a745;
+                font-weight: bold;
+            }
+
+            .yd-imported-minus {
+                background: rgba(0, 0, 0, 0.04) !important;
+                color: #aaa !important;
+                text-decoration: line-through;
+                text-decoration-color: rgba(0, 0, 0, 0.1);
+                opacity: 0.8;
+            }
+
+            /* COPY КНОПКА */
+            .yd-copy-query-btn {
+                display: inline-flex;
                 align-items: center;
                 justify-content: center;
                 margin-left: 8px;
@@ -2401,6 +2468,24 @@
             .yd-sq-notification-error {
                 background: #dc3545;
                 color: #fff;
+            }
+
+            /* HIGHLIGHTS CUSTOMIZATION */
+            .yd-selected-phrase {
+                background-color: #cce5ff !important;
+            }
+            .yd-selected-strict {
+                background-color: #ffd6d6 !important;
+            }
+            .yd-imported-minus {
+                background-color: rgba(0, 0, 0, 0.04) !important;
+                text-decoration: line-through;
+            }
+            .yd-sent-history {
+                background-color: rgba(245, 245, 245, 0.65) !important;
+            }
+            .yd-selected-soft {
+                background-color: #fff3cd !important;
             }
         `;
 
