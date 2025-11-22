@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.2
+// @version 0.121.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -392,59 +392,51 @@
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
 
-        // --- PHRASE BUILDING MODE ---
+        // If phrase building is in progress
         if (phraseInProgress) {
+            // Check if click is in the same row
             if (phraseInProgress.rowId !== rowId) {
-                // Clicked outside active row - ignore or maybe cancel? 
-                // User said "Rows outside... deactivate", implying ignore.
+                // Ignore clicks on other rows
                 return;
             }
 
-            // Clicked inside active row
-            if (phraseInProgress.words.includes(word)) {
-                // Word already in phrase? User didn't specify toggle inside building.
-                // Usually we just add. If clicked again, maybe nothing?
-                // Let's assume we just add unique words.
+            // Check if this word is already part of the phrase
+            if (span.classList.contains('yd-phrase-building')) {
+                // Cancel the entire phrase
+                cancelPhraseBuilding();
                 return;
             }
 
-            phraseInProgress.words.push(word);
+            // Add word to phrase
+            if (!phraseInProgress.words.includes(word)) {
+                phraseInProgress.words.push(word);
+                const sel = selections.get(phraseInProgress.id);
+                sel.raw = phraseInProgress.words.join(' ');
+                sel.display = `"${sel.raw}"`;
+                sel.words = [...phraseInProgress.words];
 
-            // Update selection
-            const sel = selections.get(phraseInProgress.id);
-            sel.raw = phraseInProgress.words.join(' ');
-            sel.display = `"${sel.raw}"`; // Quote match
-            sel.words = [...phraseInProgress.words];
+                span.classList.add('yd-phrase-building');
+                span.dataset.phraseId = phraseInProgress.id;
 
-            span.classList.add('yd-phrase-building');
-            span.dataset.phraseId = phraseInProgress.id;
+                // Auto-complete if row has only 2 words and both are selected
+                const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
+                if (rowSpans.length === 2 && phraseInProgress.words.length === 2) {
+                    finalizePhraseBuilding(false);
+                    return;
+                }
 
-            // Check for auto-completion (2-word row)
-            const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
-            if (rowSpans.length === 2 && phraseInProgress.words.length === 2) {
-                finalizePhraseBuilding(false);
+                updateUI();
             }
-
-            updateUI();
             return;
         }
 
-        // --- NORMAL MODE ---
-
-        // Check if word is part of a completed phrase (Quote match)
-        // We need to find if this word belongs to any selection of type 'quote'
-        // We can check classes or iterate selections.
-        // Checking classes is faster if we trust them.
+        // Normal click behavior (no phrase mode)
+        // Check if word is part of a completed phrase
         if (span.classList.contains('yd-selected-phrase')) {
-            // Find the selection ID. It might be on the span or we search.
-            // Since we don't store ID on span for completed phrases (only building), we search.
-            // This is slightly expensive but safe.
-            for (const sel of selections.values()) {
-                if (sel.matchType === 'quote' && sel.rowId === rowId) {
-                    // Check if this word is part of the phrase words
-                    // Simple check: is it in the row? Yes.
-                    // So if we clicked a word in a row that has a quote selection, we remove it.
-                    removeSelectionById(sel.id);
+            // Find and remove the phrase selection
+            for (const [key, sel] of selections) {
+                if (sel.kind === 'phrase' && sel.rowId === rowId && sel.pageKey === currentPageKey) {
+                    removeSelectionById(key);
                     showYdsqNotification('Фраза удалена', 'info');
                     updateUI();
                     return;
@@ -452,876 +444,833 @@
             }
         }
 
-        // Standard Soft/Strict Toggle
+        // Check if already selected as soft/strict
         if (span.classList.contains('yd-selected-soft') || span.classList.contains('yd-selected-strict')) {
             const key = span.classList.contains('yd-selected-soft') ? `soft:${stem}` : `strict:${wordLower}`;
             removeSelectionById(key);
             updateUI();
             return;
         }
-
-        if (e.altKey) {
-            toggleStrictWord(span, wordLower, word, rowId);
-            pushUndo('add_selection', `Добавлено строгое слово "${word}"`);
-        } else {
-            toggleSoftWord(span, stem, word, rowId);
-            pushUndo('add_selection', `Добавлено мягкое слово "${word}"`);
-        }
-
-        updateUI();
-        debounceAutoScroll(rowId, 180);
+        showYdsqNotification('Фраза добавлена', 'success');
     }
 
-    function onWordDoubleClick(e, targetSpan) {
-        e.stopPropagation();
+    // Remove phrase-building classes
+    for (const span of wordSpans) {
+        span.classList.remove('yd-phrase-building');
+        delete span.dataset.phraseId;
+    }
 
-        const rowId = targetSpan.dataset.rowId;
-        const word = targetSpan.dataset.word;
+    // Reactivate all rows
+    reactivateAllRows();
 
-        // If already building, maybe finalize? Or ignore?
-        if (phraseInProgress) {
-            finalizePhraseBuilding(false);
-            return;
+    phraseInProgress = null;
+    syncLocalToGlobal();
+    updateUI();
+}
+
+    function cancelPhraseBuilding() {
+    if (!phraseInProgress) return;
+
+    selections.delete(phraseInProgress.id);
+
+    // Remove phrase-building classes
+    for (const span of wordSpans) {
+        span.classList.remove('yd-phrase-building');
+        delete span.dataset.phraseId;
+    }
+
+    // Reactivate all rows
+    reactivateAllRows();
+
+    phraseInProgress = null;
+    showYdsqNotification('Фраза отменена', 'info');
+    syncLocalToGlobal();
+    updateUI();
+}
+
+function deactivateOtherRows(activeRowId) {
+    const allRows = getAllRowsOnPage();
+    for (const row of allRows) {
+        if (row.dataset.ydRowId !== activeRowId) {
+            row.classList.add('yd-row-deactivated');
         }
+    }
+}
 
-        // Start Phrase Mode
-        phraseCounter++;
-        const phraseId = `phrase:${phraseCounter}`;
+function reactivateAllRows() {
+    const allRows = getAllRowsOnPage();
+    for (const row of allRows) {
+        row.classList.remove('yd-row-deactivated');
+    }
+}
 
-        phraseInProgress = {
-            id: phraseId,
-            rowId: rowId,
-            words: [word],
-            startTime: Date.now()
-        };
+function ensureRowChecked(rowId) {
+    const cb = getRowCheckbox(rowId);
+    // console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
 
-        selections.set(phraseId, {
-            id: phraseId,
-            kind: 'phrase',
+    if (cb && !cb.checked) {
+        clickCheckbox(cb, true);  // Явно включаем чекбокс
+        cb.dataset.ydAuto = 'true';
+        // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
+    }
+}
+
+function toggleSoftWord(span, stem, word, rowId) {
+    // Если слово является стоп-словом, принудительно используем строгий режим
+    const wordLower = word.toLowerCase();
+    if (STOPWORDS.has(wordLower)) {
+        toggleStrictWord(span, wordLower, word, rowId);
+        return;
+    }
+
+    const key = `soft:${stem}`;
+
+    if (selections.has(key)) {
+        const sel = selections.get(key);
+        if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
+            removeSelectionById(key);
+            return; // removeSelectionById already calls syncLocalToGlobal
+        } else {
+            sel.rowId = rowId;
+            sel.pageKey = currentPageKey;
+            sel.raw = word;
+            sel.display = word;
+        }
+    } else {
+        selections.set(key, {
+            id: key,
+            kind: 'soft-word',
+            stem: stem,
             raw: word,
-            display: `"${word}"`,
-            words: [word],
+            display: word,
             rowId: rowId,
             pageKey: currentPageKey,
-            matchType: 'quote',
-            _building: true
+            matchType: null,
+            unassignedOnThisPage: false
         });
-
-        // Visuals
-        targetSpan.classList.add('yd-phrase-building');
-        targetSpan.dataset.phraseId = phraseId;
-
-        // Deactivate other rows
-        document.body.classList.add('yd-phrase-mode-active');
-        // Mark active row elements? 
-        // We can iterate spans and add 'yd-row-active' to those in rowId
-        for (const s of wordSpans) {
-            if (s.dataset.rowId === rowId) {
-                s.classList.add('yd-row-active');
-            } else {
-                s.classList.remove('yd-row-active');
-            }
-        }
-
         ensureRowChecked(rowId);
-        showYdsqNotification('Режим фразы', 'info');
-
-        syncLocalToGlobal();
-        updateUI();
     }
+    syncLocalToGlobal();
+}
 
-    function finalizePhraseBuilding(isCancel) {
-        if (!phraseInProgress) return;
+function toggleStrictWord(span, wordLower, word, rowId) {
+    const key = `strict:${wordLower}`;
 
-        const sel = selections.get(phraseInProgress.id);
-
-        if (isCancel || !sel) {
-            selections.delete(phraseInProgress.id);
+    if (selections.has(key)) {
+        const sel = selections.get(key);
+        if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
+            removeSelectionById(key);
+            return; // removeSelectionById already calls syncLocalToGlobal
         } else {
-            sel._building = false;
-            pushUndo('add_selection', `Построена фраза: "${sel.raw}"`);
-            showYdsqNotification('Фраза добавлена', 'success');
+            sel.rowId = rowId;
+            sel.pageKey = currentPageKey;
+            sel.raw = word;
+            sel.display = '!' + word;
         }
-
-        // Cleanup Visuals
-        document.body.classList.remove('yd-phrase-mode-active');
-        for (const span of wordSpans) {
-            span.classList.remove('yd-phrase-building', 'yd-row-active');
-            delete span.dataset.phraseId;
-        }
-
-        phraseInProgress = null;
-        syncLocalToGlobal();
-        updateUI();
+    } else {
+        selections.set(key, {
+            id: key,
+            kind: 'strict-word',
+            wordLower: wordLower,
+            raw: word,
+            display: '!' + word,
+            rowId: rowId,
+            pageKey: currentPageKey,
+            matchType: 'strict',
+            unassignedOnThisPage: false
+        });
+        ensureRowChecked(rowId);
     }
+    syncLocalToGlobal();
+}
 
-    function ensureRowChecked(rowId) {
+function removeSelectionById(id) {
+    const sel = selections.get(id);
+    if (!sel) return;
+
+    selections.delete(id);
+
+    const { rowId, pageKey } = sel;
+    const otherSelsOnRow = Array.from(selections.values()).some(
+        s => s.pageKey === pageKey && s.rowId === rowId
+    );
+
+    if (!otherSelsOnRow && pageKey === currentPageKey) {
         const cb = getRowCheckbox(rowId);
-        // console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
-
-        if (cb && !cb.checked) {
-            clickCheckbox(cb, true);  // Явно включаем чекбокс
-            cb.dataset.ydAuto = 'true';
-            // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
+        if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+            clickCheckbox(cb, false);  // Явно выключаем чекбокс
+            delete cb.dataset.ydAuto;
         }
     }
+    syncLocalToGlobal();
+}
 
-    function toggleSoftWord(span, stem, word, rowId) {
-        // Если слово является стоп-словом, принудительно используем строгий режим
-        const wordLower = word.toLowerCase();
-        if (STOPWORDS.has(wordLower)) {
-            toggleStrictWord(span, wordLower, word, rowId);
-            return;
+// ==================== TOOLTIP ====================
+
+function onWordHover(e, targetSpan) {
+    const span = targetSpan;
+    tooltipTimeout = setTimeout(() => {
+        const tooltip = createTooltip(span);
+        if (tooltip) {
+            document.body.appendChild(tooltip);
+
+            const rect = span.getBoundingClientRect();
+            tooltip.style.left = rect.left + 'px';
+            tooltip.style.top = (rect.top - tooltip.offsetHeight - 5) + 'px';
         }
+    }, 500);
+}
 
-        const key = `soft:${stem}`;
+function onWordHoverOut(e, targetSpan) {
+    clearTimeout(tooltipTimeout);
+    const existing = document.querySelector('.yd-tooltip');
+    if (existing) existing.remove();
+}
 
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
-                return; // removeSelectionById already calls syncLocalToGlobal
-            } else {
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = word;
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'soft-word',
-                stem: stem,
-                raw: word,
-                display: word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: null,
-                unassignedOnThisPage: false
-            });
-            ensureRowChecked(rowId);
-        }
-        syncLocalToGlobal();
-    }
+function createTooltip(span) {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'yd-tooltip';
 
-    function toggleStrictWord(span, wordLower, word, rowId) {
-        const key = `strict:${wordLower}`;
+    if (span.classList.contains('yd-sent-history')) {
+        const sentAt = span.dataset.sentAt ? new Date(parseInt(span.dataset.sentAt)) : null;
+        const dateStr = sentAt ? sentAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
 
-        if (selections.has(key)) {
-            const sel = selections.get(key);
-            if (sel.pageKey === currentPageKey && sel.rowId === rowId) {
-                removeSelectionById(key);
-                return; // removeSelectionById already calls syncLocalToGlobal
-            } else {
-                sel.rowId = rowId;
-                sel.pageKey = currentPageKey;
-                sel.raw = word;
-                sel.display = '!' + word;
-            }
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'strict-word',
-                wordLower: wordLower,
-                raw: word,
-                display: '!' + word,
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: 'strict',
-                unassignedOnThisPage: false
-            });
-            ensureRowChecked(rowId);
-        }
-        syncLocalToGlobal();
-    }
-
-    function removeSelectionById(id) {
-        const sel = selections.get(id);
-        if (!sel) return;
-
-        selections.delete(id);
-
-        const { rowId, pageKey } = sel;
-        const otherSelsOnRow = Array.from(selections.values()).some(
-            s => s.pageKey === pageKey && s.rowId === rowId
-        );
-
-        if (!otherSelsOnRow && pageKey === currentPageKey) {
-            const cb = getRowCheckbox(rowId);
-            if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb, false);  // Явно выключаем чекбокс
-                delete cb.dataset.ydAuto;
-            }
-        }
-        syncLocalToGlobal();
-    }
-
-    // ==================== TOOLTIP ====================
-
-    function onWordHover(e, targetSpan) {
-        const span = targetSpan;
-        tooltipTimeout = setTimeout(() => {
-            const tooltip = createTooltip(span);
-            if (tooltip) {
-                document.body.appendChild(tooltip);
-
-                const rect = span.getBoundingClientRect();
-                tooltip.style.left = rect.left + 'px';
-                tooltip.style.top = (rect.top - tooltip.offsetHeight - 5) + 'px';
-            }
-        }, 500);
-    }
-
-    function onWordHoverOut(e, targetSpan) {
-        clearTimeout(tooltipTimeout);
-        const existing = document.querySelector('.yd-tooltip');
-        if (existing) existing.remove();
-    }
-
-    function createTooltip(span) {
-        const tooltip = document.createElement('div');
-        tooltip.className = 'yd-tooltip';
-
-        if (span.classList.contains('yd-sent-history')) {
-            const sentAt = span.dataset.sentAt ? new Date(parseInt(span.dataset.sentAt)) : null;
-            const dateStr = sentAt ? sentAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
-
-            tooltip.innerHTML = `
+        tooltip.innerHTML = `
                 <div class="yd-tooltip-layer">Присутствует в истории</div>
                 <div class="yd-tooltip-content">
                     ✓ Отправлено ${dateStr}
                 </div>
             `;
-            return tooltip;
-        }
+        return tooltip;
+    }
 
-        if (span.classList.contains('yd-imported-minus')) {
-            const importedAt = span.dataset.importedAt ? new Date(parseInt(span.dataset.importedAt)) : null;
-            const dateStr = importedAt ? importedAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
+    if (span.classList.contains('yd-imported-minus')) {
+        const importedAt = span.dataset.importedAt ? new Date(parseInt(span.dataset.importedAt)) : null;
+        const dateStr = importedAt ? importedAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
 
-            tooltip.innerHTML = `
+        tooltip.innerHTML = `
                 <div class="yd-tooltip-layer">Минус в кампании</div>
                 <div class="yd-tooltip-content">
                     📥 В кампании<br>
                     загружено ${dateStr}
                 </div>
             `;
-            return tooltip;
-        }
+        return tooltip;
+    }
 
-        if (span.classList.contains('yd-selected-soft')) {
-            const stem = span.dataset.stem;
-            const count = wordSpans.filter(s => s.dataset.stem === stem).length;
+    if (span.classList.contains('yd-selected-soft')) {
+        const stem = span.dataset.stem;
+        const count = wordSpans.filter(s => s.dataset.stem === stem).length;
 
-            tooltip.innerHTML = `
+        tooltip.innerHTML = `
                 <div class="yd-tooltip-layer">Мягкое выделение (soft)</div>
                 <div class="yd-tooltip-content">
                     Похоже на "${span.dataset.word}"<br>
                     найдено ещё ${count - 1} похожих
                 </div>
             `;
-            return tooltip;
-        }
+        return tooltip;
+    }
 
-        if (span.classList.contains('yd-selected-strict')) {
-            tooltip.innerHTML = `
+    if (span.classList.contains('yd-selected-strict')) {
+        tooltip.innerHTML = `
                 <div class="yd-tooltip-layer">Строгое выделение (strict)</div>
                 <div class="yd-tooltip-content">Точное совпадение</div>
             `;
-            return tooltip;
-        }
-
-        return null;
+        return tooltip;
     }
 
-    // ==================== HIGHLIGHTS ====================
+    return null;
+}
 
-    // Cache for parsed rules to avoid re-parsing on every update
-    let cachedImportedRules = null;
-    let lastImportedMinusesRef = null;
+// ==================== HIGHLIGHTS ====================
 
-    function updateHighlights() {
-        // 1. Clear classes
-        // Using a simple loop is fast for clearing.
-        for (const sp of wordSpans) {
-            sp.className = 'yd-word'; // Reset to base class
-            // Restore original classes if any? 
-            // Actually wordSpans only have 'yd-word' initially.
-            // But wait, if we have other classes?
-            // Safer to remove specific classes.
-            sp.classList.remove(
-                'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
-                'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
-                'yd-sent-history', 'yd-imported-minus'
-            );
-            delete sp.dataset.phraseId;
-            delete sp.dataset.sentAt;
-            delete sp.dataset.importedAt;
+// Cache for parsed rules to avoid re-parsing on every update
+let cachedImportedRules = null;
+let lastImportedMinusesRef = null;
+
+function updateHighlights() {
+    // 1. Clear classes
+    // Using a simple loop is fast for clearing.
+    for (const sp of wordSpans) {
+        sp.className = 'yd-word'; // Reset to base class
+        // Restore original classes if any? 
+        // Actually wordSpans only have 'yd-word' initially.
+        // But wait, if we have other classes?
+        // Safer to remove specific classes.
+        sp.classList.remove(
+            'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
+            'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
+            'yd-sent-history', 'yd-imported-minus'
+        );
+        delete sp.dataset.phraseId;
+        delete sp.dataset.sentAt;
+        delete sp.dataset.importedAt;
+    }
+
+    // 2. Prepare Rules
+    // Check if importedMinuses array reference changed
+    if (lastImportedMinusesRef !== importedMinuses) {
+        cachedImportedRules = importedMinuses.map(imp => {
+            const r = parseMinusRule(imp.raw);
+            r.source = 'imported';
+            return r;
+        });
+        lastImportedMinusesRef = importedMinuses;
+    }
+
+    // Combine cached imported rules with current selections
+    const rules = [...(cachedImportedRules || [])];
+
+    for (const sel of selections.values()) {
+        if (sel.display) {
+            const r = parseMinusRule(sel.display);
+            r.source = 'selection';
+            rules.push(r);
         }
+    }
 
-        // 2. Prepare Rules
-        // Check if importedMinuses array reference changed
-        if (lastImportedMinusesRef !== importedMinuses) {
-            cachedImportedRules = importedMinuses.map(imp => {
-                const r = parseMinusRule(imp.raw);
-                r.source = 'imported';
-                return r;
-            });
-            lastImportedMinusesRef = importedMinuses;
+    if (rules.length === 0 && sentHistory.length === 0) return;
+
+    // 3. Group spans by row (Optimization)
+    // This avoids O(N*M) filtering inside the loop.
+    const spansByRow = new Map();
+    for (const sp of wordSpans) {
+        const rid = sp.dataset.rowId;
+        if (!rid) continue;
+        let arr = spansByRow.get(rid);
+        if (!arr) {
+            arr = [];
+            spansByRow.set(rid, arr);
         }
+        arr.push(sp);
+    }
 
-        // Combine cached imported rules with current selections
-        const rules = [...(cachedImportedRules || [])];
+    // 4. Iterate Rows
+    for (const [rowId, rowSpans] of spansByRow) {
+        // Prepare row data once
+        const rowWordsData = rowSpans.map(s => ({
+            text: s.dataset.word,
+            lower: s.dataset.wordLower,
+            stem: s.dataset.stem,
+            span: s
+        }));
+        const rowLen = rowWordsData.length;
 
-        for (const sel of selections.values()) {
-            if (sel.display) {
-                const r = parseMinusRule(sel.display);
-                r.source = 'selection';
-                rules.push(r);
+        for (const rule of rules) {
+            let isMatch = false;
+            let matchedIndices = new Set();
+            let strictIndices = new Set();
+
+            let baseClass = 'yd-imported-minus';
+            if (rule.source === 'selection') {
+                baseClass = 'yd-selected-soft';
             }
-        }
 
-        if (rules.length === 0 && sentHistory.length === 0) return;
-
-        // 3. Group spans by row (Optimization)
-        // This avoids O(N*M) filtering inside the loop.
-        const spansByRow = new Map();
-        for (const sp of wordSpans) {
-            const rid = sp.dataset.rowId;
-            if (!rid) continue;
-            let arr = spansByRow.get(rid);
-            if (!arr) {
-                arr = [];
-                spansByRow.set(rid, arr);
-            }
-            arr.push(sp);
-        }
-
-        // 4. Iterate Rows
-        for (const [rowId, rowSpans] of spansByRow) {
-            // Prepare row data once
-            const rowWordsData = rowSpans.map(s => ({
-                text: s.dataset.word,
-                lower: s.dataset.wordLower,
-                stem: s.dataset.stem,
-                span: s
-            }));
-            const rowLen = rowWordsData.length;
-
-            for (const rule of rules) {
-                let isMatch = false;
-                let matchedIndices = new Set();
-                let strictIndices = new Set();
-
-                let baseClass = 'yd-imported-minus';
-                if (rule.source === 'selection') {
-                    baseClass = 'yd-selected-soft';
-                }
-
-                if (rule.type === 'quote') {
-                    // Quote: Exact Set of words (no extra words in row)
-                    if (rowLen === rule.words.length) {
-                        const rowIndicesUsed = new Set();
-                        let allRuleWordsFound = true;
-
-                        for (const rWord of rule.words) {
-                            // Find matching word in row
-                            const foundIdx = rowWordsData.findIndex((d, idx) => {
-                                if (rowIndicesUsed.has(idx)) return false;
-                                if (rWord.isStrict) {
-                                    return d.lower === rWord.text;
-                                } else {
-                                    return d.stem === stemWord(rWord.text);
-                                }
-                            });
-
-                            if (foundIdx !== -1) {
-                                rowIndicesUsed.add(foundIdx);
-                            } else {
-                                allRuleWordsFound = false;
-                                break;
-                            }
-                        }
-
-                        if (allRuleWordsFound) {
-                            isMatch = true;
-                            for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
-                            baseClass = 'yd-selected-phrase';
-                        }
-                    }
-
-                } else if (rule.type === 'bracket') {
-                    // Bracket: Fixed sequence
-                    const pLen = rule.words.length;
-                    if (rowLen >= pLen) {
-                        for (let i = 0; i <= rowLen - pLen; i++) {
-                            let subMatch = true;
-                            for (let j = 0; j < pLen; j++) {
-                                const rWord = rule.words[j];
-                                const d = rowWordsData[i + j];
-                                const match = rWord.isStrict
-                                    ? (d.lower === rWord.text)
-                                    : (d.stem === stemWord(rWord.text));
-
-                                if (!match) {
-                                    subMatch = false;
-                                    break;
-                                }
-                            }
-
-                            if (subMatch) {
-                                isMatch = true;
-                                for (let k = 0; k < pLen; k++) matchedIndices.add(i + k);
-                            }
-                        }
-                    }
-                    if (isMatch) baseClass = 'yd-selected-strict';
-
-                } else if (rule.type === 'broad') {
-                    // Broad: All words present anywhere
-                    const indicesFound = [];
-                    let allFound = true;
+            if (rule.type === 'quote') {
+                // Quote: Exact Set of words (no extra words in row)
+                if (rowLen === rule.words.length) {
+                    const rowIndicesUsed = new Set();
+                    let allRuleWordsFound = true;
 
                     for (const rWord of rule.words) {
-                        const foundForThisWord = [];
-                        rowWordsData.forEach((d, idx) => {
-                            const match = rWord.isStrict
-                                ? (d.lower === rWord.text)
-                                : (d.stem === stemWord(rWord.text));
-                            if (match) {
-                                foundForThisWord.push(idx);
-                                if (rWord.isStrict) strictIndices.add(idx);
+                        // Find matching word in row
+                        const foundIdx = rowWordsData.findIndex((d, idx) => {
+                            if (rowIndicesUsed.has(idx)) return false;
+                            if (rWord.isStrict) {
+                                return d.lower === rWord.text;
+                            } else {
+                                return d.stem === stemWord(rWord.text);
                             }
                         });
 
-                        if (foundForThisWord.length > 0) {
-                            indicesFound.push(...foundForThisWord);
+                        if (foundIdx !== -1) {
+                            rowIndicesUsed.add(foundIdx);
                         } else {
-                            allFound = false;
+                            allRuleWordsFound = false;
                             break;
                         }
                     }
 
-                    if (allFound) {
+                    if (allRuleWordsFound) {
                         isMatch = true;
-                        indicesFound.forEach(idx => matchedIndices.add(idx));
+                        for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
+                        baseClass = 'yd-selected-phrase';
                     }
                 }
 
-                if (isMatch) {
-                    for (const idx of matchedIndices) {
-                        const span = rowWordsData[idx].span;
-                        if (rule.type === 'broad' && strictIndices.has(idx)) {
-                            span.classList.add('yd-selected-strict');
-                        } else {
-                            span.classList.add(baseClass);
+            } else if (rule.type === 'bracket') {
+                // Bracket: Fixed sequence
+                const pLen = rule.words.length;
+                if (rowLen >= pLen) {
+                    for (let i = 0; i <= rowLen - pLen; i++) {
+                        let subMatch = true;
+                        for (let j = 0; j < pLen; j++) {
+                            const rWord = rule.words[j];
+                            const d = rowWordsData[i + j];
+                            const match = rWord.isStrict
+                                ? (d.lower === rWord.text)
+                                : (d.stem === stemWord(rWord.text));
+
+                            if (!match) {
+                                subMatch = false;
+                                break;
+                            }
+                        }
+
+                        if (subMatch) {
+                            isMatch = true;
+                            for (let k = 0; k < pLen; k++) matchedIndices.add(i + k);
                         }
                     }
                 }
-            }
-        }
+                if (isMatch) baseClass = 'yd-selected-strict';
 
-        // --- HISTORY ---
-        // Optimized history check
-        if (sentHistory.length > 0) {
-            const sentStems = new Set();
-            const sentLowers = new Set();
-            for (const sent of sentHistory) {
-                sentStems.add(stemWord(sent.raw));
-                sentLowers.add(sent.raw.toLowerCase());
-            }
+            } else if (rule.type === 'broad') {
+                // Broad: All words present anywhere
+                const indicesFound = [];
+                let allFound = true;
 
-            for (const span of wordSpans) {
-                if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
-                    span.classList.add('yd-sent-history');
+                for (const rWord of rule.words) {
+                    const foundForThisWord = [];
+                    rowWordsData.forEach((d, idx) => {
+                        const match = rWord.isStrict
+                            ? (d.lower === rWord.text)
+                            : (d.stem === stemWord(rWord.text));
+                        if (match) {
+                            foundForThisWord.push(idx);
+                            if (rWord.isStrict) strictIndices.add(idx);
+                        }
+                    });
+
+                    if (foundForThisWord.length > 0) {
+                        indicesFound.push(...foundForThisWord);
+                    } else {
+                        allFound = false;
+                        break;
+                    }
+                }
+
+                if (allFound) {
+                    isMatch = true;
+                    indicesFound.forEach(idx => matchedIndices.add(idx));
                 }
             }
-        }
-    }
 
-    // Парсер минус-правил
-    function parseMinusRule(raw) {
-        raw = raw.trim();
-        let type = 'broad';
-        let content = raw;
-
-        if (raw.startsWith('"') && raw.endsWith('"')) {
-            type = 'quote';
-            content = raw.slice(1, -1);
-        } else if (raw.startsWith('[') && raw.endsWith(']')) {
-            type = 'bracket';
-            content = raw.slice(1, -1);
-        }
-
-        // Разбиваем на слова
-        const rawWords = content.split(/[\s+]+/).filter(w => w);
-        const words = rawWords.map(w => {
-            let text = w.toLowerCase();
-            let isStrict = false;
-            if (text.startsWith('!')) {
-                isStrict = true;
-                text = text.substring(1);
-            }
-            return { text, isStrict };
-        });
-
-        return { type, words, raw };
-    }
-
-
-    function restoreVisualMarkers() {
-        updateHighlights();
-
-        // Восстановить чекбоксы для сохраненных выделений
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId) {
-                ensureRowChecked(sel.rowId);
-            }
-        }
-    }
-
-    // ==================== UNDO/REDO ====================
-
-    function pushUndo(actionType, description) {
-        undoStack.stack = undoStack.stack.slice(0, undoStack.currentIndex + 1);
-
-        undoStack.stack.push({
-            timestamp: Date.now(),
-            type: actionType,
-            description: description,
-            snapshot: new Map(selections)
-        });
-
-        undoStack.currentIndex++;
-
-        if (undoStack.stack.length > undoStack.maxSize) {
-            undoStack.stack.shift();
-            undoStack.currentIndex--;
-        }
-
-        updateUndoRedoButtons();
-    }
-
-    function undo() {
-        if (undoStack.currentIndex > 0) {
-            undoStack.currentIndex--;
-            selections.clear();
-
-            const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
-            for (const [key, val] of snapshot) {
-                selections.set(key, { ...val });
-            }
-
-            updateUI();
-            updateUndoRedoButtons();
-            syncLocalToGlobal();
-        }
-    }
-
-    function redo() {
-        if (undoStack.currentIndex < undoStack.stack.length - 1) {
-            undoStack.currentIndex++;
-            selections.clear();
-
-            const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
-            for (const [key, val] of snapshot) {
-                selections.set(key, { ...val });
-            }
-
-            updateUI();
-            updateUndoRedoButtons();
-            syncLocalToGlobal();
-        }
-    }
-
-    function updateUndoRedoButtons() {
-        const undoBtn = document.getElementById('yd-sq-undo-btn');
-        const redoBtn = document.getElementById('yd-sq-redo-btn');
-
-        if (undoBtn) undoBtn.disabled = (undoStack.currentIndex <= 0);
-        if (redoBtn) redoBtn.disabled = (undoStack.currentIndex >= undoStack.stack.length - 1);
-    }
-
-    // ==================== CHECKBOX УПРАВЛЕНИЕ ====================
-
-    function getRowCheckbox(rowId) {
-        const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
-        return row ? row.querySelector('input[type="checkbox"]') : null;
-    }
-
-    function clickCheckbox(cb, newState) {
-        // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
-
-        if (cb.checked !== newState) {
-            cb.click();
-            // console.log('[YD-SQ] Выполнен клик по чекбоксу');
-
-            // Проверка и fallback
-            setTimeout(() => {
-                if (cb.checked !== newState) {
-                    // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
-                    cb.checked = newState;
-                    cb.dispatchEvent(new Event('input', { bubbles: true }));
-                    cb.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }, 50);
-        }
-    }
-
-    function getAllRowsOnPage() {
-        return Array.from(document.querySelectorAll(`[data-yd-row-id^="${currentPageKey}:"]`));
-    }
-
-    // ==================== AUTO-SCROLL ====================
-
-    function debounceAutoScroll(rowId, delay) {
-        if (autoScrollDebounceMap.has(rowId)) {
-            clearTimeout(autoScrollDebounceMap.get(rowId));
-        }
-
-        const timeout = setTimeout(() => {
-            autoScrollIfAllowed(rowId);
-            autoScrollDebounceMap.delete(rowId);
-        }, delay);
-
-        autoScrollDebounceMap.set(rowId, timeout);
-    }
-
-    function autoScrollIfAllowed(rowId) {
-        if (isSending) return;
-        if (phraseInProgress) return;
-        if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-        if (Date.now() - lastManualScrollTime < 600) return;
-
-        const row = getAllRowsOnPage().find(r => r.dataset.ydRowId === rowId);
-        if (!row) return;
-
-        const rect = row.getBoundingClientRect();
-        const table = row.closest('table');
-        const header = table ? table.querySelector('thead') : null;
-        const headerHeight = header ? header.getBoundingClientRect().height : 0;
-        const rowHeight = rect.height;
-        const desiredOffset = headerHeight + (rowHeight * 2);
-
-        if (rect.top < desiredOffset || rect.top > window.innerHeight - 100) {
-            const targetScrollTop = window.scrollY + rect.top - desiredOffset;
-            window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-        }
-    }
-
-    // ==================== ИСТОРИЯ И ИМПОРТ ====================
-
-    function addToSentHistory(display, matchType, pageNumbers = []) {
-        const existing = sentHistory.find(s => s.raw === display);
-
-        if (existing) {
-            existing.count++;
-            existing.lastSentAt = Date.now();
-            existing.pageNumbers = [...new Set([...existing.pageNumbers, ...pageNumbers])];
-        } else {
-            sentHistory.push({
-                id: `sent:${Date.now()}_${Math.random()}`,
-                raw: display,
-                matchType: matchType,
-                firstSentAt: Date.now(),
-                lastSentAt: Date.now(),
-                count: 1,
-                pageNumbers: pageNumbers,
-                status: 'confirmed'
-            });
-        }
-
-        syncLocalToGlobal();
-    }
-
-    // ==================== SMART DATA PIPELINE ====================
-
-    function normalizeMinusInput(rawInput) {
-        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
-        // Разделители: новая строка, табуляция, запятая, точка с запятой
-        const parts = rawString.split(/[\n\t,;]+/);
-        const normalized = new Set();
-
-        for (let part of parts) {
-            part = part.trim();
-            if (!part) continue;
-
-            // Удаляем ведущий дефис, если он есть (формат Яндекса: -слово)
-            // Но сохраняем структуру фразы
-            if (part.startsWith('-')) {
-                part = part.substring(1);
-            }
-
-            part = part.trim();
-            if (!part) continue;
-
-            normalized.add(part);
-        }
-        return normalized;
-    }
-
-    function validateMinusSet(newSet, existingSet) {
-        const result = {
-            valid: true,
-            filteredSet: new Set(),
-            warnings: [],
-            clipboardCopyNeeded: false
-        };
-
-        // 1. Дубликаты
-        for (const item of newSet) {
-            if (!existingSet.has(item)) {
-                result.filteredSet.add(item);
-            }
-        }
-
-        if (result.filteredSet.size === 0) {
-            return result;
-        }
-
-        // 2. Лимит длины (4000 символов)
-        const currentContent = Array.from(existingSet).join('\n');
-        const newContent = Array.from(result.filteredSet).join('\n');
-
-        if ((currentContent.length + newContent.length + 10) > 4000) {
-            result.valid = false;
-            result.clipboardCopyNeeded = true;
-            result.warnings.push('Превышен лимит поля (4000 симв).');
-            return result;
-        }
-
-        // 3. Вложенность
-        const allItems = new Set([...existingSet, ...result.filteredSet]);
-
-        for (const phrase of result.filteredSet) {
-            // Разбиваем фразу на слова
-            const words = phrase.split(/[\s+]+/);
-            if (words.length > 1) {
-                for (const word of words) {
-                    const cleanWord = word.replace(/[!\[\]""]/g, '').toLowerCase();
-                    // Проверяем, есть ли это слово как отдельный минус
-                    if (allItems.has(cleanWord) || allItems.has('!' + cleanWord)) {
-                        result.warnings.push(`Конфликт: фраза "${phrase}" содержит минус "${cleanWord}"`);
+            if (isMatch) {
+                for (const idx of matchedIndices) {
+                    const span = rowWordsData[idx].span;
+                    if (rule.type === 'broad' && strictIndices.has(idx)) {
+                        span.classList.add('yd-selected-strict');
+                    } else {
+                        span.classList.add(baseClass);
                     }
                 }
             }
         }
+    }
 
+    // --- HISTORY ---
+    // Optimized history check
+    if (sentHistory.length > 0) {
+        const sentStems = new Set();
+        const sentLowers = new Set();
+        for (const sent of sentHistory) {
+            sentStems.add(stemWord(sent.raw));
+            sentLowers.add(sent.raw.toLowerCase());
+        }
+
+        for (const span of wordSpans) {
+            if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
+                span.classList.add('yd-sent-history');
+            }
+        }
+    }
+}
+
+// Парсер минус-правил
+function parseMinusRule(raw) {
+    raw = raw.trim();
+    let type = 'broad';
+    let content = raw;
+
+    if (raw.startsWith('"') && raw.endsWith('"')) {
+        type = 'quote';
+        content = raw.slice(1, -1);
+    } else if (raw.startsWith('[') && raw.endsWith(']')) {
+        type = 'bracket';
+        content = raw.slice(1, -1);
+    }
+
+    // Разбиваем на слова
+    const rawWords = content.split(/[\s+]+/).filter(w => w);
+    const words = rawWords.map(w => {
+        let text = w.toLowerCase();
+        let isStrict = false;
+        if (text.startsWith('!')) {
+            isStrict = true;
+            text = text.substring(1);
+        }
+        return { text, isStrict };
+    });
+
+    return { type, words, raw };
+}
+
+
+function restoreVisualMarkers() {
+    updateHighlights();
+
+    // Восстановить чекбоксы для сохраненных выделений
+    for (const sel of selections.values()) {
+        if (sel.pageKey === currentPageKey && sel.rowId) {
+            ensureRowChecked(sel.rowId);
+        }
+    }
+}
+
+// ==================== UNDO/REDO ====================
+
+function pushUndo(actionType, description) {
+    undoStack.stack = undoStack.stack.slice(0, undoStack.currentIndex + 1);
+
+    undoStack.stack.push({
+        timestamp: Date.now(),
+        type: actionType,
+        description: description,
+        snapshot: new Map(selections)
+    });
+
+    undoStack.currentIndex++;
+
+    if (undoStack.stack.length > undoStack.maxSize) {
+        undoStack.stack.shift();
+        undoStack.currentIndex--;
+    }
+
+    updateUndoRedoButtons();
+}
+
+function undo() {
+    if (undoStack.currentIndex > 0) {
+        undoStack.currentIndex--;
+        selections.clear();
+
+        const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
+        for (const [key, val] of snapshot) {
+            selections.set(key, { ...val });
+        }
+
+        updateUI();
+        updateUndoRedoButtons();
+        syncLocalToGlobal();
+    }
+}
+
+function redo() {
+    if (undoStack.currentIndex < undoStack.stack.length - 1) {
+        undoStack.currentIndex++;
+        selections.clear();
+
+        const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
+        for (const [key, val] of snapshot) {
+            selections.set(key, { ...val });
+        }
+
+        updateUI();
+        updateUndoRedoButtons();
+        syncLocalToGlobal();
+    }
+}
+
+function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById('yd-sq-undo-btn');
+    const redoBtn = document.getElementById('yd-sq-redo-btn');
+
+    if (undoBtn) undoBtn.disabled = (undoStack.currentIndex <= 0);
+    if (redoBtn) redoBtn.disabled = (undoStack.currentIndex >= undoStack.stack.length - 1);
+}
+
+// ==================== CHECKBOX УПРАВЛЕНИЕ ====================
+
+function getRowCheckbox(rowId) {
+    const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+    return row ? row.querySelector('input[type="checkbox"]') : null;
+}
+
+function clickCheckbox(cb, newState) {
+    // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
+
+    if (cb.checked !== newState) {
+        cb.click();
+        // console.log('[YD-SQ] Выполнен клик по чекбоксу');
+
+        // Проверка и fallback
+        setTimeout(() => {
+            if (cb.checked !== newState) {
+                // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
+                cb.checked = newState;
+                cb.dispatchEvent(new Event('input', { bubbles: true }));
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }, 50);
+    }
+}
+
+function getAllRowsOnPage() {
+    return Array.from(document.querySelectorAll(`[data-yd-row-id^="${currentPageKey}:"]`));
+}
+
+// ==================== AUTO-SCROLL ====================
+
+function debounceAutoScroll(rowId, delay) {
+    if (autoScrollDebounceMap.has(rowId)) {
+        clearTimeout(autoScrollDebounceMap.get(rowId));
+    }
+
+    const timeout = setTimeout(() => {
+        autoScrollIfAllowed(rowId);
+        autoScrollDebounceMap.delete(rowId);
+    }, delay);
+
+    autoScrollDebounceMap.set(rowId, timeout);
+}
+
+function autoScrollIfAllowed(rowId) {
+    if (isSending) return;
+    if (phraseInProgress) return;
+    if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (Date.now() - lastManualScrollTime < 600) return;
+
+    const row = getAllRowsOnPage().find(r => r.dataset.ydRowId === rowId);
+    if (!row) return;
+
+    const rect = row.getBoundingClientRect();
+    const table = row.closest('table');
+    const header = table ? table.querySelector('thead') : null;
+    const headerHeight = header ? header.getBoundingClientRect().height : 0;
+    const rowHeight = rect.height;
+    const desiredOffset = headerHeight + (rowHeight * 2);
+
+    if (rect.top < desiredOffset || rect.top > window.innerHeight - 100) {
+        const targetScrollTop = window.scrollY + rect.top - desiredOffset;
+        window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+    }
+}
+
+// ==================== ИСТОРИЯ И ИМПОРТ ====================
+
+function addToSentHistory(display, matchType, pageNumbers = []) {
+    const existing = sentHistory.find(s => s.raw === display);
+
+    if (existing) {
+        existing.count++;
+        existing.lastSentAt = Date.now();
+        existing.pageNumbers = [...new Set([...existing.pageNumbers, ...pageNumbers])];
+    } else {
+        sentHistory.push({
+            id: `sent:${Date.now()}_${Math.random()}`,
+            raw: display,
+            matchType: matchType,
+            firstSentAt: Date.now(),
+            lastSentAt: Date.now(),
+            count: 1,
+            pageNumbers: pageNumbers,
+            status: 'confirmed'
+        });
+    }
+
+    syncLocalToGlobal();
+}
+
+// ==================== SMART DATA PIPELINE ====================
+
+function normalizeMinusInput(rawInput) {
+    const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+    // Разделители: новая строка, табуляция, запятая, точка с запятой
+    const parts = rawString.split(/[\n\t,;]+/);
+    const normalized = new Set();
+
+    for (let part of parts) {
+        part = part.trim();
+        if (!part) continue;
+
+        // Удаляем ведущий дефис, если он есть (формат Яндекса: -слово)
+        // Но сохраняем структуру фразы
+        if (part.startsWith('-')) {
+            part = part.substring(1);
+        }
+
+        part = part.trim();
+        if (!part) continue;
+
+        normalized.add(part);
+    }
+    return normalized;
+}
+
+function validateMinusSet(newSet, existingSet) {
+    const result = {
+        valid: true,
+        filteredSet: new Set(),
+        warnings: [],
+        clipboardCopyNeeded: false
+    };
+
+    // 1. Дубликаты
+    for (const item of newSet) {
+        if (!existingSet.has(item)) {
+            result.filteredSet.add(item);
+        }
+    }
+
+    if (result.filteredSet.size === 0) {
         return result;
     }
 
-    async function smartAppendToField(input, newPhrasesSet) {
-        const currentVal = input.value || '';
-        const existingSet = normalizeMinusInput(currentVal);
+    // 2. Лимит длины (4000 символов)
+    const currentContent = Array.from(existingSet).join('\n');
+    const newContent = Array.from(result.filteredSet).join('\n');
 
-        const validation = validateMinusSet(newPhrasesSet, existingSet);
-
-        if (!validation.valid) {
-            if (validation.clipboardCopyNeeded) {
-                const textToCopy = Array.from(validation.filteredSet).join('\n');
-                await navigator.clipboard.writeText(textToCopy);
-                showYdsqNotification(validation.warnings.join('\n') + '\nСкопировано в буфер!', 'warn');
-            }
-            return false;
-        }
-
-        if (validation.warnings.length > 0) {
-            const proceed = confirm(`Обнаружены предупреждения:\n${validation.warnings.join('\n')}\n\nВсё равно добавить?`);
-            if (!proceed) return false;
-        }
-
-        if (validation.filteredSet.size === 0) {
-            return true; // Уже есть
-        }
-
-        // Слияние
-        const finalSet = new Set([...existingSet, ...validation.filteredSet]);
-        const separator = input.tagName === 'TEXTAREA' ? '\n' : ', ';
-        input.value = Array.from(finalSet).join(separator);
-
-        // События
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        input.dispatchEvent(new Event('blur', { bubbles: true }));
-
-        return true;
+    if ((currentContent.length + newContent.length + 10) > 4000) {
+        result.valid = false;
+        result.clipboardCopyNeeded = true;
+        result.warnings.push('Превышен лимит поля (4000 симв).');
+        return result;
     }
 
+    // 3. Вложенность
+    const allItems = new Set([...existingSet, ...result.filteredSet]);
 
-
-    async function importMinusesFromClipboard() {
-        try {
-            const text = await navigator.clipboard.readText();
-            const newPhrases = normalizeMinusInput(text);
-
-            if (newPhrases.size === 0) {
-                showYdsqNotification('В буфере не найдено минусов', 'warn');
-                return;
-            }
-
-            const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены в список "В кампании".`);
-            if (!confirmed) return;
-
-            const newItems = [];
-            for (const phrase of newPhrases) {
-                if (!importedMinuses.some(imp => imp.raw === phrase)) {
-                    newItems.push({
-                        id: `imp:${Date.now()}_${Math.random()}`,
-                        raw: phrase,
-                        importedAt: Date.now()
-                    });
+    for (const phrase of result.filteredSet) {
+        // Разбиваем фразу на слова
+        const words = phrase.split(/[\s+]+/);
+        if (words.length > 1) {
+            for (const word of words) {
+                const cleanWord = word.replace(/[!\[\]""]/g, '').toLowerCase();
+                // Проверяем, есть ли это слово как отдельный минус
+                if (allItems.has(cleanWord) || allItems.has('!' + cleanWord)) {
+                    result.warnings.push(`Конфликт: фраза "${phrase}" содержит минус "${cleanWord}"`);
                 }
             }
-
-            if (newItems.length > 0) {
-                importedMinuses = [...importedMinuses, ...newItems];
-                syncLocalToGlobal();
-                rebuildCampaignMinusList();
-                updateHighlights();
-                updateUI();
-                showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
-            } else {
-                showYdsqNotification('Все минусы уже есть в списке', 'info');
-            }
-
-            syncLocalToGlobal();
-            updateHighlights(); // Обновить стили (серый цвет для imported)
-
-            showYdsqNotification(`Импортировано ${newPhrases.size} минусов`, 'success');
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка импорта:', err);
-            showYdsqNotification('Ошибка чтения буфера обмена', 'error');
         }
     }
 
-    function clearImportedMinuses() {
-        if (importedMinuses.length === 0) {
-            showYdsqNotification('Список импортированных пуст', 'info');
+    return result;
+}
+
+async function smartAppendToField(input, newPhrasesSet) {
+    const currentVal = input.value || '';
+    const existingSet = normalizeMinusInput(currentVal);
+
+    const validation = validateMinusSet(newPhrasesSet, existingSet);
+
+    if (!validation.valid) {
+        if (validation.clipboardCopyNeeded) {
+            const textToCopy = Array.from(validation.filteredSet).join('\n');
+            await navigator.clipboard.writeText(textToCopy);
+            showYdsqNotification(validation.warnings.join('\n') + '\nСкопировано в буфер!', 'warn');
+        }
+        return false;
+    }
+
+    if (validation.warnings.length > 0) {
+        const proceed = confirm(`Обнаружены предупреждения:\n${validation.warnings.join('\n')}\n\nВсё равно добавить?`);
+        if (!proceed) return false;
+    }
+
+    if (validation.filteredSet.size === 0) {
+        return true; // Уже есть
+    }
+
+    // Слияние
+    const finalSet = new Set([...existingSet, ...validation.filteredSet]);
+    const separator = input.tagName === 'TEXTAREA' ? '\n' : ', ';
+    input.value = Array.from(finalSet).join(separator);
+
+    // События
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+    return true;
+}
+
+
+
+async function importMinusesFromClipboard() {
+    try {
+        const text = await navigator.clipboard.readText();
+        const newPhrases = normalizeMinusInput(text);
+
+        if (newPhrases.size === 0) {
+            showYdsqNotification('В буфере не найдено минусов', 'warn');
             return;
         }
 
-        const confirmed = confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`);
+        const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены в список "В кампании".`);
         if (!confirmed) return;
 
-        importedMinuses = [];
-        syncLocalToGlobal();
-        updateHighlights();
-        updateUI();
-        showYdsqNotification('Список импортированных очищен', 'success');
-    }
-
-    // ==================== UI ПАНЕЛЬ ====================
-
-    function createPanel() {
-        const existing = document.getElementById('yd-sq-panel');
-        if (existing) {
-            existing.style.display = '';
-            return;
+        const newItems = [];
+        for (const phrase of newPhrases) {
+            if (!importedMinuses.some(imp => imp.raw === phrase)) {
+                newItems.push({
+                    id: `imp:${Date.now()}_${Math.random()}`,
+                    raw: phrase,
+                    importedAt: Date.now()
+                });
+            }
         }
 
-        const panel = document.createElement('div');
-        panel.id = 'yd-sq-panel';
-        panel.innerHTML = `
+        if (newItems.length > 0) {
+            importedMinuses = [...importedMinuses, ...newItems];
+            syncLocalToGlobal();
+            rebuildCampaignMinusList();
+            updateHighlights();
+            updateUI();
+            showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
+        } else {
+            showYdsqNotification('Все минусы уже есть в списке', 'info');
+        }
+
+        syncLocalToGlobal();
+        updateHighlights(); // Обновить стили (серый цвет для imported)
+
+        showYdsqNotification(`Импортировано ${newPhrases.size} минусов`, 'success');
+    } catch (err) {
+        console.error('[YD-SQ] Ошибка импорта:', err);
+        showYdsqNotification('Ошибка чтения буфера обмена', 'error');
+    }
+}
+
+function clearImportedMinuses() {
+    if (importedMinuses.length === 0) {
+        showYdsqNotification('Список импортированных пуст', 'info');
+        return;
+    }
+
+    const confirmed = confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`);
+    if (!confirmed) return;
+
+    importedMinuses = [];
+    syncLocalToGlobal();
+    updateHighlights();
+    updateUI();
+    showYdsqNotification('Список импортированных очищен', 'success');
+}
+
+// ==================== UI ПАНЕЛЬ ====================
+
+function createPanel() {
+    const existing = document.getElementById('yd-sq-panel');
+    if (existing) {
+        existing.style.display = '';
+        return;
+    }
+
+    const panel = document.createElement('div');
+    panel.id = 'yd-sq-panel';
+    panel.innerHTML = `
             <div class="yd-sq-header" id="yd-sq-panel-header">
                 <span>Минус-слова и фразы</span>
                 <button id="yd-sq-panel-toggle" class="yd-sq-toggle">−</button>
@@ -1373,160 +1322,160 @@
             </div>
         `;
 
-        document.body.appendChild(panel);
+    document.body.appendChild(panel);
 
-        // Применить позицию
-        panel.style.position = 'fixed';
-        panel.style.left = panelPosition.left;
-        panel.style.right = panelPosition.right;
-        panel.style.top = panelPosition.top;
+    // Применить позицию
+    panel.style.position = 'fixed';
+    panel.style.left = panelPosition.left;
+    panel.style.right = panelPosition.right;
+    panel.style.top = panelPosition.top;
 
-        // Обработчики
-        document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
-            const body = document.getElementById('yd-sq-panel-body');
-            const btn = document.getElementById('yd-sq-panel-toggle');
-            if (body.style.display === 'none') {
-                body.style.display = '';
-                btn.textContent = '−';
-            } else {
-                body.style.display = 'none';
-                btn.textContent = '+';
-            }
-        });
+    // Обработчики
+    document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
+        const body = document.getElementById('yd-sq-panel-body');
+        const btn = document.getElementById('yd-sq-panel-toggle');
+        if (body.style.display === 'none') {
+            body.style.display = '';
+            btn.textContent = '−';
+        } else {
+            body.style.display = 'none';
+            btn.textContent = '+';
+        }
+    });
 
-        document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-sent-list');
-            const btn = document.getElementById('yd-sq-sent-toggle');
-            if (list.style.display === 'none') {
-                list.style.display = '';
-                btn.textContent = '▲';
-            } else {
-                list.style.display = 'none';
-                btn.textContent = '▼';
-            }
-        });
+    document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => {
+        const list = document.getElementById('yd-sq-sent-list');
+        const btn = document.getElementById('yd-sq-sent-toggle');
+        if (list.style.display === 'none') {
+            list.style.display = '';
+            btn.textContent = '▲';
+        } else {
+            list.style.display = 'none';
+            btn.textContent = '▼';
+        }
+    });
 
-        document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-imported-list');
-            const btn = document.getElementById('yd-sq-imported-toggle');
-            if (list.style.display === 'none') {
-                list.style.display = '';
-                btn.textContent = '▲';
-            } else {
-                list.style.display = 'none';
-                btn.textContent = '▼';
-            }
-        });
+    document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
+        const list = document.getElementById('yd-sq-imported-list');
+        const btn = document.getElementById('yd-sq-imported-toggle');
+        if (list.style.display === 'none') {
+            list.style.display = '';
+            btn.textContent = '▲';
+        } else {
+            list.style.display = 'none';
+            btn.textContent = '▼';
+        }
+    });
 
-        document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
+    document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
 
-        document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
+    document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
 
-        document.getElementById('yd-sq-undo-btn').addEventListener('click', undo);
-        document.getElementById('yd-sq-redo-btn').addEventListener('click', redo);
+    document.getElementById('yd-sq-undo-btn').addEventListener('click', undo);
+    document.getElementById('yd-sq-redo-btn').addEventListener('click', redo);
 
-        document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
+    document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
-        document.getElementById('yd-sq-clear-all').addEventListener('click', () => {
-            if (confirm('Очистить все выделения?')) {
-                // Снять чекбоксы для текущей страницы
-                for (const sel of selections.values()) {
-                    if (sel.pageKey === currentPageKey && sel.rowId) {
-                        const cb = getRowCheckbox(sel.rowId);
-                        if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                            clickCheckbox(cb, false);
-                            delete cb.dataset.ydAuto;
-                        }
+    document.getElementById('yd-sq-clear-all').addEventListener('click', () => {
+        if (confirm('Очистить все выделения?')) {
+            // Снять чекбоксы для текущей страницы
+            for (const sel of selections.values()) {
+                if (sel.pageKey === currentPageKey && sel.rowId) {
+                    const cb = getRowCheckbox(sel.rowId);
+                    if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+                        clickCheckbox(cb, false);
+                        delete cb.dataset.ydAuto;
                     }
                 }
-
-                selections.clear();
-                pushUndo('clear_all', 'Очищены все выделения');
-                syncLocalToGlobal();
-                updateUI();
             }
-        });
 
-        makePanelDraggable();
-    }
-
-    function makePanelDraggable() {
-        const header = document.getElementById('yd-sq-panel-header');
-        const panel = document.getElementById('yd-sq-panel');
-
-        let isDragging = false;
-        let offset = { x: 0, y: 0 };
-
-        header.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            offset.x = e.clientX - panel.offsetLeft;
-            offset.y = e.clientY - panel.offsetTop;
-            header.style.cursor = 'grabbing';
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-
-            panel.style.left = (e.clientX - offset.x) + 'px';
-            panel.style.top = (e.clientY - offset.y) + 'px';
-            panel.style.right = 'auto';
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (!isDragging) return;
-
-            isDragging = false;
-            header.style.cursor = 'grab';
-
-            panelPosition = {
-                left: panel.style.left,
-                right: 'auto',
-                top: panel.style.top
-            };
+            selections.clear();
+            pushUndo('clear_all', 'Очищены все выделения');
             syncLocalToGlobal();
-        });
-    }
-
-    function updateUI() {
-        updateHighlights();
-        renderSelectionList();
-        renderSentHistory();
-        renderImportedMinuses();
-        updateUndoRedoButtons();
-    }
-
-    function renderSelectionList() {
-        const container = document.getElementById('yd-sq-list');
-        const countIndicator = document.getElementById('yd-sq-global-count');
-
-        countIndicator.textContent = selections.size;
-
-        if (selections.size === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">Пока ничего не выбрано</div>';
-            return;
+            updateUI();
         }
+    });
 
-        const items = Array.from(selections.values()).sort((a, b) => {
-            if (a.pageKey === currentPageKey && b.pageKey !== currentPageKey) return -1;
-            if (a.pageKey !== currentPageKey && b.pageKey === currentPageKey) return 1;
-            return 0;
-        });
+    makePanelDraggable();
+}
 
-        container.innerHTML = items.map(sel => {
-            const isBuilding = sel._building;
-            const isUnassigned = sel.unassignedOnThisPage;
-            const isForeign = sel.pageKey !== currentPageKey;
+function makePanelDraggable() {
+    const header = document.getElementById('yd-sq-panel-header');
+    const panel = document.getElementById('yd-sq-panel');
 
-            let classes = 'yd-sq-item';
-            if (isBuilding) classes += ' yd-sq-item-building';
-            if (isUnassigned) classes += ' yd-sq-item-unassigned';
-            if (isForeign) classes += ' yd-sq-item-foreign';
+    let isDragging = false;
+    let offset = { x: 0, y: 0 };
 
-            const pageHint = isForeign ? `<span class="yd-sq-page-hint">(стр. ${sel.pageKey.split(':')[1]})</span>` :
-                isUnassigned ? `<span class="yd-sq-page-hint">(не найдена на странице)</span>` :
-                    isBuilding ? `<span class="yd-sq-page-hint">(Дб.клик...)</span>` : '';
+    header.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        offset.x = e.clientX - panel.offsetLeft;
+        offset.y = e.clientY - panel.offsetTop;
+        header.style.cursor = 'grabbing';
+    });
 
-            return `
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        panel.style.left = (e.clientX - offset.x) + 'px';
+        panel.style.top = (e.clientY - offset.y) + 'px';
+        panel.style.right = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+
+        isDragging = false;
+        header.style.cursor = 'grab';
+
+        panelPosition = {
+            left: panel.style.left,
+            right: 'auto',
+            top: panel.style.top
+        };
+        syncLocalToGlobal();
+    });
+}
+
+function updateUI() {
+    updateHighlights();
+    renderSelectionList();
+    renderSentHistory();
+    renderImportedMinuses();
+    updateUndoRedoButtons();
+}
+
+function renderSelectionList() {
+    const container = document.getElementById('yd-sq-list');
+    const countIndicator = document.getElementById('yd-sq-global-count');
+
+    countIndicator.textContent = selections.size;
+
+    if (selections.size === 0) {
+        container.innerHTML = '<div class="yd-sq-empty">Пока ничего не выбрано</div>';
+        return;
+    }
+
+    const items = Array.from(selections.values()).sort((a, b) => {
+        if (a.pageKey === currentPageKey && b.pageKey !== currentPageKey) return -1;
+        if (a.pageKey !== currentPageKey && b.pageKey === currentPageKey) return 1;
+        return 0;
+    });
+
+    container.innerHTML = items.map(sel => {
+        const isBuilding = sel._building;
+        const isUnassigned = sel.unassignedOnThisPage;
+        const isForeign = sel.pageKey !== currentPageKey;
+
+        let classes = 'yd-sq-item';
+        if (isBuilding) classes += ' yd-sq-item-building';
+        if (isUnassigned) classes += ' yd-sq-item-unassigned';
+        if (isForeign) classes += ' yd-sq-item-foreign';
+
+        const pageHint = isForeign ? `<span class="yd-sq-page-hint">(стр. ${sel.pageKey.split(':')[1]})</span>` :
+            isUnassigned ? `<span class="yd-sq-page-hint">(не найдена на странице)</span>` :
+                isBuilding ? `<span class="yd-sq-page-hint">(Дб.клик...)</span>` : '';
+
+        return `
                 <div class="${classes}" data-sel-id="${escapeHtml(sel.id)}">
                     <div class="yd-sq-left">
                         <button class="type-btn ${sel.matchType === 'quote' ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}">" "</button>
@@ -1543,43 +1492,43 @@
                     </div>
                 </div>
             `;
-        }).join('');
+    }).join('');
 
-        // Обработчики
-        addClickListener(container, '.type-btn', (e, btn) => {
-            toggleMatchType(btn.dataset.selId, btn.dataset.type);
-        });
+    // Обработчики
+    addClickListener(container, '.type-btn', (e, btn) => {
+        toggleMatchType(btn.dataset.selId, btn.dataset.type);
+    });
 
-        addClickListener(container, '.yd-sq-edit', (e, btn) => {
-            startInlineEdit(btn.dataset.selId);
-        });
+    addClickListener(container, '.yd-sq-edit', (e, btn) => {
+        startInlineEdit(btn.dataset.selId);
+    });
 
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            removeSelectionById(btn.dataset.selId);
-            updateUI();
-        });
+    addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+        removeSelectionById(btn.dataset.selId);
+        updateUI();
+    });
 
-        container.scrollTop = container.scrollHeight;
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderSentHistory() {
+    const container = document.getElementById('yd-sq-sent-list');
+    const countIndicator = document.getElementById('yd-sq-sent-count');
+
+    countIndicator.textContent = sentHistory.length;
+
+    if (sentHistory.length === 0) {
+        container.innerHTML = '<div class="yd-sq-empty">История пуста</div>';
+        return;
     }
 
-    function renderSentHistory() {
-        const container = document.getElementById('yd-sq-sent-list');
-        const countIndicator = document.getElementById('yd-sq-sent-count');
+    const sorted = [...sentHistory].sort((a, b) => b.lastSentAt - a.lastSentAt);
 
-        countIndicator.textContent = sentHistory.length;
+    container.innerHTML = sorted.map((sent, idx) => {
+        const date = new Date(sent.lastSentAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+        const pages = sent.pageNumbers.length > 0 ? `на стр. ${sent.pageNumbers.join(', ')}` : '';
 
-        if (sentHistory.length === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">История пуста</div>';
-            return;
-        }
-
-        const sorted = [...sentHistory].sort((a, b) => b.lastSentAt - a.lastSentAt);
-
-        container.innerHTML = sorted.map((sent, idx) => {
-            const date = new Date(sent.lastSentAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-            const pages = sent.pageNumbers.length > 0 ? `на стр. ${sent.pageNumbers.join(', ')}` : '';
-
-            return `
+        return `
                 <div class="yd-sq-item yd-sq-item-sent" data-sent-idx="${idx}">
                     <div class="yd-sq-left">
                         <span class="yd-sq-checkmark">✓</span>
@@ -1593,31 +1542,31 @@
                     </div>
                 </div>
             `;
-        }).join('');
+    }).join('');
 
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            const idx = parseInt(btn.dataset.sentIdx);
-            sentHistory.splice(idx, 1);
-            syncLocalToGlobal();
-            updateUI();
-        });
+    addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+        const idx = parseInt(btn.dataset.sentIdx);
+        sentHistory.splice(idx, 1);
+        syncLocalToGlobal();
+        updateUI();
+    });
+}
+
+function renderImportedMinuses() {
+    const container = document.getElementById('yd-sq-imported-list');
+    const countIndicator = document.getElementById('yd-sq-imported-count');
+
+    countIndicator.textContent = importedMinuses.length;
+
+    if (importedMinuses.length === 0) {
+        container.innerHTML = '<div class="yd-sq-empty">Минусы не загружены</div>';
+        return;
     }
 
-    function renderImportedMinuses() {
-        const container = document.getElementById('yd-sq-imported-list');
-        const countIndicator = document.getElementById('yd-sq-imported-count');
+    container.innerHTML = importedMinuses.map((imp, idx) => {
+        const date = new Date(imp.importedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
-        countIndicator.textContent = importedMinuses.length;
-
-        if (importedMinuses.length === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">Минусы не загружены</div>';
-            return;
-        }
-
-        container.innerHTML = importedMinuses.map((imp, idx) => {
-            const date = new Date(imp.importedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-
-            return `
+        return `
                 <div class="yd-sq-item yd-sq-item-imported" data-imp-idx="${idx}">
                     <div class="yd-sq-left">
                         <span class="yd-sq-import-icon">📥</span>
@@ -1631,483 +1580,483 @@
                     </div>
                 </div>
             `;
-        }).join('');
+    }).join('');
 
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            const idx = parseInt(btn.dataset.impIdx);
-            importedMinuses.splice(idx, 1);
-            syncLocalToGlobal();
-            updateHighlights();
-            renderImportedMinuses();
-        });
+    addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+        const idx = parseInt(btn.dataset.impIdx);
+        importedMinuses.splice(idx, 1);
+        syncLocalToGlobal();
+        updateHighlights();
+        renderImportedMinuses();
+    });
+}
+
+function toggleMatchType(id, type) {
+    const sel = selections.get(id);
+    if (!sel) return;
+
+    if (type === 'quote') {
+        sel.matchType = (sel.matchType === 'quote') ? null : 'quote';
+    } else if (type === 'bracket' && sel.kind === 'phrase') {
+        sel.matchType = (sel.matchType === 'bracket') ? null : 'bracket';
+    } else if (type === 'strict') {
+        sel.matchType = (sel.matchType === 'strict') ? null : 'strict';
     }
 
-    function toggleMatchType(id, type) {
-        const sel = selections.get(id);
-        if (!sel) return;
+    applyMatchTypeToSelection(sel, sel.matchType);
+    syncLocalToGlobal();
+    updateUI();
+}
 
-        if (type === 'quote') {
-            sel.matchType = (sel.matchType === 'quote') ? null : 'quote';
-        } else if (type === 'bracket' && sel.kind === 'phrase') {
-            sel.matchType = (sel.matchType === 'bracket') ? null : 'bracket';
-        } else if (type === 'strict') {
-            sel.matchType = (sel.matchType === 'strict') ? null : 'strict';
+function applyMatchTypeToSelection(sel, matchType) {
+    if (!matchType) {
+        sel.display = sel.raw;
+        sel.matchType = null;
+        return;
+    }
+
+    if (matchType === 'quote') {
+        sel.display = '"' + sel.raw + '"';
+    } else if (matchType === 'bracket' && sel.kind === 'phrase') {
+        sel.display = '[' + sel.raw + ']';
+    } else if (matchType === 'strict') {
+        if (sel.kind === 'phrase') {
+            const words = sel.raw.split(/\s+/).map(w => {
+                const wlow = w.toLowerCase().replace(/[^а-яa-z0-9ё]+/gi, '');
+                return STOPWORDS.has(wlow) ? w : ('!' + w);
+            });
+            sel.display = words.join(' ');
+        } else {
+            sel.display = sel.raw.startsWith('!') ? sel.raw : ('!' + sel.raw);
+        }
+    }
+}
+
+function startInlineEdit(id) {
+    const span = document.querySelector(`[data-sel-id-text="${id}"]`);
+    const sel = selections.get(id);
+    if (!span || !sel) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = sel.raw;
+    input.style.width = '100%';
+    input.style.fontSize = '13px';
+    input.style.padding = '2px 4px';
+    input.style.border = '1px solid #4a90e2';
+    input.style.borderRadius = '3px';
+
+    const finishEdit = () => {
+        const newValue = input.value.trim();
+        sel.raw = newValue;
+
+        if (sel.kind === 'phrase') {
+            sel.words = sel.raw.split(/\s+/).filter(w => w);
+        } else if (sel.kind === 'soft-word') {
+            sel.stem = stemWord(sel.raw);
+        } else if (sel.kind === 'strict-word') {
+            sel.wordLower = sel.raw.toLowerCase();
         }
 
         applyMatchTypeToSelection(sel, sel.matchType);
         syncLocalToGlobal();
         updateUI();
-    }
+    };
 
-    function applyMatchTypeToSelection(sel, matchType) {
-        if (!matchType) {
-            sel.display = sel.raw;
-            sel.matchType = null;
-            return;
-        }
-
-        if (matchType === 'quote') {
-            sel.display = '"' + sel.raw + '"';
-        } else if (matchType === 'bracket' && sel.kind === 'phrase') {
-            sel.display = '[' + sel.raw + ']';
-        } else if (matchType === 'strict') {
-            if (sel.kind === 'phrase') {
-                const words = sel.raw.split(/\s+/).map(w => {
-                    const wlow = w.toLowerCase().replace(/[^а-яa-z0-9ё]+/gi, '');
-                    return STOPWORDS.has(wlow) ? w : ('!' + w);
-                });
-                sel.display = words.join(' ');
-            } else {
-                sel.display = sel.raw.startsWith('!') ? sel.raw : ('!' + sel.raw);
-            }
-        }
-    }
-
-    function startInlineEdit(id) {
-        const span = document.querySelector(`[data-sel-id-text="${id}"]`);
-        const sel = selections.get(id);
-        if (!span || !sel) return;
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = sel.raw;
-        input.style.width = '100%';
-        input.style.fontSize = '13px';
-        input.style.padding = '2px 4px';
-        input.style.border = '1px solid #4a90e2';
-        input.style.borderRadius = '3px';
-
-        const finishEdit = () => {
-            const newValue = input.value.trim();
-            sel.raw = newValue;
-
-            if (sel.kind === 'phrase') {
-                sel.words = sel.raw.split(/\s+/).filter(w => w);
-            } else if (sel.kind === 'soft-word') {
-                sel.stem = stemWord(sel.raw);
-            } else if (sel.kind === 'strict-word') {
-                sel.wordLower = sel.raw.toLowerCase();
-            }
-
-            applyMatchTypeToSelection(sel, sel.matchType);
-            syncLocalToGlobal();
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            finishEdit();
+        } else if (e.key === 'Escape') {
             updateUI();
+        }
+    });
+
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+// ==================== ОТПРАВКА ====================
+
+function waitForElement(target, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        const check = () => {
+            if (typeof target === 'string') {
+                const el = document.querySelector(target);
+                if (el) return el;
+            } else if (typeof target === 'function') {
+                return target();
+            }
+            return null;
         };
 
-        input.addEventListener('blur', finishEdit);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                finishEdit();
-            } else if (e.key === 'Escape') {
-                updateUI();
-            }
-        });
+        const res = check();
+        if (res) return resolve(res);
 
-        span.replaceWith(input);
-        input.focus();
-        input.select();
-    }
-
-    // ==================== ОТПРАВКА ====================
-
-    function waitForElement(target, timeout = 10000) {
-        return new Promise((resolve, reject) => {
-            const check = () => {
-                if (typeof target === 'string') {
-                    const el = document.querySelector(target);
-                    if (el) return el;
-                } else if (typeof target === 'function') {
-                    return target();
-                }
-                return null;
-            };
-
+        const observer = new MutationObserver(() => {
             const res = check();
-            if (res) return resolve(res);
-
-            const observer = new MutationObserver(() => {
-                const res = check();
-                if (res) {
-                    observer.disconnect();
-                    resolve(res);
-                }
-            });
-
-            observer.observe(document.body, { childList: true, subtree: true });
-
-            setTimeout(() => {
+            if (res) {
                 observer.disconnect();
-                reject(new Error('Timeout waiting for element'));
-            }, timeout);
+                resolve(res);
+            }
         });
-    }
 
-    async function sendToMinusPhrases() {
-        if (selections.size === 0) {
-            showYdsqNotification('Список минусов пуст', 'warn');
-            return;
-        }
-
-        if (isSending) return;
-        isSending = true;
-
-        const values = [];
-        const unassigned = [];
-
-        for (const sel of selections.values()) {
-            if (sel.unassignedOnThisPage) {
-                unassigned.push(sel.display);
-            } else {
-                values.push(sel.display);
-            }
-        }
-
-        if (unassigned.length > 0) {
-            showYdsqNotification(`Внимание: ${unassigned.length} элементов не найдены на странице`, 'warn');
-        }
-
-        // Найти кнопку "Добавить в минус-фразы"
-        const addButton = findAddToMinusPhrasesButton();
-        if (!addButton) {
-            showYdsqNotification('Кнопка "Добавить в минус-фразы" не найдена', 'error');
-            isSending = false;
-            return;
-        }
-
-        addButton.click();
-
-        try {
-            const modal = await waitForElement(findMinusModal, 5000);
-
-            // Установить "на кампанию"
-            const selects = modal.querySelectorAll('select');
-            for (const select of selects) {
-                const options = Array.from(select.options);
-                const campaignOption = options.find(opt =>
-                    opt.textContent.includes('на кампанию') || opt.textContent.includes('кампани')
-                );
-
-                if (campaignOption) {
-                    select.value = campaignOption.value;
-                    select.dispatchEvent(new Event('change', { bubbles: true }));
-                    select.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-
-            // Ждем поля ввода
-            const inputs = await waitForElement(() => {
-                const textareas = Array.from(modal.querySelectorAll('textarea'));
-                const textInputs = Array.from(modal.querySelectorAll('input[type="text"]'));
-                const contentEditables = Array.from(modal.querySelectorAll('[contenteditable="true"]'));
-                const all = [...textareas, ...textInputs, ...contentEditables];
-                const visible = all.filter(el => {
-                    const rect = el.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0;
-                });
-                return visible.length > 0 ? visible : null;
-            }, 3000);
-
-            const targetInput = inputs[0];
-            const newPhrases = normalizeMinusInput(values);
-
-            const success = await smartAppendToField(targetInput, newPhrases);
-
-            if (success) {
-                // Add to "In Campaign" list
-                let addedCount = 0;
-                for (const val of values) {
-                    if (!importedMinuses.some(imp => imp.raw === val)) {
-                        importedMinuses.push({
-                            id: `imp:${Date.now()}_${Math.random()}`,
-                            raw: val,
-                            importedAt: Date.now()
-                        });
-                        addedCount++;
-                    }
-                }
-
-                // Clear selections that were sent
-                selections.clear();
-
-                // Add to history
-                const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-                for (const val of values) {
-                    addToSentHistory(val, null, [currentPage]);
-                }
-
-                syncLocalToGlobal();
-                rebuildCampaignMinusList();
-                updateUI();
-
-                showYdsqNotification(`Обработано ${newPhrases.size} минусов`, 'success');
-                pushUndo('send', `Отправлено ${newPhrases.size} минусов`);
-
-                setTimeout(() => tryCloseResultPopup(), 1000);
-            }
-
-        } catch (err) {
-            console.error('[YD-SQ]', err);
-            showYdsqNotification('Ошибка при отправке: ' + err.message, 'error');
-        } finally {
-            isSending = false;
-        }
-    }
-
-    function tryCloseResultPopup() {
-        const popup = findResultPopup();
-        if (!popup) return false;
-
-        const buttons = popup.querySelectorAll('button');
-        for (const btn of buttons) {
-            const text = btn.textContent.toLowerCase();
-            if (text.includes('ok') || text.includes('ок')) {
-                btn.click();
-                return true;
-            }
-        }
-
-        const closeBtn = popup.querySelector('[aria-label*="Закрыть"], [aria-label*="закрыть"]');
-        if (closeBtn) {
-            closeBtn.click();
-            return true;
-        }
-
-        return false;
-    }
-
-    function findResultPopup() {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        for (const dialog of dialogs) {
-            const text = dialog.textContent || '';
-            if (text.includes('Добавлено') && text.includes('минус')) {
-                return dialog;
-            }
-        }
-        return null;
-    }
-
-    // ==================== PERSISTENCE ====================
-
-    function loadGlobalState() {
-        try {
-            const campaignId = getCampaignId();
-            const key = `yd-sq-state-global:${campaignId}`;
-            const stored = localStorage.getItem(key);
-
-            if (stored) {
-                const data = JSON.parse(stored);
-                sentHistory = data.sentHistory || [];
-                importedMinuses = data.importedMinuses || [];
-                panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
-                phraseCounter = data.phraseCounter || 0;
-
-                // Восстановить selections
-                if (data.selections) {
-                    selections.clear();
-                    for (const [key, val] of Object.entries(data.selections)) {
-                        selections.set(key, val);
-                    }
-                }
-
-                rebuildCampaignMinusList();
-            }
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка загрузки состояния:', err);
-        }
-    }
-
-    function syncLocalToGlobal() {
-        try {
-            const campaignId = getCampaignId();
-            const key = `yd-sq-state-global:${campaignId}`;
-
-            const selectionsObj = {};
-            for (const [k, v] of selections) {
-                selectionsObj[k] = v;
-            }
-
-            const data = {
-                selections: selectionsObj,
-                phraseCounter: phraseCounter,
-                sentHistory: sentHistory,
-                importedMinuses: importedMinuses,
-                panelPosition: panelPosition
-            };
-
-            localStorage.setItem(key, JSON.stringify(data));
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка сохранения состояния:', err);
-        }
-    }
-
-    function rebuildCampaignMinusList() {
-        campaignMinusList.clear();
-        for (const imp of importedMinuses) {
-            campaignMinusList.add(imp.raw);
-        }
-    }
-
-
-
-    // ==================== УВЕДОМЛЕНИЯ ====================
-
-    function showYdsqNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `yd-sq-notification yd-sq-notification-${type}`;
-        notification.textContent = message;
-
-        document.body.appendChild(notification);
+        observer.observe(document.body, { childList: true, subtree: true });
 
         setTimeout(() => {
-            notification.classList.add('yd-sq-notification-show');
-        }, 10);
+            observer.disconnect();
+            reject(new Error('Timeout waiting for element'));
+        }, timeout);
+    });
+}
 
-        setTimeout(() => {
-            notification.classList.remove('yd-sq-notification-show');
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
+async function sendToMinusPhrases() {
+    if (selections.size === 0) {
+        showYdsqNotification('Список минусов пуст', 'warn');
+        return;
     }
 
-    // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
+    if (isSending) return;
+    isSending = true;
 
-    function setupGlobalListeners() {
-        // Скролл пользователя
-        window.addEventListener('scroll', () => {
-            lastManualScrollTime = Date.now();
-        }, { passive: true });
+    const values = [];
+    const unassigned = [];
 
-        // Завершение фразы при клике вне
-        document.addEventListener('click', (e) => {
-            if (phraseInProgress && !e.target.classList.contains('yd-word')) {
-                finalizePhraseBuilding(false);
-            }
-        });
-
-        // Завершение фразы при Enter или любой клавише
-        document.addEventListener('keydown', (e) => {
-            if (phraseInProgress) {
-                // Any key finishes the phrase
-                finalizePhraseBuilding(false);
-            }
-        });
-
-        // Делегирование событий для слов
-        addDelegatedListener('click', '.yd-word', onWordClick);
-        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
-        addDelegatedListener('mouseover', '.yd-word', onWordHover);
-        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
-    }
-
-    function setupResultPopupObserver() {
-        const observer = new MutationObserver(() => {
-            const popup = findResultPopup();
-            if (popup) {
-                setTimeout(() => tryCloseResultPopup(), 500);
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
-
-    function setupMinusModalObserver() {
-        const observer = new MutationObserver(() => {
-            const textarea = findMinusPhrasesTextarea();
-            if (textarea && !textarea.dataset.ydSqObserved) {
-                textarea.dataset.ydSqObserved = 'true';
-                syncCampaignDataFromTextarea(textarea);
-
-                textarea.addEventListener('input', () => {
-                    syncCampaignDataFromTextarea(textarea);
-                });
-
-                textarea.addEventListener('change', () => {
-                    syncCampaignDataFromTextarea(textarea);
-                });
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
-
-    function findMinusPhrasesTextarea() {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        for (const dialog of dialogs) {
-            const title = dialog.querySelector('h3, .title, [class*="Title"]');
-            if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
-                return dialog.querySelector('textarea');
-            }
+    for (const sel of selections.values()) {
+        if (sel.unassignedOnThisPage) {
+            unassigned.push(sel.display);
+        } else {
+            values.push(sel.display);
         }
-        return null;
     }
 
-    function syncCampaignDataFromTextarea(textarea) {
-        const text = textarea.value || '';
-        const phrases = normalizeMinusInput(text);
+    if (unassigned.length > 0) {
+        showYdsqNotification(`Внимание: ${unassigned.length} элементов не найдены на странице`, 'warn');
+    }
 
-        const existingMap = new Map(importedMinuses.map(m => [m.raw, m]));
-        const newImported = [];
-        let changed = false;
+    // Найти кнопку "Добавить в минус-фразы"
+    const addButton = findAddToMinusPhrasesButton();
+    if (!addButton) {
+        showYdsqNotification('Кнопка "Добавить в минус-фразы" не найдена', 'error');
+        isSending = false;
+        return;
+    }
 
-        for (const phrase of phrases) {
-            if (existingMap.has(phrase)) {
-                newImported.push(existingMap.get(phrase));
-            } else {
-                newImported.push({
-                    id: `imp:${Date.now()}_${Math.random()}`,
-                    raw: phrase,
-                    importedAt: Date.now()
-                });
-                changed = true;
+    addButton.click();
+
+    try {
+        const modal = await waitForElement(findMinusModal, 5000);
+
+        // Установить "на кампанию"
+        const selects = modal.querySelectorAll('select');
+        for (const select of selects) {
+            const options = Array.from(select.options);
+            const campaignOption = options.find(opt =>
+                opt.textContent.includes('на кампанию') || opt.textContent.includes('кампани')
+            );
+
+            if (campaignOption) {
+                select.value = campaignOption.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
             }
         }
 
-        if (newImported.length !== importedMinuses.length) {
-            changed = true;
-        }
+        // Ждем поля ввода
+        const inputs = await waitForElement(() => {
+            const textareas = Array.from(modal.querySelectorAll('textarea'));
+            const textInputs = Array.from(modal.querySelectorAll('input[type="text"]'));
+            const contentEditables = Array.from(modal.querySelectorAll('[contenteditable="true"]'));
+            const all = [...textareas, ...textInputs, ...contentEditables];
+            const visible = all.filter(el => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            });
+            return visible.length > 0 ? visible : null;
+        }, 3000);
 
-        if (changed) {
-            importedMinuses = newImported;
+        const targetInput = inputs[0];
+        const newPhrases = normalizeMinusInput(values);
+
+        const success = await smartAppendToField(targetInput, newPhrases);
+
+        if (success) {
+            // Add to "In Campaign" list
+            let addedCount = 0;
+            for (const val of values) {
+                if (!importedMinuses.some(imp => imp.raw === val)) {
+                    importedMinuses.push({
+                        id: `imp:${Date.now()}_${Math.random()}`,
+                        raw: val,
+                        importedAt: Date.now()
+                    });
+                    addedCount++;
+                }
+            }
+
+            // Clear selections that were sent
+            selections.clear();
+
+            // Add to history
+            const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
+            for (const val of values) {
+                addToSentHistory(val, null, [currentPage]);
+            }
+
             syncLocalToGlobal();
             rebuildCampaignMinusList();
-            updateHighlights();
             updateUI();
+
+            showYdsqNotification(`Обработано ${newPhrases.size} минусов`, 'success');
+            pushUndo('send', `Отправлено ${newPhrases.size} минусов`);
+
+            setTimeout(() => tryCloseResultPopup(), 1000);
+        }
+
+    } catch (err) {
+        console.error('[YD-SQ]', err);
+        showYdsqNotification('Ошибка при отправке: ' + err.message, 'error');
+    } finally {
+        isSending = false;
+    }
+}
+
+function tryCloseResultPopup() {
+    const popup = findResultPopup();
+    if (!popup) return false;
+
+    const buttons = popup.querySelectorAll('button');
+    for (const btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        if (text.includes('ok') || text.includes('ок')) {
+            btn.click();
+            return true;
         }
     }
 
-    // ==================== CSS СТИЛИ ====================
+    const closeBtn = popup.querySelector('[aria-label*="Закрыть"], [aria-label*="закрыть"]');
+    if (closeBtn) {
+        closeBtn.click();
+        return true;
+    }
 
-    function injectStyles() {
-        if (document.getElementById('yd-sq-styles')) return;
+    return false;
+}
 
-        const style = document.createElement('style');
-        style.id = 'yd-sq-styles';
-        style.textContent = `
+function findResultPopup() {
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    for (const dialog of dialogs) {
+        const text = dialog.textContent || '';
+        if (text.includes('Добавлено') && text.includes('минус')) {
+            return dialog;
+        }
+    }
+    return null;
+}
+
+// ==================== PERSISTENCE ====================
+
+function loadGlobalState() {
+    try {
+        const campaignId = getCampaignId();
+        const key = `yd-sq-state-global:${campaignId}`;
+        const stored = localStorage.getItem(key);
+
+        if (stored) {
+            const data = JSON.parse(stored);
+            sentHistory = data.sentHistory || [];
+            importedMinuses = data.importedMinuses || [];
+            panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
+            phraseCounter = data.phraseCounter || 0;
+
+            // Восстановить selections
+            if (data.selections) {
+                selections.clear();
+                for (const [key, val] of Object.entries(data.selections)) {
+                    selections.set(key, val);
+                }
+            }
+
+            rebuildCampaignMinusList();
+        }
+    } catch (err) {
+        console.error('[YD-SQ] Ошибка загрузки состояния:', err);
+    }
+}
+
+function syncLocalToGlobal() {
+    try {
+        const campaignId = getCampaignId();
+        const key = `yd-sq-state-global:${campaignId}`;
+
+        const selectionsObj = {};
+        for (const [k, v] of selections) {
+            selectionsObj[k] = v;
+        }
+
+        const data = {
+            selections: selectionsObj,
+            phraseCounter: phraseCounter,
+            sentHistory: sentHistory,
+            importedMinuses: importedMinuses,
+            panelPosition: panelPosition
+        };
+
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (err) {
+        console.error('[YD-SQ] Ошибка сохранения состояния:', err);
+    }
+}
+
+function rebuildCampaignMinusList() {
+    campaignMinusList.clear();
+    for (const imp of importedMinuses) {
+        campaignMinusList.add(imp.raw);
+    }
+}
+
+
+
+// ==================== УВЕДОМЛЕНИЯ ====================
+
+function showYdsqNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `yd-sq-notification yd-sq-notification-${type}`;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.classList.add('yd-sq-notification-show');
+    }, 10);
+
+    setTimeout(() => {
+        notification.classList.remove('yd-sq-notification-show');
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+// ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
+
+function setupGlobalListeners() {
+    // Скролл пользователя
+    window.addEventListener('scroll', () => {
+        lastManualScrollTime = Date.now();
+    }, { passive: true });
+
+    // Завершение фразы при клике вне
+    document.addEventListener('click', (e) => {
+        if (phraseInProgress && !e.target.classList.contains('yd-word')) {
+            finalizePhraseBuilding(false);
+        }
+    });
+
+    // Завершение фразы при любой клавише
+    document.addEventListener('keydown', (e) => {
+        if (phraseInProgress) {
+            e.preventDefault();
+            finalizePhraseBuilding(false);
+        }
+    });
+
+    // Делегирование событий для слов
+    addDelegatedListener('click', '.yd-word', onWordClick);
+    addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
+    addDelegatedListener('mouseover', '.yd-word', onWordHover);
+    addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
+}
+
+function setupResultPopupObserver() {
+    const observer = new MutationObserver(() => {
+        const popup = findResultPopup();
+        if (popup) {
+            setTimeout(() => tryCloseResultPopup(), 500);
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+function setupMinusModalObserver() {
+    const observer = new MutationObserver(() => {
+        const textarea = findMinusPhrasesTextarea();
+        if (textarea && !textarea.dataset.ydSqObserved) {
+            textarea.dataset.ydSqObserved = 'true';
+            syncCampaignDataFromTextarea(textarea);
+
+            textarea.addEventListener('input', () => {
+                syncCampaignDataFromTextarea(textarea);
+            });
+
+            textarea.addEventListener('change', () => {
+                syncCampaignDataFromTextarea(textarea);
+            });
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+function findMinusPhrasesTextarea() {
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    for (const dialog of dialogs) {
+        const title = dialog.querySelector('h3, .title, [class*="Title"]');
+        if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
+            return dialog.querySelector('textarea');
+        }
+    }
+    return null;
+}
+
+function syncCampaignDataFromTextarea(textarea) {
+    const text = textarea.value || '';
+    const phrases = normalizeMinusInput(text);
+
+    const existingMap = new Map(importedMinuses.map(m => [m.raw, m]));
+    const newImported = [];
+    let changed = false;
+
+    for (const phrase of phrases) {
+        if (existingMap.has(phrase)) {
+            newImported.push(existingMap.get(phrase));
+        } else {
+            newImported.push({
+                id: `imp:${Date.now()}_${Math.random()}`,
+                raw: phrase,
+                importedAt: Date.now()
+            });
+            changed = true;
+        }
+    }
+
+    if (newImported.length !== importedMinuses.length) {
+        changed = true;
+    }
+
+    if (changed) {
+        importedMinuses = newImported;
+        syncLocalToGlobal();
+        rebuildCampaignMinusList();
+        updateHighlights();
+        updateUI();
+    }
+}
+
+// ==================== CSS СТИЛИ ====================
+
+function injectStyles() {
+    if (document.getElementById('yd-sq-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'yd-sq-styles';
+    style.textContent = `
             /* ПАНЕЛЬ */
             #yd-sq-panel {
                 position: fixed;
@@ -2574,29 +2523,18 @@
             .yd-selected-soft {
                 background-color: #fff3cd !important;
             }
-
-            /* PHRASE MODE DEACTIVATION */
-            body.yd-phrase-mode-active .yd-word:not(.yd-row-active) {
-                background-color: rgba(0, 0, 0, 0.04) !important;
-                color: #aaa !important;
-                pointer-events: none;
-            }
-            /* Ensure active words in phrase mode are highlighted */
-            .yd-phrase-building {
-                background-color: #cce5ff !important;
-            }
         `;
 
-        document.head.appendChild(style);
-    }
+    document.head.appendChild(style);
+}
 
-    // ==================== ЗАПУСК ====================
+// ==================== ЗАПУСК ====================
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
 
-})();
+}) ();
 
