@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.120
+// @version      0.0.121
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -385,7 +385,6 @@
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
-        // e.stopImmediatePropagation(); // Не нужно при делегировании
 
         const span = targetSpan;
         const stem = span.dataset.stem;
@@ -393,7 +392,67 @@
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
 
-        // Проверка уже выделено
+        // --- PHRASE BUILDING MODE ---
+        if (phraseInProgress) {
+            if (phraseInProgress.rowId !== rowId) {
+                // Clicked outside active row - ignore or maybe cancel? 
+                // User said "Rows outside... deactivate", implying ignore.
+                return;
+            }
+
+            // Clicked inside active row
+            if (phraseInProgress.words.includes(word)) {
+                // Word already in phrase? User didn't specify toggle inside building.
+                // Usually we just add. If clicked again, maybe nothing?
+                // Let's assume we just add unique words.
+                return;
+            }
+
+            phraseInProgress.words.push(word);
+
+            // Update selection
+            const sel = selections.get(phraseInProgress.id);
+            sel.raw = phraseInProgress.words.join(' ');
+            sel.display = `"${sel.raw}"`; // Quote match
+            sel.words = [...phraseInProgress.words];
+
+            span.classList.add('yd-phrase-building');
+            span.dataset.phraseId = phraseInProgress.id;
+
+            // Check for auto-completion (2-word row)
+            const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
+            if (rowSpans.length === 2 && phraseInProgress.words.length === 2) {
+                finalizePhraseBuilding(false);
+            }
+
+            updateUI();
+            return;
+        }
+
+        // --- NORMAL MODE ---
+
+        // Check if word is part of a completed phrase (Quote match)
+        // We need to find if this word belongs to any selection of type 'quote'
+        // We can check classes or iterate selections.
+        // Checking classes is faster if we trust them.
+        if (span.classList.contains('yd-selected-phrase')) {
+            // Find the selection ID. It might be on the span or we search.
+            // Since we don't store ID on span for completed phrases (only building), we search.
+            // This is slightly expensive but safe.
+            for (const sel of selections.values()) {
+                if (sel.matchType === 'quote' && sel.rowId === rowId) {
+                    // Check if this word is part of the phrase words
+                    // Simple check: is it in the row? Yes.
+                    // So if we clicked a word in a row that has a quote selection, we remove it.
+                    removeSelectionById(sel.id);
+                    showYdsqNotification('Фраза удалена', 'info');
+                    updateUI();
+                    return;
+                }
+            }
+        }
+
+        // Standard Soft/Strict Toggle
         if (span.classList.contains('yd-selected-soft') || span.classList.contains('yd-selected-strict')) {
             const key = span.classList.contains('yd-selected-soft') ? `soft:${stem}` : `strict:${wordLower}`;
             removeSelectionById(key);
@@ -417,30 +476,55 @@
         e.stopPropagation();
 
         const rowId = targetSpan.dataset.rowId;
+        const word = targetSpan.dataset.word;
 
-        // Collect all words in the row to form a phrase
-        // We filter wordSpans. This is fast enough for a single user interaction.
-        const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
-        const words = rowSpans.map(s => s.dataset.word);
-        const phrase = words.join(' ');
-
-        // Use a deterministic key for the phrase
-        const key = `quote:${phrase}`;
-
-        if (selections.has(key)) {
-            removeSelectionById(key);
-        } else {
-            selections.set(key, {
-                id: key,
-                kind: 'phrase',
-                raw: phrase,
-                display: `"${phrase}"`, // Quotes imply Phrase Match (Exact Set)
-                rowId: rowId,
-                pageKey: currentPageKey,
-                matchType: 'quote'
-            });
-            ensureRowChecked(rowId);
+        // If already building, maybe finalize? Or ignore?
+        if (phraseInProgress) {
+            finalizePhraseBuilding(false);
+            return;
         }
+
+        // Start Phrase Mode
+        phraseCounter++;
+        const phraseId = `phrase:${phraseCounter}`;
+
+        phraseInProgress = {
+            id: phraseId,
+            rowId: rowId,
+            words: [word],
+            startTime: Date.now()
+        };
+
+        selections.set(phraseId, {
+            id: phraseId,
+            kind: 'phrase',
+            raw: word,
+            display: `"${word}"`,
+            words: [word],
+            rowId: rowId,
+            pageKey: currentPageKey,
+            matchType: 'quote',
+            _building: true
+        });
+
+        // Visuals
+        targetSpan.classList.add('yd-phrase-building');
+        targetSpan.dataset.phraseId = phraseId;
+
+        // Deactivate other rows
+        document.body.classList.add('yd-phrase-mode-active');
+        // Mark active row elements? 
+        // We can iterate spans and add 'yd-row-active' to those in rowId
+        for (const s of wordSpans) {
+            if (s.dataset.rowId === rowId) {
+                s.classList.add('yd-row-active');
+            } else {
+                s.classList.remove('yd-row-active');
+            }
+        }
+
+        ensureRowChecked(rowId);
+        showYdsqNotification('Режим фразы', 'info');
 
         syncLocalToGlobal();
         updateUI();
@@ -451,16 +535,18 @@
 
         const sel = selections.get(phraseInProgress.id);
 
-        if (isCancel || !sel || sel.words.length < 2) {
+        if (isCancel || !sel) {
             selections.delete(phraseInProgress.id);
         } else {
             sel._building = false;
             pushUndo('add_selection', `Построена фраза: "${sel.raw}"`);
+            showYdsqNotification('Фраза добавлена', 'success');
         }
 
-        // Удалить классы
+        // Cleanup Visuals
+        document.body.classList.remove('yd-phrase-mode-active');
         for (const span of wordSpans) {
-            span.classList.remove('yd-phrase-building');
+            span.classList.remove('yd-phrase-building', 'yd-row-active');
             delete span.dataset.phraseId;
         }
 
@@ -1917,9 +2003,10 @@
             }
         });
 
-        // Завершение фразы при Enter
+        // Завершение фразы при Enter или любой клавише
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && phraseInProgress) {
+            if (phraseInProgress) {
+                // Any key finishes the phrase
                 finalizePhraseBuilding(false);
             }
         });
@@ -2486,6 +2573,17 @@
             }
             .yd-selected-soft {
                 background-color: #fff3cd !important;
+            }
+
+            /* PHRASE MODE DEACTIVATION */
+            body.yd-phrase-mode-active .yd-word:not(.yd-row-active) {
+                background-color: rgba(0, 0, 0, 0.04) !important;
+                color: #aaa !important;
+                pointer-events: none;
+            }
+            /* Ensure active words in phrase mode are highlighted */
+            .yd-phrase-building {
+                background-color: #cce5ff !important;
             }
         `;
 
