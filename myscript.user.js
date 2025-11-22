@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version      0.0.119
+// @version      0.0.120
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -415,53 +415,34 @@
 
     function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
-        // e.stopImmediatePropagation();
 
-        const span = targetSpan;
-        const word = span.dataset.word;
-        const rowId = span.dataset.rowId;
+        const rowId = targetSpan.dataset.rowId;
 
-        if (!phraseInProgress) {
-            phraseCounter++;
-            const phraseId = `phrase:${phraseCounter}`;
-            phraseInProgress = {
-                id: phraseId,
-                rowId: rowId,
-                words: [word],
-                startTime: Date.now()
-            };
+        // Collect all words in the row to form a phrase
+        // We filter wordSpans. This is fast enough for a single user interaction.
+        const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
+        const words = rowSpans.map(s => s.dataset.word);
+        const phrase = words.join(' ');
 
-            selections.set(phraseId, {
-                id: phraseId,
+        // Use a deterministic key for the phrase
+        const key = `quote:${phrase}`;
+
+        if (selections.has(key)) {
+            removeSelectionById(key);
+        } else {
+            selections.set(key, {
+                id: key,
                 kind: 'phrase',
-                raw: word,
-                display: word,
-                words: [word],
+                raw: phrase,
+                display: `"${phrase}"`, // Quotes imply Phrase Match (Exact Set)
                 rowId: rowId,
                 pageKey: currentPageKey,
-                matchType: null,
-                _building: true
+                matchType: 'quote'
             });
-
-            span.classList.add('yd-phrase-building');
-            span.dataset.phraseId = phraseId;
-        } else if (phraseInProgress.rowId === rowId) {
-            if (phraseInProgress.words.includes(word)) return;
-
-            phraseInProgress.words.push(word);
-            const sel = selections.get(phraseInProgress.id);
-            sel.raw = phraseInProgress.words.join(' ');
-            sel.display = sel.raw;
-            sel.words = [...phraseInProgress.words];
-
-            span.classList.add('yd-phrase-building');
-            span.dataset.phraseId = phraseInProgress.id;
-        } else {
-            finalizePhraseBuilding(false);
-            onWordDoubleClick(e);
-            return;
+            ensureRowChecked(rowId);
         }
 
+        syncLocalToGlobal();
         updateUI();
     }
 
@@ -669,9 +650,19 @@
 
     // ==================== HIGHLIGHTS ====================
 
+    // Cache for parsed rules to avoid re-parsing on every update
+    let cachedImportedRules = null;
+    let lastImportedMinusesRef = null;
+
     function updateHighlights() {
-        // Очистить все классы
+        // 1. Clear classes
+        // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
+            sp.className = 'yd-word'; // Reset to base class
+            // Restore original classes if any? 
+            // Actually wordSpans only have 'yd-word' initially.
+            // But wait, if we have other classes?
+            // Safer to remove specific classes.
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
@@ -682,57 +673,73 @@
             delete sp.dataset.importedAt;
         }
 
-        // --- СБОР ПРАВИЛ ---
-        const rules = [];
-
-        // 1. Из "В кампании" (importedMinuses)
-        for (const imp of importedMinuses) {
-            const rule = parseMinusRule(imp.raw);
-            rule.source = 'imported';
-            rules.push(rule);
+        // 2. Prepare Rules
+        // Check if importedMinuses array reference changed
+        if (lastImportedMinusesRef !== importedMinuses) {
+            cachedImportedRules = importedMinuses.map(imp => {
+                const r = parseMinusRule(imp.raw);
+                r.source = 'imported';
+                return r;
+            });
+            lastImportedMinusesRef = importedMinuses;
         }
 
-        // 2. Из "Выбранные сейчас" (selections)
+        // Combine cached imported rules with current selections
+        const rules = [...(cachedImportedRules || [])];
+
         for (const sel of selections.values()) {
             if (sel.display) {
-                const rule = parseMinusRule(sel.display);
-                rule.source = 'selection';
-                rules.push(rule);
+                const r = parseMinusRule(sel.display);
+                r.source = 'selection';
+                rules.push(r);
             }
         }
 
-        // --- ПРИМЕНЕНИЕ ПРАВИЛ ---
-        const rows = getAllRowsOnPage();
+        if (rules.length === 0 && sentHistory.length === 0) return;
 
-        for (const row of rows) {
-            const rowId = row.dataset.ydRowId;
-            const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
-            if (rowSpans.length === 0) continue;
+        // 3. Group spans by row (Optimization)
+        // This avoids O(N*M) filtering inside the loop.
+        const spansByRow = new Map();
+        for (const sp of wordSpans) {
+            const rid = sp.dataset.rowId;
+            if (!rid) continue;
+            let arr = spansByRow.get(rid);
+            if (!arr) {
+                arr = [];
+                spansByRow.set(rid, arr);
+            }
+            arr.push(sp);
+        }
 
+        // 4. Iterate Rows
+        for (const [rowId, rowSpans] of spansByRow) {
+            // Prepare row data once
             const rowWordsData = rowSpans.map(s => ({
                 text: s.dataset.word,
                 lower: s.dataset.wordLower,
                 stem: s.dataset.stem,
                 span: s
             }));
+            const rowLen = rowWordsData.length;
 
             for (const rule of rules) {
                 let isMatch = false;
                 let matchedIndices = new Set();
                 let strictIndices = new Set();
 
-                // Determine base class
                 let baseClass = 'yd-imported-minus';
                 if (rule.source === 'selection') {
                     baseClass = 'yd-selected-soft';
                 }
 
                 if (rule.type === 'quote') {
-                    if (rowWordsData.length === rule.words.length) {
+                    // Quote: Exact Set of words (no extra words in row)
+                    if (rowLen === rule.words.length) {
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
 
                         for (const rWord of rule.words) {
+                            // Find matching word in row
                             const foundIdx = rowWordsData.findIndex((d, idx) => {
                                 if (rowIndicesUsed.has(idx)) return false;
                                 if (rWord.isStrict) {
@@ -752,15 +759,16 @@
 
                         if (allRuleWordsFound) {
                             isMatch = true;
-                            for (let i = 0; i < rowWordsData.length; i++) matchedIndices.add(i);
+                            for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
                             baseClass = 'yd-selected-phrase';
                         }
                     }
 
                 } else if (rule.type === 'bracket') {
+                    // Bracket: Fixed sequence
                     const pLen = rule.words.length;
-                    if (rowWordsData.length >= pLen) {
-                        for (let i = 0; i <= rowWordsData.length - pLen; i++) {
+                    if (rowLen >= pLen) {
+                        for (let i = 0; i <= rowLen - pLen; i++) {
                             let subMatch = true;
                             for (let j = 0; j < pLen; j++) {
                                 const rWord = rule.words[j];
@@ -784,6 +792,7 @@
                     if (isMatch) baseClass = 'yd-selected-strict';
 
                 } else if (rule.type === 'broad') {
+                    // Broad: All words present anywhere
                     const indicesFound = [];
                     let allFound = true;
 
@@ -826,15 +835,18 @@
             }
         }
 
-        // --- ИСТОРИЯ ---
-        for (const sent of sentHistory) {
-            const sentStem = stemWord(sent.raw);
-            const sentLower = sent.raw.toLowerCase();
+        // --- HISTORY ---
+        // Optimized history check
+        if (sentHistory.length > 0) {
+            const sentStems = new Set();
+            const sentLowers = new Set();
+            for (const sent of sentHistory) {
+                sentStems.add(stemWord(sent.raw));
+                sentLowers.add(sent.raw.toLowerCase());
+            }
 
             for (const span of wordSpans) {
-                const stem = span.dataset.stem;
-                const wordLower = span.dataset.wordLower;
-                if (stem === sentStem || wordLower === sentLower) {
+                if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
                     span.classList.add('yd-sent-history');
                 }
             }
@@ -1164,40 +1176,28 @@
             const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены в список "В кампании".`);
             if (!confirmed) return;
 
-            let addedCount = 0;
+            const newItems = [];
             for (const phrase of newPhrases) {
-                // Check if already exists in importedMinuses
                 if (!importedMinuses.some(imp => imp.raw === phrase)) {
-                    importedMinuses.push({
+                    newItems.push({
                         id: `imp:${Date.now()}_${Math.random()}`,
                         raw: phrase,
                         importedAt: Date.now()
                     });
-                    addedCount++;
                 }
             }
 
-            if (addedCount > 0) {
+            if (newItems.length > 0) {
+                importedMinuses = [...importedMinuses, ...newItems];
                 syncLocalToGlobal();
                 rebuildCampaignMinusList();
                 updateHighlights();
                 updateUI();
-                showYdsqNotification(`Добавлено ${addedCount} минусов в "В кампании"`, 'success');
+                showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
             } else {
                 showYdsqNotification('Все минусы уже есть в списке', 'info');
             }
 
-            // Также добавляем в историю импорта (для отображения в списке "В кампании")
-            // Но теперь мы используем selections как основной источник правды
-            // Можно добавить в importedMinuses для истории
-            for (const phrase of newPhrases) {
-                importedMinuses.push({
-                    id: `imp:${Date.now()}_${Math.random()}`,
-                    raw: phrase,
-                    matchType: phrase.startsWith('!') ? 'strict' : null,
-                    importedAt: Date.now()
-                });
-            }
             syncLocalToGlobal();
             updateHighlights(); // Обновить стили (серый цвет для imported)
 
