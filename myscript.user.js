@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.6
+// @version 0.121.7
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -502,6 +502,7 @@
         // Show notification
         showYdsqNotification('Режим фразы', 'info');
 
+        ensureRowChecked(rowId);
         updateUI();
     }
 
@@ -537,6 +538,7 @@
     function cancelPhraseBuilding() {
         if (!phraseInProgress) return;
 
+        const rowId = phraseInProgress.rowId;
         selections.delete(phraseInProgress.id);
 
         // Remove phrase-building classes
@@ -547,6 +549,18 @@
 
         // Reactivate all rows
         reactivateAllRows();
+
+        // Uncheck if no other selections on this row
+        const otherSelsOnRow = Array.from(selections.values()).some(
+            s => s.pageKey === currentPageKey && s.rowId === rowId
+        );
+        if (!otherSelsOnRow) {
+            const cb = getRowCheckbox(rowId);
+            if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+                clickCheckbox(cb, false);
+                delete cb.dataset.ydAuto;
+            }
+        }
 
         phraseInProgress = null;
         showYdsqNotification('Фраза отменена', 'info');
@@ -2661,6 +2675,7 @@
     }
 
 })();
+
 
 
 
