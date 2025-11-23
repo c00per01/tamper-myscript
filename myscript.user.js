@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.13
+// @version 0.121.14
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -604,6 +604,8 @@
                 clickCheckbox(cb, false);
                 delete cb.dataset.ydAuto;
             }
+        } else {
+            ensureRowChecked(rowId);
         }
 
         phraseInProgress = null;
@@ -734,6 +736,9 @@
                 clickCheckbox(cb, false);  // Явно выключаем чекбокс
                 delete cb.dataset.ydAuto;
             }
+        } else if (otherSelsOnRow && pageKey === currentPageKey) {
+            // Если остались другие выделенные слова, гарантируем, что чекбокс включен
+            ensureRowChecked(rowId);
         }
         syncLocalToGlobal();
     }
@@ -2728,6 +2733,7 @@
     }
 
 })();
+
 
 
 
