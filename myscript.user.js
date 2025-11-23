@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.11
+// @version 0.121.13
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -370,6 +370,10 @@
                             span.addEventListener('mouseover', (e) => onWordHover(e, span));
                             span.addEventListener('mouseout', (e) => onWordHoverOut(e, span));
 
+                            // Stop propagation for mouse events to prevent row toggle
+                            span.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+                            span.addEventListener('mouseup', (e) => { e.stopPropagation(); });
+
                             wordSpans.push(span);
                             fragment.appendChild(span);
                         } else {
@@ -633,6 +637,15 @@
             cb.dataset.ydAuto = 'true';
             // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
         }
+
+        // Double check after a delay to fix race conditions with Yandex handlers
+        setTimeout(() => {
+            const cb2 = getRowCheckbox(rowId);
+            if (cb2 && !cb2.checked) {
+                clickCheckbox(cb2, true);
+                cb2.dataset.ydAuto = 'true';
+            }
+        }, 50);
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
@@ -2715,6 +2728,7 @@
     }
 
 })();
+
 
 
 
