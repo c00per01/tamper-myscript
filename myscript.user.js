@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.4
+// @version 0.121.5
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -412,7 +412,7 @@
                 phraseInProgress.words.push(word);
                 const sel = selections.get(phraseInProgress.id);
                 sel.raw = phraseInProgress.words.join(' ');
-                sel.display = `"${sel.raw}"`;
+                sel.display = sel.raw;
                 sel.words = [...phraseInProgress.words];
 
                 span.classList.add('yd-phrase-building');
@@ -485,11 +485,11 @@
             id: phraseId,
             kind: 'phrase',
             raw: word,
-            display: `"${word}"`,
+            display: word,
             words: [word],
             rowId: rowId,
             pageKey: currentPageKey,
-            matchType: 'quote',
+            matchType: null,
             _building: true
         });
 
@@ -514,7 +514,6 @@
             selections.delete(phraseInProgress.id);
         } else {
             sel._building = false;
-            sel.matchType = 'quote';
             ensureRowChecked(phraseInProgress.rowId);
             pushUndo('add_selection', `Построена фраза: "${sel.raw}"`);
             showYdsqNotification('Фраза добавлена', 'success');
@@ -2613,5 +2612,6 @@
     }
 
 })();
+
 
 
