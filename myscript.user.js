@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.9
+// @version 0.121.11
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -20,6 +20,7 @@
     let importedMinuses = [];
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
+    let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
 
@@ -112,6 +113,7 @@
         try {
             inited = true;
             wrapTableWords(table);
+            setupTableObserver(table);
             injectStyles();
             createPanel();
             setupResultPopupObserver();
@@ -123,6 +125,37 @@
         } catch (err) {
             console.error('[YD-SQ] Ошибка инициализации:', err);
         }
+    }
+
+    function setupTableObserver(table) {
+        const observer = new MutationObserver((mutations) => {
+            if (isWrapping) return;
+
+            let shouldUpdate = false;
+            for (const m of mutations) {
+                if (m.type === 'childList') {
+                    shouldUpdate = true;
+                    break;
+                }
+            }
+
+            if (shouldUpdate) {
+                isWrapping = true;
+                setTimeout(() => {
+                    cleanWordSpans();
+                    wrapTableWords(table);
+                    restoreVisualMarkers();
+                    isWrapping = false;
+                }, 50);
+            }
+        });
+
+        const tbody = table.querySelector('tbody') || table;
+        observer.observe(tbody, { childList: true, subtree: true });
+    }
+
+    function cleanWordSpans() {
+        wordSpans = wordSpans.filter(span => document.body.contains(span));
     }
 
     function detectPageChange() {
@@ -294,6 +327,9 @@
             }
 
             if (queryCell) {
+                // Check if already wrapped to avoid double processing
+                if (queryCell.querySelector('.yd-word')) continue;
+
                 addCopyButtonToRow(row, queryCell);
                 wrapCellWordsPreserving(queryCell, rowId);
             }
@@ -2679,6 +2715,7 @@
     }
 
 })();
+
 
 
 
