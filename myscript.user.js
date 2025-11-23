@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.17
+// @version 0.121.18
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -717,7 +717,15 @@
             cancelPhraseBuilding();
         });
 
-        cell.appendChild(container);
+        // Insert after the last word to be close to the query
+        const words = cell.querySelectorAll('.yd-word');
+        const lastWord = words[words.length - 1];
+        if (lastWord) {
+            // Add a space if needed, or rely on margin
+            lastWord.after(container);
+        } else {
+            cell.appendChild(container);
+        }
     }
 
     function removePhraseButtons(rowId) {
@@ -2856,6 +2864,7 @@
     }
 
 })();
+
 
 
 
