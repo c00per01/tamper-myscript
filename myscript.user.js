@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.16
+// @version 0.121.17
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2645,6 +2645,46 @@
 
             /* СЛОВА В ТАБЛИЦЕ */
             .yd-word {
+                cursor: pointer;
+                transition: background 0.15s ease, box-shadow 0.15s ease;
+                border-radius: 2px;
+                padding: 1px 0;
+                position: relative;
+                display: inline-block;
+            }
+
+            .yd-word:hover {
+                background: rgba(74, 144, 226, 0.1);
+            }
+
+            .yd-selected-soft {
+                background: #fff3bf !important;
+            }
+
+            .yd-selected-strict {
+                background: #ffd6d6 !important;
+            }
+
+            .yd-selected-phrase {
+                background: #cce5ff !important;
+            }
+
+            .yd-phrase-building {
+                background: #cce5ff !important;
+                animation: yd-phrase-blink 1.5s infinite ease-in-out;
+            }
+
+            @keyframes yd-phrase-blink {
+                0% { background-color: #cce5ff; }
+                50% { background-color: transparent; }
+                100% { background-color: #cce5ff; }
+            }
+
+            .yd-primary-soft {
+                box-shadow: 0 0 0 2px #f0c200 inset;
+                font-weight: 600;
+            }
+
             .yd-primary-strict {
                 box-shadow: 0 0 0 2px #d90000 inset;
                 background: #ffd6d6 !important;
@@ -2675,6 +2715,26 @@
                 text-decoration-color: rgba(0, 0, 0, 0.1);
                 opacity: 0.8;
             }
+
+            .yd-row-deactivated {
+                opacity: 0.5;
+                pointer-events: none;
+                filter: grayscale(100%);
+            }
+
+            .yd-phrase-actions {
+                display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;
+            }
+            .yd-phrase-btn {
+                border: 1px solid #ccc; background: #fff; padding: 2px 6px;
+                border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600;
+                line-height: 1; color: #333; transition: all 0.2s;
+            }
+            .yd-phrase-btn:hover { background: #f0f0f0; border-color: #999; }
+            .yd-phrase-btn-done { color: #28a745; border-color: #28a745; }
+            .yd-phrase-btn-done:hover { background: #e6ffec; }
+            .yd-phrase-btn-cancel { color: #dc3545; border-color: #dc3545; }
+            .yd-phrase-btn-cancel:hover { background: #ffe6e6; }
 
             /* COPY КНОПКА */
             .yd-copy-query-btn {
@@ -2782,34 +2842,6 @@
                 background: #dc3545;
                 color: #fff;
             }
-
-            /* HIGHLIGHTS CUSTOMIZATION */
-            .yd-selected-phrase {
-                background-color: #cce5ff !important;
-            }
-            .yd-selected-strict {
-                background-color: #ffd6d6 !important;
-            }
-            .yd-imported-minus {
-                background-color: rgba(0, 0, 0, 0.04) !important;
-                text-decoration: line-through;
-            }
-            .yd-sent-history {
-                background-color: rgba(245, 245, 245, 0.65) !important;
-            }
-            .yd-selected-soft {
-                background-color: #fff3cd !important;
-            }
-            .yd-phrase-building {
-                background-color: #cce5ff !important;
-                font-weight: 600;
-            }
-            .yd-row-deactivated {
-                background-color: rgba(0, 0, 0, 0.04) !important;
-                color: #aaa !important;
-                pointer-events: none;
-                opacity: 0.5;
-            }
         `;
 
         document.head.appendChild(style);
@@ -2824,6 +2856,7 @@
     }
 
 })();
+
 
 
 
