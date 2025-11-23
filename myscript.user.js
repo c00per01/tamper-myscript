@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.7
+// @version 0.121.9
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -328,8 +328,12 @@
                             span.dataset.stem = stemWord(word);
                             span.dataset.rowId = rowId;
 
-                            span.dataset.rowId = rowId;
-                            // Listeners removed for delegation
+                            // Direct listeners to prevent bubbling to row and fix checkbox toggling
+                            span.addEventListener('click', (e) => onWordClick(e, span));
+                            span.addEventListener('dblclick', (e) => onWordDoubleClick(e, span));
+                            span.addEventListener('mouseover', (e) => onWordHover(e, span));
+                            span.addEventListener('mouseout', (e) => onWordHoverOut(e, span));
+
                             wordSpans.push(span);
                             fragment.appendChild(span);
                         } else {
@@ -2100,11 +2104,11 @@
             }
         });
 
-        // Делегирование событий для слов
-        addDelegatedListener('click', '.yd-word', onWordClick);
-        addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
-        addDelegatedListener('mouseover', '.yd-word', onWordHover);
-        addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
+        // Делегирование событий для слов - REMOVED in favor of direct listeners to stop propagation
+        // addDelegatedListener('click', '.yd-word', onWordClick);
+        // addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
+        // addDelegatedListener('mouseover', '.yd-word', onWordHover);
+        // addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
 
 
@@ -2675,6 +2679,7 @@
     }
 
 })();
+
 
 
 
