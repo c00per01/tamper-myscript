@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.20
+// @version 0.121.21
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2270,16 +2270,21 @@
         // Завершение фразы при клике вне слов активной строки
         document.addEventListener('click', (e) => {
             if (phraseInProgress) {
-                // Ignore clicks on phrase buttons (they stop propagation, but just in case)
+                // Ignore clicks on phrase buttons
                 if (e.target.closest('.yd-phrase-actions')) return;
 
                 // Check if click is on a word
                 const clickedWord = e.target.closest('.yd-word');
-
-                // If clicked on a word, let onWordClick handle it
                 if (clickedWord) return;
 
-                // Click is outside words - show confirm
+                // Check if click is inside the active row
+                const clickedRow = e.target.closest('[data-yd-row-id]');
+                if (clickedRow && clickedRow.dataset.ydRowId === phraseInProgress.rowId) {
+                    // Click inside active row but not on a word - ignore
+                    return;
+                }
+
+                // Click is outside active row - show confirm
                 if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
                     cancelPhraseBuilding();
                 }
@@ -2876,6 +2881,7 @@
     }
 
 })();
+
 
 
 
