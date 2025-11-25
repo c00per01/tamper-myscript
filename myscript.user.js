@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.19
+// @version 0.121.20
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -440,10 +440,7 @@
         if (phraseInProgress) {
             // Check if click is in the same row
             if (phraseInProgress.rowId !== rowId) {
-                // Click on another row's word -> Confirm cancel
-                if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
-                    cancelPhraseBuilding();
-                }
+                // Click on another row's word -> Ignore (do nothing)
                 return;
             }
 
@@ -1134,6 +1131,20 @@
             for (const span of wordSpans) {
                 if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
                     span.classList.add('yd-sent-history');
+                }
+            }
+        }
+
+        // --- PHRASE BUILDING ---
+        // Restore highlighting for the phrase being built
+        if (phraseInProgress) {
+            const phraseId = phraseInProgress.id.split(':')[1];
+            for (const word of phraseInProgress.words) {
+                for (const span of wordSpans) {
+                    if (String(phraseInProgress.rowId) === span.dataset.rowId && span.dataset.word === word) {
+                        span.classList.add('yd-phrase-building');
+                        span.dataset.phraseId = phraseId;
+                    }
                 }
             }
         }
@@ -2865,6 +2876,7 @@
     }
 
 })();
+
 
 
 
