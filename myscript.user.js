@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.18
+// @version 0.121.19
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -717,15 +717,7 @@
             cancelPhraseBuilding();
         });
 
-        // Insert after the last word to be close to the query
-        const words = cell.querySelectorAll('.yd-word');
-        const lastWord = words[words.length - 1];
-        if (lastWord) {
-            // Add a space if needed, or rely on margin
-            lastWord.after(container);
-        } else {
-            cell.appendChild(container);
-        }
+        cell.appendChild(container);
     }
 
     function removePhraseButtons(rowId) {
@@ -2264,13 +2256,19 @@
             lastManualScrollTime = Date.now();
         }, { passive: true });
 
-        // Завершение фразы при клике вне
+        // Завершение фразы при клике вне слов активной строки
         document.addEventListener('click', (e) => {
             if (phraseInProgress) {
                 // Ignore clicks on phrase buttons (they stop propagation, but just in case)
                 if (e.target.closest('.yd-phrase-actions')) return;
 
-                // Confirm cancel
+                // Check if click is on a word
+                const clickedWord = e.target.closest('.yd-word');
+
+                // If clicked on a word, let onWordClick handle it
+                if (clickedWord) return;
+
+                // Click is outside words - show confirm
                 if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
                     cancelPhraseBuilding();
                 }
@@ -2677,15 +2675,18 @@
                 background: #cce5ff !important;
             }
 
+            /* Строящаяся фраза - стиль из Малый код.txt */
             .yd-phrase-building {
-                background: #cce5ff !important;
+                background: #e2f0ff !important;
+                outline: 2px dashed #7da9ff;
+                outline-offset: 1px;
                 animation: yd-phrase-blink 1.5s infinite ease-in-out;
             }
 
             @keyframes yd-phrase-blink {
-                0% { background-color: #cce5ff; }
-                50% { background-color: transparent; }
-                100% { background-color: #cce5ff; }
+                0% { background-color: #e2f0ff; opacity: 1; }
+                50% { background-color: transparent; opacity: 0.3; }
+                100% { background-color: #e2f0ff; opacity: 1; }
             }
 
             .yd-primary-soft {
