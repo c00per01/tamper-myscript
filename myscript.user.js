@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.21
+// @version 0.121.22
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -489,6 +489,7 @@
             }
 
             updateUI();
+            ensureRowChecked(rowId);
             return;
         }
 
@@ -1131,6 +1132,22 @@
             for (const span of wordSpans) {
                 if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
                     span.classList.add('yd-sent-history');
+                }
+            }
+        }
+
+        // --- SELECTION SOURCE HIGHLIGHT ---
+        // Explicitly highlight words in the source row for phrase selections
+        for (const sel of selections.values()) {
+            if (sel.kind === 'phrase' && !sel._building && sel.rowId && sel.words) {
+                // Find spans in this row
+                const rowSpans = spansByRow.get(sel.rowId);
+                if (rowSpans) {
+                    for (const span of rowSpans) {
+                        if (sel.words.includes(span.dataset.word)) {
+                            span.classList.add('yd-selected-phrase');
+                        }
+                    }
                 }
             }
         }
@@ -2881,6 +2898,7 @@
     }
 
 })();
+
 
 
 
