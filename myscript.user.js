@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.22
+// @version 0.121.23
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -23,6 +23,7 @@
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
+    let currentTable = null;
 
     // Undo/Redo
     let undoStack = {
@@ -69,6 +70,9 @@
         }
 
         loadGlobalState();
+        setupGlobalListeners();
+        setupResultPopupObserver();
+        setupMinusModalObserver();
         detectPageChange();
         waitForTableAndInit();
     }
@@ -116,9 +120,12 @@
             setupTableObserver(table);
             injectStyles();
             createPanel();
-            setupResultPopupObserver();
-            setupMinusModalObserver();
-            setupGlobalListeners();
+            injectStyles();
+            createPanel();
+            // setupResultPopupObserver(); // Moved to init
+            // setupMinusModalObserver(); // Moved to init
+            // setupGlobalListeners(); // Moved to init
+            currentTable = table; // Save reference
             restoreVisualMarkers();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
@@ -161,8 +168,16 @@
     function detectPageChange() {
         setInterval(() => {
             const newPageKey = getCurrentPageKey();
-            if (newPageKey !== currentPageKey) {
-                console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
+            const table = findSearchQueryTable();
+
+            // Check if URL changed OR Table element changed (AJAX)
+            const urlChanged = newPageKey !== currentPageKey;
+            const tableChanged = table && table !== currentTable;
+
+            if (urlChanged || tableChanged) {
+                console.log('[YD-SQ] Смена контекста:',
+                    urlChanged ? `URL ${currentPageKey} -> ${newPageKey}` : 'AJAX Table Update');
+
                 currentPageKey = newPageKey;
 
                 if (phraseInProgress) {
@@ -171,6 +186,7 @@
 
                 inited = false;
                 wordSpans = [];
+                currentTable = null;
                 waitForTableAndInit();
             }
         }, 500);
@@ -2898,6 +2914,7 @@
     }
 
 })();
+
 
 
 
