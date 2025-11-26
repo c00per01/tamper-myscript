@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.43
+// @version 0.121.44
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -997,7 +997,6 @@
     // Cache for parsed rules to avoid re-parsing on every update
     let cachedImportedRules = null;
     let lastImportedMinusesRef = null;
-
     function updateHighlights() {
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
@@ -1008,7 +1007,6 @@
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
                 'yd-sent-history', 'yd-imported-minus'
             );
-
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
             delete sp.dataset.importedAt;
@@ -1940,12 +1938,7 @@
         addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
             const idx = parseInt(btn.dataset.impIdx);
             importedMinuses.splice(idx, 1);
-
-            // Сброс кеша для принудительного пересоздания правил в updateHighlights
-            lastImportedMinusesRef = null;
-
             syncLocalToGlobal();
-            rebuildCampaignMinusList();
             updateHighlights();
             renderImportedMinuses();
         });
@@ -2502,12 +2495,7 @@
                 if (clearImpBtn.dataset.confirming === 'true') {
                     // Второе нажатие - выполняем очистку
                     importedMinuses = [];
-
-                    // Сброс кеша для принудительного пересоздания правил в updateHighlights
-                    lastImportedMinusesRef = null;
-
                     syncLocalToGlobal();
-                    rebuildCampaignMinusList();
                     updateHighlights();
                     updateUI();
                     showYdsqNotification('Список импортированных очищен', 'success');
