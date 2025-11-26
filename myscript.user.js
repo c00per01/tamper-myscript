@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.36
+// @version 0.121.37
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1252,6 +1252,11 @@
     // ==================== UNDO/REDO ====================
 
     function pushUndo(actionType, description) {
+        // Сбрасываем кнопку "Очистить все", если это не действие очистки
+        if (actionType !== 'clear_all') {
+            resetClearAllButton();
+        }
+
         undoStack.stack = undoStack.stack.slice(0, undoStack.currentIndex + 1);
 
         undoStack.stack.push({
@@ -1284,6 +1289,7 @@
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
+            resetClearAllButton(); // Всегда сбрасываем при Undo
         }
     }
 
@@ -1300,6 +1306,7 @@
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
+            resetClearAllButton(); // Всегда сбрасываем при Redo
         }
     }
 
@@ -2330,6 +2337,16 @@
         }, 4000);
     }
 
+    function resetClearAllButton() {
+        const btn = document.getElementById('yd-sq-clear-all');
+        if (btn) {
+            btn.textContent = 'Очистить все';
+            delete btn.dataset.mode;
+            btn.style.background = '';
+            btn.style.color = '';
+        }
+    }
+
     // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
     function setupGlobalListeners() {
@@ -2377,15 +2394,21 @@
             }
         });
 
-        // Делегирование для кнопки "Очистить все"
+        // Делегирование для кнопок панели
         document.body.addEventListener('click', (e) => {
-            const btn = e.target.closest('#yd-sq-clear-all');
-            if (btn) {
-                console.log('[YD-SQ] Кнопка "Очистить все" нажата (делегирование)');
+            // Кнопка "Очистить все" / "Вернуть"
+            const clearAllBtn = e.target.closest('#yd-sq-clear-all');
+            if (clearAllBtn) {
+                console.log('[YD-SQ] Кнопка "Очистить все/Вернуть" нажата');
 
-                if (btn.dataset.confirming === 'true') {
-                    // Второе нажатие - выполняем очистку
-                    console.log('[YD-SQ] Подтверждение получено (двойной клик), очистка selections:', selections.size);
+                if (clearAllBtn.dataset.mode === 'undo') {
+                    // Режим "Вернуть" - отменяем очистку (делаем Undo)
+                    console.log('[YD-SQ] Выполняется Undo очистки');
+                    undoLastAction(); // Используем существующую функцию undo
+                    resetClearAllButton();
+                } else {
+                    // Режим "Очистить все"
+                    console.log('[YD-SQ] Выполняется очистка');
 
                     // Снять чекбоксы для текущей страницы
                     for (const sel of selections.values()) {
@@ -2394,40 +2417,43 @@
                             if (cb && cb.checked) {
                                 clickCheckbox(cb, false);
                                 delete cb.dataset.ydAuto;
-                                console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
                             }
                         }
                     }
 
                     selections.clear();
-                    pushUndo('clear_all', 'Очищены все выделения');
+                    pushUndo('clear_all', 'Очищены все выделения'); // Это сохранит состояние ПЕРЕД очисткой
                     syncLocalToGlobal();
                     updateUI();
-                    console.log('[YD-SQ] Очистка завершена');
 
-                    // Сброс кнопки
-                    btn.textContent = 'Очистить все';
-                    delete btn.dataset.confirming;
-                    btn.style.background = '';
-                    btn.style.color = '';
-                } else {
-                    // Первое нажатие - запрашиваем подтверждение
-                    btn.dataset.confirming = 'true';
-                    const originalText = btn.textContent;
-                    btn.textContent = 'Точно?';
-                    btn.style.background = '#ff4d4f';
-                    btn.style.color = 'white';
-
-                    // Сброс через 3 секунды
-                    setTimeout(() => {
-                        if (btn.dataset.confirming === 'true') {
-                            btn.textContent = originalText;
-                            delete btn.dataset.confirming;
-                            btn.style.background = '';
-                            btn.style.color = '';
-                        }
-                    }, 3000);
+                    // Меняем кнопку на "Вернуть"
+                    clearAllBtn.textContent = '↩ Вернуть';
+                    clearAllBtn.dataset.mode = 'undo';
+                    clearAllBtn.style.background = '#e6f7ff';
+                    clearAllBtn.style.color = '#1890ff';
                 }
+                return;
+            }
+
+            // Кнопка "Очистить импортированные"
+            const clearImpBtn = e.target.closest('#yd-sq-clear-imported');
+            if (clearImpBtn) {
+                console.log('[YD-SQ] Кнопка "Очистить импортированные" нажата');
+                if (importedMinuses.length === 0) {
+                    showYdsqNotification('Список импортированных пуст', 'info');
+                    return;
+                }
+
+                setTimeout(() => {
+                    if (confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`)) {
+                        importedMinuses = [];
+                        syncLocalToGlobal();
+                        updateHighlights();
+                        updateUI();
+                        showYdsqNotification('Список импортированных очищен', 'success');
+                    }
+                }, 10);
+                return;
             }
         });
     }
@@ -2998,6 +3024,7 @@
     }
 
 })();
+
 
 
 
