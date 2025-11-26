@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.37
+// @version 0.121.38
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -552,6 +552,7 @@
         if (span.classList.contains('yd-selected-soft') || span.classList.contains('yd-selected-strict')) {
             const key = span.classList.contains('yd-selected-soft') ? `soft:${stem}` : `strict:${wordLower}`;
             removeSelectionById(key);
+            resetClearAllButton();
             updateUI();
             return;
         }
@@ -564,6 +565,7 @@
             pushUndo('add_selection', `Добавлено мягкое слово "${word}"`);
         }
 
+        resetClearAllButton();
         updateUI();
         debounceAutoScroll(rowId, 180);
     }
@@ -695,6 +697,7 @@
 
         phraseInProgress = null;
         syncLocalToGlobal();
+        resetClearAllButton();
         updateUI();
     }
 
@@ -1252,11 +1255,6 @@
     // ==================== UNDO/REDO ====================
 
     function pushUndo(actionType, description) {
-        // Сбрасываем кнопку "Очистить все", если это не действие очистки
-        if (actionType !== 'clear_all') {
-            resetClearAllButton();
-        }
-
         undoStack.stack = undoStack.stack.slice(0, undoStack.currentIndex + 1);
 
         undoStack.stack.push({
@@ -1289,7 +1287,6 @@
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
-            resetClearAllButton(); // Всегда сбрасываем при Undo
         }
     }
 
@@ -1306,7 +1303,6 @@
             updateUI();
             updateUndoRedoButtons();
             syncLocalToGlobal();
-            resetClearAllButton(); // Всегда сбрасываем при Redo
         }
     }
 
@@ -1589,6 +1585,7 @@
                 syncLocalToGlobal();
                 rebuildCampaignMinusList();
                 updateHighlights();
+                resetClearAllButton();
                 updateUI();
                 showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
             } else {
@@ -2238,6 +2235,7 @@
                 const count = selections.size;
                 selections.clear();
                 syncLocalToGlobal();
+                resetClearAllButton();
                 updateUI();
                 showYdsqNotification(`Отправлено ${count} минусов`, 'success');
             }, 100);
@@ -2337,17 +2335,20 @@
         }, 4000);
     }
 
+    // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
+
+    let clearAllUndoState = null;
+
     function resetClearAllButton() {
         const btn = document.getElementById('yd-sq-clear-all');
-        if (btn) {
+        if (btn && btn.dataset.undoMode === 'true') {
             btn.textContent = 'Очистить все';
-            delete btn.dataset.mode;
+            delete btn.dataset.undoMode;
             btn.style.background = '';
             btn.style.color = '';
+            clearAllUndoState = null;
         }
     }
-
-    // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
     function setupGlobalListeners() {
         // Скролл пользователя
@@ -2396,21 +2397,42 @@
 
         // Делегирование для кнопок панели
         document.body.addEventListener('click', (e) => {
-            // Кнопка "Очистить все" / "Вернуть"
+            // Кнопка "Очистить все"
             const clearAllBtn = e.target.closest('#yd-sq-clear-all');
             if (clearAllBtn) {
-                console.log('[YD-SQ] Кнопка "Очистить все/Вернуть" нажата');
+                console.log('[YD-SQ] Кнопка "Очистить все" нажата');
 
-                if (clearAllBtn.dataset.mode === 'undo') {
-                    // Режим "Вернуть" - отменяем очистку (делаем Undo)
-                    console.log('[YD-SQ] Выполняется Undo очистки');
-                    undoLastAction(); // Используем существующую функцию undo
+                if (clearAllBtn.dataset.undoMode === 'true') {
+                    // Режим "Вернуть" - восстанавливаем состояние
+                    if (clearAllUndoState) {
+                        selections.clear();
+                        for (const [key, val] of clearAllUndoState) {
+                            selections.set(key, val);
+                        }
+
+                        // Восстанавливаем чекбоксы
+                        for (const sel of selections.values()) {
+                            if (sel.pageKey === currentPageKey && sel.rowId) {
+                                ensureRowChecked(sel.rowId);
+                            }
+                        }
+
+                        syncLocalToGlobal();
+                        updateUI();
+                        showYdsqNotification('Очистка отменена', 'success');
+                    }
                     resetClearAllButton();
                 } else {
-                    // Режим "Очистить все"
-                    console.log('[YD-SQ] Выполняется очистка');
+                    // Режим "Очистить"
+                    if (selections.size === 0) {
+                        showYdsqNotification('Нет выделений для очистки', 'info');
+                        return;
+                    }
 
-                    // Снять чекбоксы для текущей страницы
+                    // Сохраняем состояние
+                    clearAllUndoState = new Map(selections);
+
+                    // Снимаем чекбоксы для текущей страницы
                     for (const sel of selections.values()) {
                         if (sel.pageKey === currentPageKey && sel.rowId) {
                             const cb = getRowCheckbox(sel.rowId);
@@ -2422,38 +2444,57 @@
                     }
 
                     selections.clear();
-                    pushUndo('clear_all', 'Очищены все выделения'); // Это сохранит состояние ПЕРЕД очисткой
+                    pushUndo('clear_all', 'Очищены все выделения');
                     syncLocalToGlobal();
                     updateUI();
 
-                    // Меняем кнопку на "Вернуть"
-                    clearAllBtn.textContent = '↩ Вернуть';
-                    clearAllBtn.dataset.mode = 'undo';
+                    // Переключаем кнопку в режим "Вернуть"
+                    clearAllBtn.textContent = 'Вернуть ↩';
+                    clearAllBtn.dataset.undoMode = 'true';
                     clearAllBtn.style.background = '#e6f7ff';
                     clearAllBtn.style.color = '#1890ff';
                 }
-                return;
             }
 
             // Кнопка "Очистить импортированные"
             const clearImpBtn = e.target.closest('#yd-sq-clear-imported');
             if (clearImpBtn) {
-                console.log('[YD-SQ] Кнопка "Очистить импортированные" нажата');
                 if (importedMinuses.length === 0) {
                     showYdsqNotification('Список импортированных пуст', 'info');
                     return;
                 }
 
-                setTimeout(() => {
-                    if (confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`)) {
-                        importedMinuses = [];
-                        syncLocalToGlobal();
-                        updateHighlights();
-                        updateUI();
-                        showYdsqNotification('Список импортированных очищен', 'success');
-                    }
-                }, 10);
-                return;
+                if (clearImpBtn.dataset.confirming === 'true') {
+                    // Второе нажатие - выполняем очистку
+                    importedMinuses = [];
+                    syncLocalToGlobal();
+                    updateHighlights();
+                    updateUI();
+                    showYdsqNotification('Список импортированных очищен', 'success');
+
+                    // Сброс кнопки
+                    clearImpBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+                    delete clearImpBtn.dataset.confirming;
+                    clearImpBtn.style.background = '';
+                    clearImpBtn.style.color = '';
+                } else {
+                    // Первое нажатие - запрашиваем подтверждение
+                    clearImpBtn.dataset.confirming = 'true';
+                    const originalHtml = clearImpBtn.innerHTML;
+                    clearImpBtn.textContent = 'Точно?';
+                    clearImpBtn.style.background = '#ff4d4f';
+                    clearImpBtn.style.color = 'white';
+
+                    // Сброс через 3 секунды
+                    setTimeout(() => {
+                        if (clearImpBtn.dataset.confirming === 'true') {
+                            clearImpBtn.innerHTML = originalHtml;
+                            delete clearImpBtn.dataset.confirming;
+                            clearImpBtn.style.background = '';
+                            clearImpBtn.style.color = '';
+                        }
+                    }, 3000);
+                }
             }
         });
     }
