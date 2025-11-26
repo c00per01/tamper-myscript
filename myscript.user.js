@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.30
+// @version 0.121.31
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1727,14 +1727,18 @@
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
         document.getElementById('yd-sq-clear-all').addEventListener('click', () => {
+            console.log('[YD-SQ] Кнопка "Очистить все" нажата');
             if (confirm('Очистить все выделения?')) {
+                console.log('[YD-SQ] Подтверждение получено, очистка selections:', selections.size);
+
                 // Снять чекбоксы для текущей страницы
                 for (const sel of selections.values()) {
                     if (sel.pageKey === currentPageKey && sel.rowId) {
                         const cb = getRowCheckbox(sel.rowId);
-                        if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
+                        if (cb && cb.checked) {
                             clickCheckbox(cb, false);
                             delete cb.dataset.ydAuto;
+                            console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
                         }
                     }
                 }
@@ -1743,6 +1747,7 @@
                 pushUndo('clear_all', 'Очищены все выделения');
                 syncLocalToGlobal();
                 updateUI();
+                console.log('[YD-SQ] Очистка завершена');
             }
         });
 
@@ -2939,6 +2944,7 @@
     }
 
 })();
+
 
 
 
