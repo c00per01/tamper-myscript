@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.44
+// @version 0.121.46
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -225,9 +225,11 @@
 
     function getCurrentPageKey() {
         const params = new URLSearchParams(window.location.search);
-        const page = params.get('page') || '1';
+        const page = params.get('page') || params.get('p') || '1';
         const tab = params.get('tab') || 'default';
-        return `page:${page}:${tab}`;
+        // Add hash to detect SPA navigation if params don't change
+        const hash = window.location.hash;
+        return `page:${page}:${tab}:${hash}`;
     }
 
     function getCampaignId() {
@@ -3093,6 +3095,7 @@
     }
 
 })();
+
 
 
 
