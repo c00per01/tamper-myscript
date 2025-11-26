@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.40
+// @version 0.121.41
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -471,17 +471,17 @@
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
 
+        // 🛑 ISOLATION LOCKDOWN: Блокировка импортированных минус-слов
+        if (targetSpan.classList.contains('yd-imported-minus')) {
+            e.stopPropagation();
+            return;
+        }
+
         const span = targetSpan;
         const stem = span.dataset.stem;
         const wordLower = span.dataset.wordLower;
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
-
-        // Защита: не реагировать на клики по импортированным словам
-        if (span.classList.contains('yd-imported-minus')) {
-            console.log('[YD-SQ] Клик по импортированному слову - игнорируется');
-            return;
-        }
 
         // If phrase building is in progress
         if (phraseInProgress) {
@@ -579,15 +579,15 @@
     function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
 
+        // 🛑 ISOLATION LOCKDOWN: Блокировка импортированных минус-слов
+        if (targetSpan.classList.contains('yd-imported-minus')) {
+            e.stopPropagation();
+            return;
+        }
+
         const span = targetSpan;
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
-
-        // Защита: не реагировать на клики по импортированным словам
-        if (span.classList.contains('yd-imported-minus')) {
-            console.log('[YD-SQ] Двойной клик по импортированному слову - игнорируется');
-            return;
-        }
 
         // 1. Exclusive Mode: Clear other selections in this row
         // We need to find all selections for this row and remove them
@@ -1068,11 +1068,8 @@
                 let strictIndices = new Set();
 
                 let baseClass = 'yd-imported-minus';
-                let isSelection = false; // Флаг, что это пользовательское выделение
-
                 if (rule.source === 'selection') {
                     baseClass = 'yd-selected-soft';
-                    isSelection = true;
                 }
 
                 if (rule.type === 'quote') {
@@ -1103,11 +1100,7 @@
                         if (allRuleWordsFound) {
                             isMatch = true;
                             for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
-
-                            // ИСПРАВЛЕНИЕ 1: Меняем класс только для selection
-                            if (isSelection) {
-                                baseClass = 'yd-selected-phrase';
-                            }
+                            baseClass = 'yd-selected-phrase';
                         }
                     }
 
@@ -1136,10 +1129,7 @@
                             }
                         }
                     }
-                    // ИСПРАВЛЕНИЕ 2: Меняем класс только для selection
-                    if (isMatch && isSelection) {
-                        baseClass = 'yd-selected-strict';
-                    }
+                    if (isMatch) baseClass = 'yd-selected-strict';
 
                 } else if (rule.type === 'broad') {
                     // Broad: All words present anywhere
@@ -1175,9 +1165,7 @@
                 if (isMatch) {
                     for (const idx of matchedIndices) {
                         const span = rowWordsData[idx].span;
-
-                        // ИСПРАВЛЕНИЕ 3: Проверяем isSelection перед назначением строгого стиля
-                        if (rule.type === 'broad' && strictIndices.has(idx) && isSelection) {
+                        if (rule.type === 'broad' && strictIndices.has(idx)) {
                             span.classList.add('yd-selected-strict');
                         } else {
                             span.classList.add(baseClass);
@@ -2955,9 +2943,10 @@
             .yd-imported-minus {
                 background: rgba(0, 0, 0, 0.04) !important;
                 color: #aaa !important;
-                text-decoration: line-through;
-                text-decoration-color: rgba(0, 0, 0, 0.1);
+                text-decoration: none !important;
                 opacity: 0.8;
+                cursor: default;
+                pointer-events: none;
             }
 
             .yd-row-deactivated {
