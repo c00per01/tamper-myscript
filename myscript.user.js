@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.38
+// @version 0.121.39
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2397,12 +2397,15 @@
 
         // Делегирование для кнопок панели
         document.body.addEventListener('click', (e) => {
-            // Кнопка "Очистить все"
+            // Кнопка "Очист ить все"
             const clearAllBtn = e.target.closest('#yd-sq-clear-all');
             if (clearAllBtn) {
                 console.log('[YD-SQ] Кнопка "Очистить все" нажата');
+                console.log('[YD-SQ] undoMode:', clearAllBtn.dataset.undoMode);
+                console.log('[YD-SQ] selections.size:', selections.size);
 
                 if (clearAllBtn.dataset.undoMode === 'true') {
+                    console.log('[YD-SQ] Режим Вернуть');
                     // Режим "Вернуть" - восстанавливаем состояние
                     if (clearAllUndoState) {
                         selections.clear();
@@ -2423,15 +2426,19 @@
                     }
                     resetClearAllButton();
                 } else {
+                    console.log('[YD-SQ] Режим Очистить');
                     // Режим "Очистить"
                     if (selections.size === 0) {
+                        console.log('[YD-SQ] Нет выделений');
                         showYdsqNotification('Нет выделений для очистки', 'info');
                         return;
                     }
 
+                    console.log('[YD-SQ] Сохраняем состояние, размер:', selections.size);
                     // Сохраняем состояние
                     clearAllUndoState = new Map(selections);
 
+                    console.log('[YD-SQ] Снимаем чекбоксы');
                     // Снимаем чекбоксы для текущей страницы
                     for (const sel of selections.values()) {
                         if (sel.pageKey === currentPageKey && sel.rowId) {
@@ -2443,16 +2450,20 @@
                         }
                     }
 
+                    console.log('[YD-SQ] Очищаем selections');
                     selections.clear();
                     pushUndo('clear_all', 'Очищены все выделения');
                     syncLocalToGlobal();
+                    console.log('[YD-SQ] Вызываем updateUI');
                     updateUI();
+                    console.log('[YD-SQ] Переключаем кнопку');
 
                     // Переключаем кнопку в режим "Вернуть"
                     clearAllBtn.textContent = 'Вернуть ↩';
                     clearAllBtn.dataset.undoMode = 'true';
                     clearAllBtn.style.background = '#e6f7ff';
                     clearAllBtn.style.color = '#1890ff';
+                    console.log('[YD-SQ] Готово');
                 }
             }
 
@@ -3065,6 +3076,7 @@
     }
 
 })();
+
 
 
 
