@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.41
+// @version 0.121.42
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -197,6 +197,10 @@
         document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             delete cb.dataset.ydAuto;
         });
+
+        // Reset "Clear All" button state
+        clearAllUndoState = null;
+        resetClearAllButton();
 
         console.log('[YD-SQ] Состояние страницы очищено');
     }
@@ -998,16 +1002,21 @@
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
+            // Preserve .yd-imported-minus if present
+            const isImported = sp.classList.contains('yd-imported-minus');
+
             sp.className = 'yd-word'; // Reset to base class
-            // Restore original classes if any? 
-            // Actually wordSpans only have 'yd-word' initially.
-            // But wait, if we have other classes?
-            // Safer to remove specific classes.
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
-                'yd-sent-history', 'yd-imported-minus'
+                'yd-sent-history'
             );
+
+            // Restore .yd-imported-minus if it was there
+            if (isImported) {
+                sp.classList.add('yd-imported-minus');
+            }
+
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
             delete sp.dataset.importedAt;
@@ -1165,6 +1174,12 @@
                 if (isMatch) {
                     for (const idx of matchedIndices) {
                         const span = rowWordsData[idx].span;
+
+                        // 🛑 PROTECTION: Skip coloring if already imported
+                        if (span.classList.contains('yd-imported-minus')) {
+                            continue;
+                        }
+
                         if (rule.type === 'broad' && strictIndices.has(idx)) {
                             span.classList.add('yd-selected-strict');
                         } else {
@@ -2946,7 +2961,6 @@
                 text-decoration: none !important;
                 opacity: 0.8;
                 cursor: default;
-                pointer-events: none;
             }
 
             .yd-row-deactivated {
@@ -3089,6 +3103,7 @@
     }
 
 })();
+
 
 
 
