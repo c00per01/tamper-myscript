@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.29
+// @version 0.121.30
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -167,6 +167,23 @@
         // Remove all phrase action buttons
         document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
 
+        // Unwrap all .yd-word spans back to text
+        const parents = new Set();
+        document.querySelectorAll('.yd-word').forEach(span => {
+            const text = span.textContent;
+            const textNode = document.createTextNode(text);
+            const parent = span.parentNode;
+            parent.replaceChild(textNode, span);
+            parents.add(parent);
+        });
+
+        // Normalize parent nodes to merge adjacent text nodes
+        parents.forEach(parent => {
+            if (parent && parent.normalize) {
+                parent.normalize();
+            }
+        });
+
         // Clear wordSpans array
         wordSpans = [];
 
@@ -174,12 +191,6 @@
         document.querySelectorAll('[data-yd-row-id]').forEach(row => {
             row.classList.remove('yd-row-deactivated');
             delete row.dataset.ydAutoRow;
-        });
-
-        // Remove phrase-building classes from all word spans
-        document.querySelectorAll('.yd-word').forEach(span => {
-            span.classList.remove('yd-phrase-building');
-            delete span.dataset.phraseId;
         });
 
         // Reset checkbox dataset attributes
@@ -2928,6 +2939,7 @@
     }
 
 })();
+
 
 
 
