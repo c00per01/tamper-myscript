@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.27
+// @version 0.121.28
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -23,6 +23,7 @@
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
+    let globalListenersSetup = false;
 
     // Undo/Redo
     let undoStack = {
@@ -37,10 +38,6 @@
     // Auto-scroll
     let lastManualScrollTime = 0;
     const autoScrollDebounceMap = new Map();
-
-    // Observers and listeners
-    let tableObserver = null;
-    let globalListenersSetup = false;
 
     // Стоп-слова для строгого режима фраз
     // Стоп-слова для строгого режима фраз и автоматического переключения в strict
@@ -84,26 +81,13 @@
         }
 
         const table = findSearchQueryTable();
-        if (table && !inited) {
-            // Check if table has data rows (not just header)
-            const dataRows = Array.from(table.querySelectorAll('tr, [role="row"]'))
-                .filter(row => {
-                    if (row.closest('thead')) return false;
-                    if (row.querySelector('th')) return false;
-                    if ((row.textContent || '').toLowerCase().includes('поисковый запрос')) return false;
-                    return row.querySelector('input[type="checkbox"]');
-                });
+        // Check if table has rows to ensure data is loaded
+        const hasRows = table && table.querySelectorAll('tbody tr').length > 0;
 
-            if (dataRows.length > 0) {
-                console.log('[YD-SQ] Таблица найдена с', dataRows.length, 'строками, инициализация...');
-                // Small delay to ensure DOM is stable
-                setTimeout(() => {
-                    initWithTable(table);
-                }, attempt === 0 ? 300 : 0);
-            } else {
-                // Table found but no data rows yet
-                setTimeout(() => waitForTableAndInit(attempt + 1), 250);
-            }
+        if (table && hasRows && !inited) {
+            console.log('[YD-SQ] Таблица найдена, инициализация...');
+            // Give a small delay to ensure DOM is stable
+            setTimeout(() => initWithTable(table), 100);
         } else {
             setTimeout(() => waitForTableAndInit(attempt + 1), 250);
         }
@@ -130,16 +114,27 @@
         return null;
     }
 
+    function getAllRowsOnPage() {
+        const table = findSearchQueryTable();
+        return table ? Array.from(table.querySelectorAll('tbody tr')) : [];
+    }
+
     function initWithTable(table) {
         try {
             inited = true;
+            cleanWordSpans(); // Ensure no stale spans
             wrapTableWords(table);
             setupTableObserver(table);
             injectStyles();
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
-            setupGlobalListeners();
+
+            if (!globalListenersSetup) {
+                setupGlobalListeners();
+                globalListenersSetup = true;
+            }
+
             restoreVisualMarkers();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
@@ -149,13 +144,7 @@
     }
 
     function setupTableObserver(table) {
-        // Stop previous observer if exists
-        if (tableObserver) {
-            tableObserver.disconnect();
-            tableObserver = null;
-        }
-
-        tableObserver = new MutationObserver((mutations) => {
+        const observer = new MutationObserver((mutations) => {
             if (isWrapping) return;
 
             let shouldUpdate = false;
@@ -173,18 +162,12 @@
                     wrapTableWords(table);
                     restoreVisualMarkers();
                     isWrapping = false;
-                }, 200); // Increased delay for stability
+                }, 50);
             }
         });
 
         const tbody = table.querySelector('tbody') || table;
-
-        // Delay observer start to avoid triggering on initial page load
-        setTimeout(() => {
-            if (tableObserver) {
-                tableObserver.observe(tbody, { childList: true, subtree: true });
-            }
-        }, 1000);
+        observer.observe(tbody, { childList: true, subtree: true });
     }
 
     function cleanWordSpans() {
@@ -196,43 +179,32 @@
             const newPageKey = getCurrentPageKey();
             if (newPageKey !== currentPageKey) {
                 console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
-                const oldPageKey = currentPageKey;
                 currentPageKey = newPageKey;
 
-                // Full state cleanup
+                // 1. Reset Phrase Mode
                 if (phraseInProgress) {
-                    finalizePhraseBuilding(true);
+                    finalizePhraseBuilding(true); // Cancel current phrase
                 }
-
-                // Remove all phrase buttons
-                document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
-
-                // Remove all temporary classes from old page
-                document.querySelectorAll('.yd-row-deactivated').forEach(row => {
-                    row.classList.remove('yd-row-deactivated');
-                });
-
-                document.querySelectorAll('.yd-phrase-building').forEach(span => {
-                    span.classList.remove('yd-phrase-building');
-                    delete span.dataset.phraseId;
-                });
-
-                // Reset all checkbox auto flags
-                document.querySelectorAll('input[type="checkbox"][data-yd-auto]').forEach(cb => {
-                    delete cb.dataset.ydAuto;
-                });
-
-                // Clear row auto flags
-                document.querySelectorAll('[data-yd-auto-row]').forEach(row => {
-                    delete row.dataset.ydAutoRow;
-                });
-
-                // Reset state
                 phraseInProgress = null;
-                inited = false;
-                wordSpans = [];
 
-                // Re-initialize
+                // 2. Cleanup DOM elements
+                document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
+                document.querySelectorAll('.yd-row-deactivated').forEach(el => el.classList.remove('yd-row-deactivated'));
+
+                // 3. Reset State
+                wordSpans = [];
+                inited = false;
+
+                // 4. Clear selections from other pages
+                const keysToDelete = [];
+                for (const [key, sel] of selections) {
+                    if (sel.pageKey !== currentPageKey) {
+                        keysToDelete.push(key);
+                    }
+                }
+                keysToDelete.forEach(k => selections.delete(k));
+
+                // 5. Re-init
                 waitForTableAndInit();
             }
         }, 500);
@@ -787,16 +759,15 @@
         if (actions) actions.remove();
     }
 
-    function getAllRowsOnPage() {
-        return Array.from(document.querySelectorAll('[data-yd-row-id]'));
-    }
-
     function deactivateOtherRows(activeRowId) {
         const allRows = getAllRowsOnPage();
-        const activeRowIdStr = String(activeRowId);
         for (const row of allRows) {
-            if (String(row.dataset.ydRowId) !== activeRowIdStr) {
+            const rid = row.dataset.ydRowId;
+            // Deactivate only if it has an ID and it's NOT the active row
+            if (rid && rid !== activeRowId) {
                 row.classList.add('yd-row-deactivated');
+            } else {
+                row.classList.remove('yd-row-deactivated');
             }
         }
     }
@@ -805,20 +776,6 @@
         const allRows = getAllRowsOnPage();
         for (const row of allRows) {
             row.classList.remove('yd-row-deactivated');
-        }
-    }
-
-    function restoreVisualMarkers() {
-        // Restore checkboxes for selections on current page
-        const rowsWithSelections = new Set();
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                rowsWithSelections.add(sel.rowId);
-            }
-        }
-
-        for (const rowId of rowsWithSelections) {
-            ensureRowChecked(rowId);
         }
     }
 
@@ -2360,10 +2317,6 @@
     // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
     function setupGlobalListeners() {
-        // Prevent duplicate listeners
-        if (globalListenersSetup) return;
-        globalListenersSetup = true;
-
         // Скролл пользователя
         window.addEventListener('scroll', () => {
             lastManualScrollTime = Date.now();
@@ -2983,7 +2936,6 @@
     }
 
 })();
-
 
 
 
