@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.48
+// @version 0.121.50
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -12,7 +12,7 @@
 (function () {
     'use strict';
     let inited = false;
-    let currentPageKey = 'page:1:default';
+    let currentPageKey = null; // Will be set in init()
     let selections = new Map();
     let phraseCounter = 0;
     let phraseInProgress = null;
@@ -69,6 +69,7 @@
         }
 
         loadGlobalState();
+        currentPageKey = getCurrentPageKey(); // Initialize correctly
         detectPageChange();
         waitForTableAndInit();
     }
@@ -1020,6 +1021,8 @@
             r.source = 'imported';
             return r;
         });
+
+        console.log('[YD-SQ] updateHighlights: rules count:', rules.length, 'importedMinuses count:', importedMinuses.length);
 
         for (const sel of selections.values()) {
             if (sel.display) {
@@ -3088,6 +3091,7 @@
     }
 
 })();
+
 
 
 
