@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.33
+// @version 0.121.34
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1726,7 +1726,8 @@
 
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
-        // Обработчик кнопки "Очистить все" теперь в setupGlobalListeners через делегирование
+        // Обработчик для "Очистить все" теперь в setupGlobalListeners через делегирование
+        // Это обеспечивает работу кнопки на всех страницах
 
         makePanelDraggable();
     }
