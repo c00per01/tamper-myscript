@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.24
+// @version 0.121.25
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -23,7 +23,6 @@
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
-    let globalListenersInitialized = false; // Flag to prevent duplicate global listeners
 
     // Undo/Redo
     let undoStack = {
@@ -82,8 +81,25 @@
 
         const table = findSearchQueryTable();
         if (table && !inited) {
-            console.log('[YD-SQ] Таблица найдена, инициализация...');
-            initWithTable(table);
+            // Check if table has data rows (not just header)
+            const dataRows = Array.from(table.querySelectorAll('tr, [role="row"]'))
+                .filter(row => {
+                    if (row.closest('thead')) return false;
+                    if (row.querySelector('th')) return false;
+                    if ((row.textContent || '').toLowerCase().includes('поисковый запрос')) return false;
+                    return row.querySelector('input[type="checkbox"]');
+                });
+
+            if (dataRows.length > 0) {
+                console.log('[YD-SQ] Таблица найдена с', dataRows.length, 'строками, инициализация...');
+                // Small delay to ensure DOM is stable
+                setTimeout(() => {
+                    initWithTable(table);
+                }, attempt === 0 ? 300 : 0);
+            } else {
+                // Table found but no data rows yet
+                setTimeout(() => waitForTableAndInit(attempt + 1), 250);
+            }
         } else {
             setTimeout(() => waitForTableAndInit(attempt + 1), 250);
         }
@@ -147,12 +163,16 @@
                     wrapTableWords(table);
                     restoreVisualMarkers();
                     isWrapping = false;
-                }, 50);
+                }, 200); // Increased delay for stability
             }
         });
 
         const tbody = table.querySelector('tbody') || table;
-        observer.observe(tbody, { childList: true, subtree: true });
+
+        // Delay observer start to avoid triggering on initial page load
+        setTimeout(() => {
+            observer.observe(tbody, { childList: true, subtree: true });
+        }, 1000);
     }
 
     function cleanWordSpans() {
@@ -164,14 +184,43 @@
             const newPageKey = getCurrentPageKey();
             if (newPageKey !== currentPageKey) {
                 console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
+                const oldPageKey = currentPageKey;
                 currentPageKey = newPageKey;
 
+                // Full state cleanup
                 if (phraseInProgress) {
                     finalizePhraseBuilding(true);
                 }
 
+                // Remove all phrase buttons
+                document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
+
+                // Remove all temporary classes from old page
+                document.querySelectorAll('.yd-row-deactivated').forEach(row => {
+                    row.classList.remove('yd-row-deactivated');
+                });
+
+                document.querySelectorAll('.yd-phrase-building').forEach(span => {
+                    span.classList.remove('yd-phrase-building');
+                    delete span.dataset.phraseId;
+                });
+
+                // Reset all checkbox auto flags
+                document.querySelectorAll('input[type="checkbox"][data-yd-auto]').forEach(cb => {
+                    delete cb.dataset.ydAuto;
+                });
+
+                // Clear row auto flags
+                document.querySelectorAll('[data-yd-auto-row]').forEach(row => {
+                    delete row.dataset.ydAutoRow;
+                });
+
+                // Reset state
+                phraseInProgress = null;
                 inited = false;
                 wordSpans = [];
+
+                // Re-initialize
                 waitForTableAndInit();
             }
         }, 500);
@@ -726,10 +775,15 @@
         if (actions) actions.remove();
     }
 
+    function getAllRowsOnPage() {
+        return Array.from(document.querySelectorAll('[data-yd-row-id]'));
+    }
+
     function deactivateOtherRows(activeRowId) {
         const allRows = getAllRowsOnPage();
+        const activeRowIdStr = String(activeRowId);
         for (const row of allRows) {
-            if (row.dataset.ydRowId !== activeRowId) {
+            if (String(row.dataset.ydRowId) !== activeRowIdStr) {
                 row.classList.add('yd-row-deactivated');
             }
         }
@@ -739,6 +793,20 @@
         const allRows = getAllRowsOnPage();
         for (const row of allRows) {
             row.classList.remove('yd-row-deactivated');
+        }
+    }
+
+    function restoreVisualMarkers() {
+        // Restore checkboxes for selections on current page
+        const rowsWithSelections = new Set();
+        for (const sel of selections.values()) {
+            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                rowsWithSelections.add(sel.rowId);
+            }
+        }
+
+        for (const rowId of rowsWithSelections) {
+            ensureRowChecked(rowId);
         }
     }
 
@@ -2280,12 +2348,6 @@
     // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
     function setupGlobalListeners() {
-        // Prevent duplicate global listeners on page change
-        if (globalListenersInitialized) {
-            return;
-        }
-        globalListenersInitialized = true;
-
         // Скролл пользователя
         window.addEventListener('scroll', () => {
             lastManualScrollTime = Date.now();
