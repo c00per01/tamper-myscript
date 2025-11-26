@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.46
+// @version 0.121.48
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -996,9 +996,8 @@
 
     // ==================== HIGHLIGHTS ====================
 
-    // Cache for parsed rules to avoid re-parsing on every update
-    let cachedImportedRules = null;
-    let lastImportedMinusesRef = null;
+    // ==================== HIGHLIGHTS ====================
+
     function updateHighlights() {
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
@@ -1015,18 +1014,12 @@
         }
 
         // 2. Prepare Rules
-        // Check if importedMinuses array reference changed
-        if (lastImportedMinusesRef !== importedMinuses) {
-            cachedImportedRules = importedMinuses.map(imp => {
-                const r = parseMinusRule(imp.raw);
-                r.source = 'imported';
-                return r;
-            });
-            lastImportedMinusesRef = importedMinuses;
-        }
-
-        // Combine cached imported rules with current selections
-        const rules = [...(cachedImportedRules || [])];
+        // Always parse to avoid stale cache issues with mutated arrays
+        const rules = importedMinuses.map(imp => {
+            const r = parseMinusRule(imp.raw);
+            r.source = 'imported';
+            return r;
+        });
 
         for (const sel of selections.values()) {
             if (sel.display) {
@@ -3095,6 +3088,7 @@
     }
 
 })();
+
 
 
 
