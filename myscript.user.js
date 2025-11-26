@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.28
+// @version 0.121.29
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -23,7 +23,6 @@
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
-    let globalListenersSetup = false;
 
     // Undo/Redo
     let undoStack = {
@@ -81,13 +80,9 @@
         }
 
         const table = findSearchQueryTable();
-        // Check if table has rows to ensure data is loaded
-        const hasRows = table && table.querySelectorAll('tbody tr').length > 0;
-
-        if (table && hasRows && !inited) {
+        if (table && !inited) {
             console.log('[YD-SQ] Таблица найдена, инициализация...');
-            // Give a small delay to ensure DOM is stable
-            setTimeout(() => initWithTable(table), 100);
+            initWithTable(table);
         } else {
             setTimeout(() => waitForTableAndInit(attempt + 1), 250);
         }
@@ -114,28 +109,17 @@
         return null;
     }
 
-    function getAllRowsOnPage() {
-        const table = findSearchQueryTable();
-        return table ? Array.from(table.querySelectorAll('tbody tr')) : [];
-    }
-
     function initWithTable(table) {
         try {
             inited = true;
-            cleanWordSpans(); // Ensure no stale spans
             wrapTableWords(table);
             setupTableObserver(table);
             injectStyles();
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
-
-            if (!globalListenersSetup) {
-                setupGlobalListeners();
-                globalListenersSetup = true;
-            }
-
-            restoreVisualMarkers();
+            setupGlobalListeners();
+            updateHighlights();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -160,7 +144,7 @@
                 setTimeout(() => {
                     cleanWordSpans();
                     wrapTableWords(table);
-                    restoreVisualMarkers();
+                    updateHighlights();
                     isWrapping = false;
                 }, 50);
             }
@@ -174,6 +158,38 @@
         wordSpans = wordSpans.filter(span => document.body.contains(span));
     }
 
+    function cleanupPageState() {
+        // Cancel phrase mode if active
+        if (phraseInProgress) {
+            phraseInProgress = null;
+        }
+
+        // Remove all phrase action buttons
+        document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
+
+        // Clear wordSpans array
+        wordSpans = [];
+
+        // Remove temporary classes from all rows
+        document.querySelectorAll('[data-yd-row-id]').forEach(row => {
+            row.classList.remove('yd-row-deactivated');
+            delete row.dataset.ydAutoRow;
+        });
+
+        // Remove phrase-building classes from all word spans
+        document.querySelectorAll('.yd-word').forEach(span => {
+            span.classList.remove('yd-phrase-building');
+            delete span.dataset.phraseId;
+        });
+
+        // Reset checkbox dataset attributes
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            delete cb.dataset.ydAuto;
+        });
+
+        console.log('[YD-SQ] Состояние страницы очищено');
+    }
+
     function detectPageChange() {
         setInterval(() => {
             const newPageKey = getCurrentPageKey();
@@ -181,30 +197,10 @@
                 console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
                 currentPageKey = newPageKey;
 
-                // 1. Reset Phrase Mode
-                if (phraseInProgress) {
-                    finalizePhraseBuilding(true); // Cancel current phrase
-                }
-                phraseInProgress = null;
+                // Full cleanup before reinitializing
+                cleanupPageState();
 
-                // 2. Cleanup DOM elements
-                document.querySelectorAll('.yd-phrase-actions').forEach(el => el.remove());
-                document.querySelectorAll('.yd-row-deactivated').forEach(el => el.classList.remove('yd-row-deactivated'));
-
-                // 3. Reset State
-                wordSpans = [];
                 inited = false;
-
-                // 4. Clear selections from other pages
-                const keysToDelete = [];
-                for (const [key, sel] of selections) {
-                    if (sel.pageKey !== currentPageKey) {
-                        keysToDelete.push(key);
-                    }
-                }
-                keysToDelete.forEach(k => selections.delete(k));
-
-                // 5. Re-init
                 waitForTableAndInit();
             }
         }, 500);
@@ -762,12 +758,8 @@
     function deactivateOtherRows(activeRowId) {
         const allRows = getAllRowsOnPage();
         for (const row of allRows) {
-            const rid = row.dataset.ydRowId;
-            // Deactivate only if it has an ID and it's NOT the active row
-            if (rid && rid !== activeRowId) {
+            if (String(row.dataset.ydRowId) !== String(activeRowId)) {
                 row.classList.add('yd-row-deactivated');
-            } else {
-                row.classList.remove('yd-row-deactivated');
             }
         }
     }
@@ -1177,7 +1169,7 @@
         // --- SELECTION SOURCE HIGHLIGHT ---
         // Explicitly highlight words in the source row for phrase selections
         for (const sel of selections.values()) {
-            if (sel.kind === 'phrase' && !sel._building && sel.rowId && sel.words) {
+            if (sel.kind === 'phrase' && !sel._building && sel.pageKey === currentPageKey && sel.rowId && sel.words) {
                 // Find spans in this row
                 const rowSpans = spansByRow.get(sel.rowId);
                 if (rowSpans) {
