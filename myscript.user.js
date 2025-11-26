@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.31
+// @version 0.121.32
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2053,6 +2053,26 @@
         if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
         if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
 
+        // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
+        const rowsWithSelections = new Set();
+        selections.forEach(sel => {
+            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                rowsWithSelections.add(sel.rowId);
+            }
+        });
+
+        const allRows = getAllRowsOnPage();
+        allRows.forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            const rowId = row.dataset.ydRowId;
+            if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
+                // Снять чекбокс, если строка не содержит selections
+                clickCheckbox(cb, false);
+                delete cb.dataset.ydAuto;
+                delete row.dataset.ydAutoRow;
+            }
+        });
+
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
@@ -2204,11 +2224,9 @@
             addToSentHistory(val, null, [currentPage]);
         }
 
-        selections.clear();
+        // НЕ очищаем selections здесь - это будет сделано в tryCloseResultPopup после успешного сохранения
         syncLocalToGlobal();
         rebuildCampaignMinusList();
-        updateUI();
-        showYdsqNotification(`Отправлено ${values.length} минусов`, 'success');
     }
 
     function findResultPopup() {
@@ -2228,7 +2246,20 @@
             const s = (el.textContent || '').trim();
             return ['OK', 'ОК', 'Ok', 'ok'].includes(s);
         });
-        if (ok) { ok.click(); return true; }
+        if (ok) {
+            ok.click();
+
+            // После успешного сохранения очищаем selections и показываем уведомление
+            setTimeout(() => {
+                const count = selections.size;
+                selections.clear();
+                syncLocalToGlobal();
+                updateUI();
+                showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+            }, 100);
+
+            return true;
+        }
         const close = pop.querySelector('button[aria-label="Закрыть"], [role="button"] svg, button');
         if (close) { close.click(); return true; }
         return false;
@@ -2365,6 +2396,34 @@
                     e.preventDefault();
                     e.stopPropagation();
                     cancelPhraseBuilding();
+                }
+            }
+        });
+
+        // Делегирование для кнопки "Очистить все"
+        document.body.addEventListener('click', (e) => {
+            if (e.target.id === 'yd-sq-clear-all') {
+                console.log('[YD-SQ] Кнопка "Очистить все" нажата (делегирование)');
+                if (confirm('Очистить все выделения?')) {
+                    console.log('[YD-SQ] Подтверждение получено, очистка selections:', selections.size);
+
+                    // Снять чекбоксы для текущей страницы
+                    for (const sel of selections.values()) {
+                        if (sel.pageKey === currentPageKey && sel.rowId) {
+                            const cb = getRowCheckbox(sel.rowId);
+                            if (cb && cb.checked) {
+                                clickCheckbox(cb, false);
+                                delete cb.dataset.ydAuto;
+                                console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
+                            }
+                        }
+                    }
+
+                    selections.clear();
+                    pushUndo('clear_all', 'Очищены все выделения');
+                    syncLocalToGlobal();
+                    updateUI();
+                    console.log('[YD-SQ] Очистка завершена');
                 }
             }
         });
@@ -2944,6 +3003,7 @@
     }
 
 })();
+
 
 
 
