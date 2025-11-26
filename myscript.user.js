@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.25
+// @version 0.121.27
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -37,6 +37,10 @@
     // Auto-scroll
     let lastManualScrollTime = 0;
     const autoScrollDebounceMap = new Map();
+
+    // Observers and listeners
+    let tableObserver = null;
+    let globalListenersSetup = false;
 
     // Стоп-слова для строгого режима фраз
     // Стоп-слова для строгого режима фраз и автоматического переключения в strict
@@ -145,7 +149,13 @@
     }
 
     function setupTableObserver(table) {
-        const observer = new MutationObserver((mutations) => {
+        // Stop previous observer if exists
+        if (tableObserver) {
+            tableObserver.disconnect();
+            tableObserver = null;
+        }
+
+        tableObserver = new MutationObserver((mutations) => {
             if (isWrapping) return;
 
             let shouldUpdate = false;
@@ -171,7 +181,9 @@
 
         // Delay observer start to avoid triggering on initial page load
         setTimeout(() => {
-            observer.observe(tbody, { childList: true, subtree: true });
+            if (tableObserver) {
+                tableObserver.observe(tbody, { childList: true, subtree: true });
+            }
         }, 1000);
     }
 
@@ -2348,6 +2360,10 @@
     // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
     function setupGlobalListeners() {
+        // Prevent duplicate listeners
+        if (globalListenersSetup) return;
+        globalListenersSetup = true;
+
         // Скролл пользователя
         window.addEventListener('scroll', () => {
             lastManualScrollTime = Date.now();
@@ -2967,6 +2983,7 @@
     }
 
 })();
+
 
 
 
