@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.42
+// @version 0.121.43
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1002,20 +1002,12 @@
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
-            // Preserve .yd-imported-minus if present
-            const isImported = sp.classList.contains('yd-imported-minus');
-
             sp.className = 'yd-word'; // Reset to base class
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
-                'yd-sent-history'
+                'yd-sent-history', 'yd-imported-minus'
             );
-
-            // Restore .yd-imported-minus if it was there
-            if (isImported) {
-                sp.classList.add('yd-imported-minus');
-            }
 
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
@@ -1948,7 +1940,12 @@
         addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
             const idx = parseInt(btn.dataset.impIdx);
             importedMinuses.splice(idx, 1);
+
+            // Сброс кеша для принудительного пересоздания правил в updateHighlights
+            lastImportedMinusesRef = null;
+
             syncLocalToGlobal();
+            rebuildCampaignMinusList();
             updateHighlights();
             renderImportedMinuses();
         });
@@ -2505,7 +2502,12 @@
                 if (clearImpBtn.dataset.confirming === 'true') {
                     // Второе нажатие - выполняем очистку
                     importedMinuses = [];
+
+                    // Сброс кеша для принудительного пересоздания правил в updateHighlights
+                    lastImportedMinusesRef = null;
+
                     syncLocalToGlobal();
+                    rebuildCampaignMinusList();
                     updateHighlights();
                     updateUI();
                     showYdsqNotification('Список импортированных очищен', 'success');
@@ -3103,6 +3105,7 @@
     }
 
 })();
+
 
 
 
