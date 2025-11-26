@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.35
+// @version 0.121.36
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2376,45 +2376,61 @@
                 }
             }
         });
+
         // Делегирование для кнопки "Очистить все"
         document.body.addEventListener('click', (e) => {
-            if (e.target.id === 'yd-sq-clear-all') {
+            const btn = e.target.closest('#yd-sq-clear-all');
+            if (btn) {
                 console.log('[YD-SQ] Кнопка "Очистить все" нажата (делегирование)');
-                // Use setTimeout to allow UI to update and avoid blocking
-                setTimeout(() => {
-                    if (confirm('Очистить все выделения?')) {
-                        console.log('[YD-SQ] Подтверждение получено, очистка selections:', selections.size);
 
-                        // Снять чекбоксы для текущей страницы
-                        for (const sel of selections.values()) {
-                            if (sel.pageKey === currentPageKey && sel.rowId) {
-                                const cb = getRowCheckbox(sel.rowId);
-                                if (cb && cb.checked) {
-                                    clickCheckbox(cb, false);
-                                    delete cb.dataset.ydAuto;
-                                    console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
-                                }
+                if (btn.dataset.confirming === 'true') {
+                    // Второе нажатие - выполняем очистку
+                    console.log('[YD-SQ] Подтверждение получено (двойной клик), очистка selections:', selections.size);
+
+                    // Снять чекбоксы для текущей страницы
+                    for (const sel of selections.values()) {
+                        if (sel.pageKey === currentPageKey && sel.rowId) {
+                            const cb = getRowCheckbox(sel.rowId);
+                            if (cb && cb.checked) {
+                                clickCheckbox(cb, false);
+                                delete cb.dataset.ydAuto;
+                                console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
                             }
                         }
-
-                        selections.clear();
-                        pushUndo('clear_all', 'Очищены все выделения');
-                        syncLocalToGlobal();
-                        updateUI();
-                        console.log('[YD-SQ] Очистка завершена');
-                    } else {
-                        console.log('[YD-SQ] Очистка отменена пользователем');
                     }
-                }, 10);
+
+                    selections.clear();
+                    pushUndo('clear_all', 'Очищены все выделения');
+                    syncLocalToGlobal();
+                    updateUI();
+                    console.log('[YD-SQ] Очистка завершена');
+
+                    // Сброс кнопки
+                    btn.textContent = 'Очистить все';
+                    delete btn.dataset.confirming;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                } else {
+                    // Первое нажатие - запрашиваем подтверждение
+                    btn.dataset.confirming = 'true';
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Точно?';
+                    btn.style.background = '#ff4d4f';
+                    btn.style.color = 'white';
+
+                    // Сброс через 3 секунды
+                    setTimeout(() => {
+                        if (btn.dataset.confirming === 'true') {
+                            btn.textContent = originalText;
+                            delete btn.dataset.confirming;
+                            btn.style.background = '';
+                            btn.style.color = '';
+                        }
+                    }, 3000);
+                }
             }
         });
-
-        // addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
-        // addDelegatedListener('mouseover', '.yd-word', onWordHover);
-        // addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
     }
-
-
 
     function setupMinusModalObserver() {
         const observer = new MutationObserver(() => {
@@ -2982,6 +2998,7 @@
     }
 
 })();
+
 
 
 
