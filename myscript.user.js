@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.34
+// @version 0.121.35
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1726,8 +1726,7 @@
 
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
-        // Обработчик для "Очистить все" теперь в setupGlobalListeners через делегирование
-        // Это обеспечивает работу кнопки на всех страницах
+        // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
 
         makePanelDraggable();
     }
@@ -2377,37 +2376,39 @@
                 }
             }
         });
-
         // Делегирование для кнопки "Очистить все"
         document.body.addEventListener('click', (e) => {
             if (e.target.id === 'yd-sq-clear-all') {
                 console.log('[YD-SQ] Кнопка "Очистить все" нажата (делегирование)');
-                if (confirm('Очистить все выделения?')) {
-                    console.log('[YD-SQ] Подтверждение получено, очистка selections:', selections.size);
+                // Use setTimeout to allow UI to update and avoid blocking
+                setTimeout(() => {
+                    if (confirm('Очистить все выделения?')) {
+                        console.log('[YD-SQ] Подтверждение получено, очистка selections:', selections.size);
 
-                    // Снять чекбоксы для текущей страницы
-                    for (const sel of selections.values()) {
-                        if (sel.pageKey === currentPageKey && sel.rowId) {
-                            const cb = getRowCheckbox(sel.rowId);
-                            if (cb && cb.checked) {
-                                clickCheckbox(cb, false);
-                                delete cb.dataset.ydAuto;
-                                console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
+                        // Снять чекбоксы для текущей страницы
+                        for (const sel of selections.values()) {
+                            if (sel.pageKey === currentPageKey && sel.rowId) {
+                                const cb = getRowCheckbox(sel.rowId);
+                                if (cb && cb.checked) {
+                                    clickCheckbox(cb, false);
+                                    delete cb.dataset.ydAuto;
+                                    console.log('[YD-SQ] Снят чекбокс для rowId:', sel.rowId);
+                                }
                             }
                         }
-                    }
 
-                    selections.clear();
-                    pushUndo('clear_all', 'Очищены все выделения');
-                    syncLocalToGlobal();
-                    updateUI();
-                    console.log('[YD-SQ] Очистка завершена');
-                }
+                        selections.clear();
+                        pushUndo('clear_all', 'Очищены все выделения');
+                        syncLocalToGlobal();
+                        updateUI();
+                        console.log('[YD-SQ] Очистка завершена');
+                    } else {
+                        console.log('[YD-SQ] Очистка отменена пользователем');
+                    }
+                }, 10);
             }
         });
 
-        // Делегирование событий для слов - REMOVED in favor of direct listeners to stop propagation
-        // addDelegatedListener('click', '.yd-word', onWordClick);
         // addDelegatedListener('dblclick', '.yd-word', onWordDoubleClick);
         // addDelegatedListener('mouseover', '.yd-word', onWordHover);
         // addDelegatedListener('mouseout', '.yd-word', onWordHoverOut);
