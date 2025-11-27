@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.55
+// @version 0.121.56
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1577,48 +1577,96 @@
 
 
     async function importMinusesFromClipboard() {
-        try {
-            const text = await navigator.clipboard.readText();
-            const newPhrases = normalizeMinusInput(text);
+        const btn = document.getElementById('yd-sq-load-clipboard');
 
-            if (newPhrases.size === 0) {
-                showYdsqNotification('В буфере не найдено минусов', 'warn');
-                return;
-            }
+        // Если кнопка уже в режиме подтверждения
+        if (btn && btn.dataset.confirming === 'true') {
+            // Второе нажатие - выполняем импорт
+            try {
+                const text = await navigator.clipboard.readText();
+                const newPhrases = normalizeMinusInput(text);
 
-            const confirmed = confirm(`Импортировать ${newPhrases.size} минусов?\nОни будут добавлены в список "В кампании".`);
-            if (!confirmed) return;
+                if (newPhrases.size === 0) {
+                    showYdsqNotification('В буфере не найдено минусов', 'warn');
+                    // Сброс кнопки
+                    btn.textContent = '📋 Загрузить из буфера';
+                    delete btn.dataset.confirming;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                    return;
+                }
 
-            const newItems = [];
-            for (const phrase of newPhrases) {
-                if (!importedMinuses.some(imp => imp.raw === phrase)) {
-                    newItems.push({
-                        id: `imp:${Date.now()}_${Math.random()}`,
-                        raw: phrase,
-                        importedAt: Date.now()
-                    });
+                const newItems = [];
+                for (const phrase of newPhrases) {
+                    if (!importedMinuses.some(imp => imp.raw === phrase)) {
+                        newItems.push({
+                            id: `imp:${Date.now()}_${Math.random()}`,
+                            raw: phrase,
+                            importedAt: Date.now()
+                        });
+                    }
+                }
+
+                if (newItems.length > 0) {
+                    importedMinuses = [...importedMinuses, ...newItems];
+                    syncLocalToGlobal();
+                    rebuildCampaignMinusList();
+                    updateHighlights();
+                    resetClearAllButton();
+                    updateUI();
+                    showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
+                } else {
+                    showYdsqNotification('Все минусы уже есть в списке', 'info');
+                }
+
+                // Сброс кнопки
+                btn.textContent = '📋 Загрузить из буфера';
+                delete btn.dataset.confirming;
+                btn.style.background = '';
+                btn.style.color = '';
+            } catch (err) {
+                console.error('[YD-SQ] Ошибка импорта:', err);
+                showYdsqNotification('Ошибка чтения буфера обмена', 'error');
+                // Сброс кнопки
+                if (btn) {
+                    btn.textContent = '📋 Загрузить из буфера';
+                    delete btn.dataset.confirming;
+                    btn.style.background = '';
+                    btn.style.color = '';
                 }
             }
+        } else {
+            // Первое нажатие - запрашиваем подтверждение
+            try {
+                const text = await navigator.clipboard.readText();
+                const newPhrases = normalizeMinusInput(text);
 
-            if (newItems.length > 0) {
-                importedMinuses = [...importedMinuses, ...newItems];
-                syncLocalToGlobal();
-                rebuildCampaignMinusList();
-                updateHighlights();
-                resetClearAllButton();
-                updateUI();
-                showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
-            } else {
-                showYdsqNotification('Все минусы уже есть в списке', 'info');
+                if (newPhrases.size === 0) {
+                    showYdsqNotification('В буфере не найдено минусов', 'warn');
+                    return;
+                }
+
+                // Показываем количество и просим подтверждение
+                if (btn) {
+                    btn.dataset.confirming = 'true';
+                    btn.textContent = `Импортировать ${newPhrases.size} шт?`;
+                    btn.style.background = '#4a90e2';
+                    btn.style.color = 'white';
+
+                    // Сброс через 5 секунд
+                    setTimeout(() => {
+                        if (btn.dataset.confirming === 'true') {
+                            btn.textContent = '📋 Загрузить из буфера';
+                            delete btn.dataset.confirming;
+                            btn.style.background = '';
+                            btn.style.color = '';
+                        }
+                    }, 5000);
+                }
+            } catch (err) {
+                console.error('[YD-SQ] Ошибка чтения буфера:', err);
+                showYdsqNotification('Ошибка чтения буфера обмена', 'error');
             }
-
-            syncLocalToGlobal();
-            updateHighlights(); // Обновить стили (серый цвет для imported)
-
-            showYdsqNotification(`Импортировано ${newPhrases.size} минусов`, 'success');
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка импорта:', err);
-            showYdsqNotification('Ошибка чтения буфера обмена', 'error');
         }
     }
 
@@ -3109,6 +3157,7 @@
     }
 
 })();
+
 
 
 
