@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.56
+// @version 0.121.57
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -20,6 +20,7 @@
     let importedMinuses = [];
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
+    let lastSentCount = 0; // Количество элементов в последней отправке
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
@@ -197,6 +198,12 @@
         document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             delete cb.dataset.ydAuto;
         });
+
+        // Сбросить кнопку "Очистить все" если она в режиме Undo
+        resetClearAllButton();
+
+        // Сбросить счетчик отправленных элементов
+        lastSentCount = 0;
 
         console.log('[YD-SQ] Состояние страницы очищено');
     }
@@ -2102,6 +2109,9 @@
         if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
         if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
 
+        // Сохраняем количество для уведомления после успешной отправки
+        lastSentCount = values.length;
+
         // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
         const rowsWithSelections = new Set();
         selections.forEach(sel => {
@@ -2300,12 +2310,13 @@
 
             // После успешного сохранения очищаем selections и показываем уведомление
             setTimeout(() => {
-                const count = selections.size;
+                const count = lastSentCount; // Используем сохраненное значение
                 selections.clear();
                 syncLocalToGlobal();
                 resetClearAllButton();
                 updateUI();
                 showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+                lastSentCount = 0; // Сбрасываем после использования
             }, 100);
 
             return true;
@@ -3157,6 +3168,7 @@
     }
 
 })();
+
 
 
 
