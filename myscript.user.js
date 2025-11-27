@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.63
+// @version 0.121.64
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1701,42 +1701,41 @@
         panel.id = 'yd-sq-panel';
         panel.innerHTML = `
             <div class="yd-sq-header" id="yd-sq-panel-header">
-                <span>Минус-слова и фразы</span>
+                <span>📝 Минус-слова</span>
                 <button id="yd-sq-panel-toggle" class="yd-sq-toggle">−</button>
             </div>
 
             <div id="yd-sq-panel-body">
                 <div class="yd-sq-section">
                     <div class="yd-sq-section-title">
-                        Выбранные сейчас (<span id="yd-sq-global-count">0</span>)
+                        ✓ Выбрано (<span id="yd-sq-global-count">0</span>)
                     </div>
                     <div id="yd-sq-list" class="yd-sq-list"></div>
                 </div>
 
                 <div class="yd-sq-section">
                     <div class="yd-sq-section-title">
-                        📥 В кампании (<span id="yd-sq-imported-count">0</span>)
-                        <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▼</button>
+                        📥 Уже в кампании (<span id="yd-sq-imported-count">0</span>)
+                        <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▲</button>
                     </div>
-                    <div id="yd-sq-imported-list" class="yd-sq-list" style="display:none;"></div>
+                    <div id="yd-sq-imported-list" class="yd-sq-list"></div>
                 </div>
 
                 <div class="yd-sq-section yd-sq-controls">
-                    <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary" style="flex-grow: 1;">📋 Загрузить из буфера</button>
-                    <button id="yd-sq-clear-imported" class="yd-sq-btn-secondary" title="Очистить импортированные" style="width: 40px;">🗑️</button>
+                    <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary yd-sq-btn-import">📋 Импорт</button>
+                    <button id="yd-sq-clear-imported" class="yd-sq-btn-secondary yd-sq-btn-clear-imported">🗑 Удалить</button>
                 </div>
 
                 <div class="yd-sq-section yd-sq-footer-buttons">
-                    <button id="yd-sq-send" class="yd-sq-btn-primary" style="flex: 2; margin-right: 8px;">Отправить</button>
-                    <button id="yd-sq-clear-all" class="yd-sq-btn-secondary" style="flex: 1;">Очистить всё</button>
+                    <button id="yd-sq-send" class="yd-sq-btn-primary">✓ Отправить</button>
+                    <button id="yd-sq-clear-all" class="yd-sq-btn-secondary">✕ Очистить выбранные</button>
                 </div>
 
                 <div class="yd-sq-hint">
-                    Клик – мягкий (soft) + скролл<br>
-                    Alt+клик – строгий (!) + скролл<br>
-                    Дб.клик – построение фразы<br>
-                    Enter/выход – завершить фразу<br>
-                    📋 – скопировать весь запрос
+                    <strong>Горячие клавиши:</strong><br>
+                    Клик — мягкое совпадение<br>
+                    Alt+клик — строгое (!)<br>
+                    2×клик — режим фразы
                 </div>
             </div>
         `;
@@ -2908,13 +2907,30 @@
                 cursor: not-allowed;
             }
 
+            #yd-sq-panel .yd-sq-btn-import {
+                flex: 1;
+                min-width: 100px;
+            }
+
+            #yd-sq-panel .yd-sq-btn-clear-imported {
+                flex: 0;
+                min-width: auto;
+                width: auto;
+                padding: 10px 12px;
+            }
+
             #yd-sq-panel .yd-sq-hint {
                 font-size: 11px;
                 color: #888;
                 margin-top: 8px;
-                line-height: 1.4;
+                line-height: 1.5;
                 padding-top: 8px;
                 border-top: 1px solid #eee;
+            }
+
+            #yd-sq-panel .yd-sq-hint strong {
+                color: #555;
+                font-weight: 600;
             }
 
             /* СЛОВА В ТАБЛИЦЕ */
@@ -3146,6 +3162,7 @@
     }
 
 })();
+
 
 
 
