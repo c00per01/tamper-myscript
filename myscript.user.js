@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.53
+// @version 0.121.54
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1875,10 +1875,28 @@
 
         if (!checkbox.checked) {
             clickCheckbox(checkbox, true);
+            await delay(200);
         }
 
+        // If modal appeared automatically
         if (document.querySelector('.modal-window')) {
             await waitForMinusModal(values);
+            return;
+        }
+
+        // Try to find "Refine" (Уточнить) button
+        const buttons = Array.from(row.querySelectorAll('button, [role="button"], a'));
+        const refineBtn = buttons.find(b => {
+            const txt = (b.textContent || '').toLowerCase().trim();
+            return txt.includes('уточнить') || txt.includes('refine');
+        });
+
+        if (refineBtn) {
+            refineBtn.click();
+            await delay(500);
+            if (document.querySelector('.modal-window')) {
+                await waitForMinusModal(values);
+            }
         }
     }
 
@@ -1887,89 +1905,94 @@
         if (isSending) return;
         isSending = true;
         console.log('[YD SQ] === ОТПРАВКА ===');
-        await delay(150);
 
-        const values = [];
-        const unassigned = [];
-        selections.forEach(sel => {
-            if (!sel.unassignedOnThisPage) values.push(sel.display);
-            else unassigned.push(sel.raw);
-        });
+        try {
+            await delay(150);
 
-        if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
-        if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
+            const values = [];
+            const unassigned = [];
+            selections.forEach(sel => {
+                if (!sel.unassignedOnThisPage) values.push(sel.display);
+                else unassigned.push(sel.raw);
+            });
 
-        // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
-        const rowsWithSelections = new Set();
-        selections.forEach(sel => {
-            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                rowsWithSelections.add(sel.rowId);
-            }
-        });
+            if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
+            if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); return; }
 
-        const allRows = getAllRowsOnPage();
-        allRows.forEach(row => {
-            const cb = row.querySelector('input[type="checkbox"]');
-            const rowId = row.dataset.ydRowId;
-            if (cb?.checked && !rowsWithSelections.has(rowId)) {
-                // Снять чекбокс, если строка не содержит selections
-                clickCheckbox(cb, false);
-                delete cb.dataset.ydAuto;
-                delete row.dataset.ydAutoRow;
-            }
-        });
+            // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
+            const rowsWithSelections = new Set();
+            selections.forEach(sel => {
+                if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                    rowsWithSelections.add(sel.rowId);
+                }
+            });
 
-        const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => r.querySelector('input[type="checkbox"]')?.checked).length;
-        const neededTotal = values.length;
-
-        if (checkedCount < neededTotal) {
-            const toReserve = neededTotal - checkedCount;
-            let lastUsedRowId = null;
-            const selsOnPage = Array.from(selections.values()).filter(s => s.pageKey === currentPageKey && !s.unassignedOnThisPage);
-            if (selsOnPage.length > 0) lastUsedRowId = selsOnPage.at(-1)?.rowId;
-
-            const freeRows = findFreeRows(lastUsedRowId);
-            if (toReserve > freeRows.length) {
-                showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
-                isSending = false;
-                return;
-            }
-
-            // Reserve rows
-            for (let i = 0; i < toReserve; i++) {
-                const row = freeRows[i];
+            const allRows = getAllRowsOnPage();
+            allRows.forEach(row => {
                 const cb = row.querySelector('input[type="checkbox"]');
-                clickCheckbox(cb, true);
-                cb.dataset.ydAuto = 'true';
-                row.dataset.ydAutoRow = 'true';
+                const rowId = row.dataset.ydRowId;
+                if (cb?.checked && !rowsWithSelections.has(rowId)) {
+                    // Снять чекбокс, если строка не содержит selections
+                    clickCheckbox(cb, false);
+                    delete cb.dataset.ydAuto;
+                    delete row.dataset.ydAutoRow;
+                }
+            });
+
+            const rows = getAllRowsOnPage();
+            let checkedCount = rows.filter(r => r.querySelector('input[type="checkbox"]')?.checked).length;
+            const neededTotal = values.length;
+
+            if (checkedCount < neededTotal) {
+                const toReserve = neededTotal - checkedCount;
+                let lastUsedRowId = null;
+                const selsOnPage = Array.from(selections.values()).filter(s => s.pageKey === currentPageKey && !s.unassignedOnThisPage);
+                if (selsOnPage.length > 0) lastUsedRowId = selsOnPage.at(-1)?.rowId;
+
+                const freeRows = findFreeRows(lastUsedRowId);
+                if (toReserve > freeRows.length) {
+                    showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
+                    return;
+                }
+
+                // Reserve rows
+                for (let i = 0; i < toReserve; i++) {
+                    const row = freeRows[i];
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    clickCheckbox(cb, true);
+                    cb.dataset.ydAuto = 'true';
+                    row.dataset.ydAutoRow = 'true';
+                }
             }
+
+            // Wait for checkboxes
+            await delay(200);
+
+            // Fill values
+            const finalRows = getAllRowsOnPage();
+            const checkedRows = finalRows.filter(r => r.querySelector('input[type="checkbox"]')?.checked);
+
+            // Sort rows by ID to ensure order
+            checkedRows.sort((a, b) => {
+                const idA = Number.parseInt(a.dataset.ydRowId.split(':')[2]);
+                const idB = Number.parseInt(b.dataset.ydRowId.split(':')[2]);
+                return idA - idB;
+            });
+
+            let rowIdx = 0;
+            for (const val of values) {
+                if (rowIdx >= checkedRows.length) break;
+                const row = checkedRows[rowIdx];
+                await checkRow(row, [val]);
+                rowIdx++;
+                await delay(100);
+            }
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка отправки:', err);
+            showYdsqNotification('Ошибка при отправке', 'error');
+        } finally {
+            isSending = false;
         }
-
-        // Wait for checkboxes
-        await delay(200);
-
-        // Fill values
-        const finalRows = getAllRowsOnPage();
-        const checkedRows = finalRows.filter(r => r.querySelector('input[type="checkbox"]')?.checked);
-
-        // Sort rows by ID to ensure order
-        checkedRows.sort((a, b) => {
-            const idA = Number.parseInt(a.dataset.ydRowId.split(':')[2]);
-            const idB = Number.parseInt(b.dataset.ydRowId.split(':')[2]);
-            return idA - idB;
-        });
-
-        let rowIdx = 0;
-        for (const val of values) {
-            if (rowIdx >= checkedRows.length) break;
-            const row = checkedRows[rowIdx];
-            await checkRow(row, [val]);
-            rowIdx++;
-            await delay(100);
-        }
-
-        isSending = false;
     }
 
     function tryCloseResultPopup() {
@@ -2832,6 +2855,7 @@
     }
 
 })();
+
 
 
 
