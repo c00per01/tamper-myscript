@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.59
+// @version 0.121.60
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1437,7 +1437,6 @@
         }
     }
 
-
     // ==================== SMART DATA PIPELINE ====================
 
     function normalizeMinusInput(rawInput) {
@@ -1647,8 +1646,6 @@
         }
     }
 
-
-
     // ==================== UI ПАНЕЛЬ ====================
 
     function createPanel() {
@@ -1740,6 +1737,7 @@
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
         // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
+        // document.getElementById('yd-sq-clear-imported').addEventListener('click', ...) - REMOVED, using delegation
 
         makePanelDraggable();
     }
@@ -1855,7 +1853,6 @@
         container.scrollTop = container.scrollHeight;
     }
 
-
     function renderImportedMinuses() {
         const container = document.getElementById('yd-sq-imported-list');
         const countIndicator = document.getElementById('yd-sq-imported-count');
@@ -1890,7 +1887,6 @@
             const idx = parseInt(btn.dataset.impIdx);
             importedMinuses.splice(idx, 1);
             syncLocalToGlobal();
-            rebuildCampaignMinusList();
             updateHighlights();
             renderImportedMinuses();
         });
@@ -2156,7 +2152,7 @@
 
         if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
-        // --- Integration of myscript features (Imported) ---
+        // --- Integration of myscript features (History & Imported) ---
         // Add to "In Campaign" list
         for (const val of values) {
             if (!importedMinuses.some(imp => imp.raw === val)) {
@@ -2448,7 +2444,6 @@
                     // Второе нажатие - выполняем очистку
                     importedMinuses = [];
                     syncLocalToGlobal();
-                    rebuildCampaignMinusList();
                     updateHighlights();
                     updateUI();
                     showYdsqNotification('Список импортированных очищен', 'success');
