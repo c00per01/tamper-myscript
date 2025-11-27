@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.62
+// @version 0.121.63
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1715,14 +1715,6 @@
 
                 <div class="yd-sq-section">
                     <div class="yd-sq-section-title">
-                        📤 История отправлений (<span id="yd-sq-sent-count">0</span>)
-                        <button id="yd-sq-sent-toggle" class="yd-sq-expand-btn">▼</button>
-                    </div>
-                    <div id="yd-sq-sent-list" class="yd-sq-list" style="display:none;"></div>
-                </div>
-
-                <div class="yd-sq-section">
-                    <div class="yd-sq-section-title">
                         📥 В кампании (<span id="yd-sq-imported-count">0</span>)
                         <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▼</button>
                     </div>
@@ -1767,18 +1759,6 @@
             } else {
                 body.style.display = 'none';
                 btn.textContent = '+';
-            }
-        });
-
-        document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-sent-list');
-            const btn = document.getElementById('yd-sq-sent-toggle');
-            if (list.style.display === 'none') {
-                list.style.display = '';
-                btn.textContent = '▲';
-            } else {
-                list.style.display = 'none';
-                btn.textContent = '▼';
             }
         });
 
@@ -1845,7 +1825,6 @@
     function updateUI() {
         updateHighlights();
         renderSelectionList();
-        renderSentHistory();
         renderImportedMinuses();
         updateUndoRedoButtons();
     }
@@ -3167,6 +3146,7 @@
     }
 
 })();
+
 
 
 
