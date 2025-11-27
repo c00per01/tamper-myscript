@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.51
+// @version 0.121.52
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -22,7 +22,7 @@
     let isSending = false;
     let isWrapping = false;
     let wordSpans = [];
-    let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
+
 
     // Undo/Redo
     let undoStack = {
@@ -50,10 +50,10 @@
     // Regex patterns for Porter Stemmer
     const RE_PERFECTIVEGERUND = /((ив|ивши|ившись|ыв|ывши|ывшись)|((?<=[ая])(в|вши|вшись)))$/;
     const RE_REFLEXIVE = /(с[яь])$/;
-    const RE_ADJECTIVE = /((ее|ие|ые|ое|ими|ыми|ей|ий|ый|ой|ем|им|ым|ом|его|ого|ему|ому|их|ых|ую|юю|ая|яя|ою|ею)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
+    const RE_ADJECTIVE = /((?:[еиыо]е|[иы]ми|[еиыо][йм]|[ео](?:го|му)|[иы]х|[ую]ю|[ая]я|[ое]ю)|(?<=[ая])(?:ем|нн|н|ш|щ))$/;
     const RE_PARTICIPLE = /((ивш|ывш|ующ)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
-    const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
-    const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
+    const RE_VERB = /((?:[иы](?:ла|ли|ло|ть|т|л|м)|ен[аоы]?|(?:ей|уй)(?:те)?|и(?:те|шь)|у(?:[ею]т|ю)|ят|ю)|(?<=[ая])(?:л[аио]?|н(?:[аыо]|но)?|е(?:те|шь|[мт])|й(?:те)?|ют|ть))$/;
+    const RE_NOUN = /(?:(?:и?я|а)ми|(?:и?я|а)х|(?:и?е|о)й|и(?:ям|е[мй]|и|[еюя])|ь[ею]|е[вм]|[оа]м|[ео]в|[аеиоуыь-я])$/;
     const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
     const RE_DERIVATIONAL_SIMPLE = /ость?$/;
     const RE_SUPERLATIVE = /(ейше|ейш)$/;
@@ -64,7 +64,7 @@
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     function init() {
-        if (!window.location.href.includes('stat_type=search_queries')) {
+        if (!globalThis.location.href.includes('stat_type=search_queries')) {
             return;
         }
 
@@ -173,7 +173,7 @@
             const text = span.textContent;
             const textNode = document.createTextNode(text);
             const parent = span.parentNode;
-            parent.replaceChild(textNode, span);
+            span.replaceWith(textNode);
             parents.add(parent);
         });
 
@@ -220,23 +220,18 @@
     // ==================== УТИЛИТЫ ====================
 
     function getCurrentPageKey() {
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(globalThis.location.search);
         const page = params.get('page') || '1';
         const tab = params.get('tab') || 'default';
         return `page:${page}:${tab}`;
     }
 
     function getCampaignId() {
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(globalThis.location.search);
         return params.get('cid') || 'unknown';
     }
 
-    function addDelegatedListener(type, selector, handler) {
-        document.body.addEventListener(type, (e) => {
-            const target = e.target.closest(selector);
-            if (target) handler(e, target);
-        });
-    }
+
 
     function addClickListener(container, selector, handler) {
         container.querySelectorAll(selector).forEach(btn => {
@@ -248,7 +243,7 @@
     }
 
     function stemWord(word) {
-        word = word.toLowerCase().replace(/ё/g, 'е');
+        word = word.toLowerCase().replaceAll('ё', 'е');
         // RV region extraction
         const match = RE_RVRE.exec(word);
         if (!match || match.length < 3) {
@@ -313,11 +308,11 @@
 
     function escapeHtml(s) {
         return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     // ==================== ОБЕРТЫВАНИЕ СЛОВ ====================
@@ -441,7 +436,7 @@
 
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const text = getTextContent(queryCell).replace(/\s+/g, ' ').trim();
+            const text = getTextContent(queryCell).replaceAll(/\s+/g, ' ').trim();
 
             try {
                 await navigator.clipboard.writeText(text);
@@ -470,80 +465,66 @@
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
-
         const span = targetSpan;
 
-        // Блокировка клика по импортированным минусам
-        if (span.classList.contains('yd-imported-minus')) {
+        if (span.classList.contains('yd-imported-minus')) return;
+
+        if (phraseInProgress) {
+            handlePhraseModeClick(span);
+        } else {
+            handleNormalClick(e, span);
+        }
+    }
+
+    function handlePhraseModeClick(span) {
+        const rowId = span.dataset.rowId;
+        const word = span.dataset.word;
+
+        if (phraseInProgress.rowId !== rowId) return;
+
+        const wordIndex = phraseInProgress.words.indexOf(word);
+        if (wordIndex !== -1) {
+            if (phraseInProgress.words.length === 1) {
+                cancelPhraseBuilding();
+                return;
+            }
+            phraseInProgress.words.splice(wordIndex, 1);
+            updatePhraseSelection();
+            span.classList.remove('yd-phrase-building');
+            delete span.dataset.phraseId;
+            updateUI();
             return;
         }
 
+        phraseInProgress.words.push(word);
+        updatePhraseSelection();
+        span.classList.add('yd-phrase-building');
+        span.dataset.phraseId = phraseInProgress.id;
+
+        const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
+        if (phraseInProgress.words.length === rowSpans.length) {
+            finalizePhraseBuilding(false);
+            return;
+        }
+
+        updateUI();
+        ensureRowChecked(rowId);
+    }
+
+    function updatePhraseSelection() {
+        const sel = selections.get(phraseInProgress.id);
+        sel.raw = phraseInProgress.words.join(' ');
+        sel.display = `"${sel.raw}"`;
+        sel.words = [...phraseInProgress.words];
+    }
+
+    function handleNormalClick(e, span) {
+        const rowId = span.dataset.rowId;
         const stem = span.dataset.stem;
         const wordLower = span.dataset.wordLower;
         const word = span.dataset.word;
-        const rowId = span.dataset.rowId;
 
-        // If phrase building is in progress
-        if (phraseInProgress) {
-            // Check if click is in the same row
-            if (phraseInProgress.rowId !== rowId) {
-                // Click on another row's word -> Ignore (do nothing)
-                return;
-            }
-
-            // Check if this word is already part of the phrase
-            const wordIndex = phraseInProgress.words.indexOf(word);
-
-            if (wordIndex !== -1) {
-                // Word is in phrase -> Remove it
-                // If it's the only word -> Fast cancel
-                if (phraseInProgress.words.length === 1) {
-                    cancelPhraseBuilding();
-                    return;
-                }
-
-                // Remove word
-                phraseInProgress.words.splice(wordIndex, 1);
-
-                // Update selection
-                const sel = selections.get(phraseInProgress.id);
-                sel.raw = phraseInProgress.words.join(' ');
-                sel.display = `"${sel.raw}"`;
-                sel.words = [...phraseInProgress.words];
-
-                span.classList.remove('yd-phrase-building');
-                delete span.dataset.phraseId;
-
-                updateUI();
-                return;
-            }
-
-            // Add word to phrase
-            phraseInProgress.words.push(word);
-            const sel = selections.get(phraseInProgress.id);
-            sel.raw = phraseInProgress.words.join(' ');
-            sel.display = `"${sel.raw}"`;
-            sel.words = [...phraseInProgress.words];
-
-            span.classList.add('yd-phrase-building');
-            span.dataset.phraseId = phraseInProgress.id;
-
-            // Auto-complete if all words in row are selected
-            const rowSpans = wordSpans.filter(s => s.dataset.rowId === rowId);
-            if (phraseInProgress.words.length === rowSpans.length) {
-                finalizePhraseBuilding(false);
-                return;
-            }
-
-            updateUI();
-            ensureRowChecked(rowId);
-            return;
-        }
-
-        // Normal click behavior (no phrase mode)
-        // Check if word is part of a completed phrase
         if (span.classList.contains('yd-selected-phrase')) {
-            // Find and remove the phrase selection
             for (const [key, sel] of selections) {
                 if (sel.kind === 'phrase' && sel.rowId === rowId && sel.pageKey === currentPageKey) {
                     removeSelectionById(key);
@@ -554,7 +535,6 @@
             }
         }
 
-        // Check if already selected as soft/strict
         if (span.classList.contains('yd-selected-soft') || span.classList.contains('yd-selected-strict')) {
             const key = span.classList.contains('yd-selected-soft') ? `soft:${stem}` : `strict:${wordLower}`;
             removeSelectionById(key);
@@ -799,12 +779,10 @@
 
     function ensureRowChecked(rowId) {
         const cb = getRowCheckbox(rowId);
-        // console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
 
         if (cb && !cb.checked) {
             clickCheckbox(cb, true);  // Явно включаем чекбокс
             cb.dataset.ydAuto = 'true';
-            // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
         }
 
         // Double check after a delay to fix race conditions with Yandex handlers
@@ -937,7 +915,7 @@
         tooltip.className = 'yd-tooltip';
 
         if (span.classList.contains('yd-sent-history')) {
-            const sentAt = span.dataset.sentAt ? new Date(parseInt(span.dataset.sentAt)) : null;
+            const sentAt = span.dataset.sentAt ? new Date(Number.parseInt(span.dataset.sentAt)) : null;
             const dateStr = sentAt ? sentAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
 
             tooltip.innerHTML = `
@@ -950,7 +928,7 @@
         }
 
         if (span.classList.contains('yd-imported-minus')) {
-            const importedAt = span.dataset.importedAt ? new Date(parseInt(span.dataset.importedAt)) : null;
+            const importedAt = span.dataset.importedAt ? new Date(Number.parseInt(span.dataset.importedAt)) : null;
             const dateStr = importedAt ? importedAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
 
             tooltip.innerHTML = `
@@ -1253,16 +1231,7 @@
     }
 
 
-    function restoreVisualMarkers() {
-        updateHighlights();
 
-        // Восстановить чекбоксы для сохраненных выделений
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId) {
-                ensureRowChecked(sel.rowId);
-            }
-        }
-    }
 
     // ==================== UNDO/REDO ====================
 
@@ -1286,37 +1255,7 @@
         updateUndoRedoButtons();
     }
 
-    function undo() {
-        if (undoStack.currentIndex > 0) {
-            undoStack.currentIndex--;
-            selections.clear();
 
-            const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
-            for (const [key, val] of snapshot) {
-                selections.set(key, { ...val });
-            }
-
-            updateUI();
-            updateUndoRedoButtons();
-            syncLocalToGlobal();
-        }
-    }
-
-    function redo() {
-        if (undoStack.currentIndex < undoStack.stack.length - 1) {
-            undoStack.currentIndex++;
-            selections.clear();
-
-            const snapshot = undoStack.stack[undoStack.currentIndex].snapshot;
-            for (const [key, val] of snapshot) {
-                selections.set(key, { ...val });
-            }
-
-            updateUI();
-            updateUndoRedoButtons();
-            syncLocalToGlobal();
-        }
-    }
 
     function updateUndoRedoButtons() {
         const undoBtn = document.getElementById('yd-sq-undo-btn');
@@ -1334,16 +1273,13 @@
     }
 
     function clickCheckbox(cb, newState) {
-        // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
 
         if (cb.checked !== newState) {
             cb.click();
-            // console.log('[YD-SQ] Выполнен клик по чекбоксу');
 
             // Проверка и fallback
             setTimeout(() => {
                 if (cb.checked !== newState) {
-                    // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
                     cb.checked = newState;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1422,9 +1358,9 @@
         const rowHeight = rect.height;
         const desiredOffset = headerHeight + (rowHeight * 2);
 
-        if (rect.top < desiredOffset || rect.top > window.innerHeight - 100) {
-            const targetScrollTop = window.scrollY + rect.top - desiredOffset;
-            window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        if (rect.top < desiredOffset || rect.top > globalThis.innerHeight - 100) {
+            const targetScrollTop = globalThis.scrollY + rect.top - desiredOffset;
+            globalThis.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
         }
     }
 
@@ -1450,123 +1386,7 @@
             });
         }
 
-        syncLocalToGlobal();
     }
-
-    // ==================== SMART DATA PIPELINE ====================
-
-    function normalizeMinusInput(rawInput) {
-        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
-        // Разделители: новая строка, табуляция, запятая, точка с запятой
-        const parts = rawString.split(/[\n\t,;]+/);
-        const normalized = new Set();
-
-        for (let part of parts) {
-            part = part.trim();
-            if (!part) continue;
-
-            // Удаляем ведущий дефис, если он есть (формат Яндекса: -слово)
-            // Но сохраняем структуру фразы
-            if (part.startsWith('-')) {
-                part = part.substring(1);
-            }
-
-            part = part.trim();
-            if (!part) continue;
-
-            normalized.add(part);
-        }
-        return normalized;
-    }
-
-    function validateMinusSet(newSet, existingSet) {
-        const result = {
-            valid: true,
-            filteredSet: new Set(),
-            warnings: [],
-            clipboardCopyNeeded: false
-        };
-
-        // 1. Дубликаты
-        for (const item of newSet) {
-            if (!existingSet.has(item)) {
-                result.filteredSet.add(item);
-            }
-        }
-
-        if (result.filteredSet.size === 0) {
-            return result;
-        }
-
-        // 2. Лимит длины (4000 символов)
-        const currentContent = Array.from(existingSet).join('\n');
-        const newContent = Array.from(result.filteredSet).join('\n');
-
-        if ((currentContent.length + newContent.length + 10) > 4000) {
-            result.valid = false;
-            result.clipboardCopyNeeded = true;
-            result.warnings.push('Превышен лимит поля (4000 симв).');
-            return result;
-        }
-
-        // 3. Вложенность
-        const allItems = new Set([...existingSet, ...result.filteredSet]);
-
-        for (const phrase of result.filteredSet) {
-            // Разбиваем фразу на слова
-            const words = phrase.split(/[\s+]+/);
-            if (words.length > 1) {
-                for (const word of words) {
-                    const cleanWord = word.replace(/[!\[\]""]/g, '').toLowerCase();
-                    // Проверяем, есть ли это слово как отдельный минус
-                    if (allItems.has(cleanWord) || allItems.has('!' + cleanWord)) {
-                        result.warnings.push(`Конфликт: фраза "${phrase}" содержит минус "${cleanWord}"`);
-                    }
-                }
-            }
-        }
-
-        return result;
-    }
-
-    async function smartAppendToField(input, newPhrasesSet) {
-        const currentVal = input.value || '';
-        const existingSet = normalizeMinusInput(currentVal);
-
-        const validation = validateMinusSet(newPhrasesSet, existingSet);
-
-        if (!validation.valid) {
-            if (validation.clipboardCopyNeeded) {
-                const textToCopy = Array.from(validation.filteredSet).join('\n');
-                await navigator.clipboard.writeText(textToCopy);
-                showYdsqNotification(validation.warnings.join('\n') + '\nСкопировано в буфер!', 'warn');
-            }
-            return false;
-        }
-
-        if (validation.warnings.length > 0) {
-            const proceed = confirm(`Обнаружены предупреждения:\n${validation.warnings.join('\n')}\n\nВсё равно добавить?`);
-            if (!proceed) return false;
-        }
-
-        if (validation.filteredSet.size === 0) {
-            return true; // Уже есть
-        }
-
-        // Слияние
-        const finalSet = new Set([...existingSet, ...validation.filteredSet]);
-        const separator = input.tagName === 'TEXTAREA' ? '\n' : ', ';
-        input.value = Array.from(finalSet).join(separator);
-
-        // События
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        input.dispatchEvent(new Event('blur', { bubbles: true }));
-
-        return true;
-    }
-
-
 
     async function importMinusesFromClipboard() {
         try {
@@ -1641,10 +1461,25 @@
 
         const panel = document.createElement('div');
         panel.id = 'yd-sq-panel';
-        panel.innerHTML = `
-            <div class="yd-sq-header" id="yd-sq-panel-header">
-                <span>Минус-слова и фразы</span>
-                <button id="yd-sq-panel-toggle" class="yd-sq-toggle">−</button>
+        panel.innerHTML = getPanelHtml();
+
+        document.body.appendChild(panel);
+
+        // Применить позицию
+        panel.style.position = 'fixed';
+        panel.style.left = panelPosition.left;
+        panel.style.right = panelPosition.right;
+        panel.style.top = panelPosition.top;
+
+        attachPanelListeners();
+        makePanelDraggable();
+    }
+
+    function getPanelHtml() {
+        return `
+        <div class="yd-sq-header" id="yd-sq-panel-header">
+            <span>Минус-слова и фразы</span>
+            <button id="yd-sq-panel-toggle" class="yd-sq-toggle">−</button>
             </div>
 
             <div id="yd-sq-panel-body">
@@ -1690,16 +1525,9 @@
                 </div>
             </div>
         `;
+    }
 
-        document.body.appendChild(panel);
-
-        // Применить позицию
-        panel.style.position = 'fixed';
-        panel.style.left = panelPosition.left;
-        panel.style.right = panelPosition.right;
-        panel.style.top = panelPosition.top;
-
-        // Обработчики
+    function attachPanelListeners() {
         document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
             const body = document.getElementById('yd-sq-panel-body');
             const btn = document.getElementById('yd-sq-panel-toggle');
@@ -1712,9 +1540,9 @@
             }
         });
 
-        document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-sent-list');
-            const btn = document.getElementById('yd-sq-sent-toggle');
+        const toggleSection = (listId, btnId) => {
+            const list = document.getElementById(listId);
+            const btn = document.getElementById(btnId);
             if (list.style.display === 'none') {
                 list.style.display = '';
                 btn.textContent = '▲';
@@ -1722,29 +1550,14 @@
                 list.style.display = 'none';
                 btn.textContent = '▼';
             }
-        });
+        };
 
-        document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-imported-list');
-            const btn = document.getElementById('yd-sq-imported-toggle');
-            if (list.style.display === 'none') {
-                list.style.display = '';
-                btn.textContent = '▲';
-            } else {
-                list.style.display = 'none';
-                btn.textContent = '▼';
-            }
-        });
+        document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => toggleSection('yd-sq-sent-list', 'yd-sq-sent-toggle'));
+        document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => toggleSection('yd-sq-imported-list', 'yd-sq-imported-toggle'));
 
         document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
-
         document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
-
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
-
-        // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
-
-        makePanelDraggable();
     }
 
     function makePanelDraggable() {
@@ -1893,7 +1706,7 @@
         }).join('');
 
         addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            const idx = parseInt(btn.dataset.sentIdx);
+            const idx = Number.parseInt(btn.dataset.sentIdx, 10);
             sentHistory.splice(idx, 1);
             syncLocalToGlobal();
             updateUI();
@@ -1931,7 +1744,7 @@
         }).join('');
 
         addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            const idx = parseInt(btn.dataset.impIdx);
+            const idx = Number.parseInt(btn.dataset.impIdx, 10);
             importedMinuses.splice(idx, 1);
             syncLocalToGlobal();
             updateHighlights();
@@ -1970,7 +1783,7 @@
         } else if (matchType === 'strict') {
             if (sel.kind === 'phrase') {
                 const words = sel.raw.split(/\s+/).map(w => {
-                    const wlow = w.toLowerCase().replace(/[^а-яa-z0-9ё]+/gi, '');
+                    const wlow = w.toLowerCase().replaceAll(/[^а-яa-z0-9ё]+/gi, '');
                     return STOPWORDS.has(wlow) ? w : ('!' + w);
                 });
                 sel.display = words.join(' ');
@@ -2067,7 +1880,7 @@
         });
 
         const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        let checkedCount = rows.filter(r => r.querySelector('input[type="checkbox"]')?.checked).length;
         const neededTotal = values.length;
 
         if (checkedCount < neededTotal) {
@@ -2080,524 +1893,373 @@
             if (toReserve > freeRows.length) {
                 showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
                 isSending = false;
-                return;
-            }
 
-            let reserved = 0;
-            for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
-                const row = freeRows[i];
-                const cb = row.querySelector('input[type="checkbox"]');
-                if (cb && !cb.checked) {
-                    clickCheckbox(cb, true);
-                    cb.dataset.ydAuto = 'true';
-                    row.dataset.ydAutoRow = 'true';
-                    reserved++;
-                }
-            }
-            checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        }
+                function tryCloseResultPopup() {
+                    const pop = findResultPopup();
+                    if (!pop) return false;
+                    const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
+                        const s = (el.textContent || '').trim();
+                        return ['OK', 'ОК', 'Ok', 'ok'].includes(s);
+                    });
+                    if (ok) {
+                        ok.click();
 
-        await delay(250);
-        const finalChecked = getAllRowsOnPage().filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+                        // После успешного сохранения очищаем selections и показываем уведомление
+                        setTimeout(() => {
+                            const count = selections.size;
+                            selections.clear();
+                            syncLocalToGlobal();
+                            resetClearAllButton();
+                            updateUI();
+                            showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+                        }, 100);
 
-        if (values.length > finalChecked) { showYdsqNotification(`Ошибка: недостаточно строк`, 'error'); isSending = false; return; }
-
-        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
-        if (!addBtn) { showYdsqNotification('Кнопка не найдена', 'error'); isSending = false; return; }
-
-        addBtn.click();
-
-        try {
-            await waitForMinusModal(values);
-        } catch (error) {
-            console.error('[YD SQ] Ошибка:', error);
-            showYdsqNotification('Ошибка при обработке окна', 'error');
-        } finally {
-            setTimeout(() => { isSending = false; }, 500);
-        }
-    }
-
-    function waitForMinusModal(values, attempt = 0) {
-        const modal = findMinusModal();
-        if (modal) fillMinusModal(modal, values);
-        else if (attempt < 50) setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; }
-    }
-
-    function findMinusModal() {
-        const candidates = document.querySelectorAll('div, section');
-        for (const el of candidates) {
-            const txt = el.textContent || '';
-            if (!txt) continue;
-            if (txt.includes('Добавление минус-фраз')) return el.closest('[role="dialog"]') || el;
-        }
-        return null;
-    }
-
-    function fillMinusModal(modal, values) {
-        const selects = Array.from(modal.querySelectorAll('select'));
-        selects.forEach((select) => {
-            const opts = Array.from(select.options);
-            const opt = opts.find(o => o.textContent.trim() === 'на кампанию' || o.textContent.trim() === 'На кампанию');
-            if (opt) {
-                select.value = opt.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                select.dispatchEvent(new Event('input', { bubbles: true }));
-                const btn = select.closest('.select')?.querySelector('button.select__button');
-                if (btn) { const t = btn.querySelector('.button__text'); if (t) t.textContent = 'на кампанию'; }
-            }
-        });
-        waitForInputFields(modal, values, 0);
-    }
-
-    function waitForInputFields(modal, values, attempt) {
-        if (attempt > 12) {
-            console.error('[YD SQ] Поля не найдены');
-            showYdsqNotification('Поля ввода не найдены', 'error');
-            isSending = false;
-            return;
-        }
-        setTimeout(() => {
-            const textareas = modal.querySelectorAll('textarea.textarea__control, textarea');
-            const textInputs = modal.querySelectorAll('input.text-input__control, input[type="text"]');
-            const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
-            const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
-
-            const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
-            const uniq = [...new Set(all)];
-            const visible = uniq.filter(el => {
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-            });
-
-            if (visible.length > 0) {
-                fillFields(visible, values);
-                setTimeout(() => tryCloseResultPopup(), 1200);
-            } else {
-                waitForInputFields(modal, values, attempt + 1);
-            }
-        }, 300);
-    }
-
-    function fillFields(inputs, values) {
-        inputs.forEach((input) => {
-            if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-
-        const n = Math.min(inputs.length, values.length);
-        for (let i = 0; i < n; i++) {
-            const el = inputs[i];
-            const val = values[i];
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
-            if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
-        }
-
-        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
-
-        // --- Integration of myscript features (History & Imported) ---
-        // Add to "In Campaign" list
-        for (const val of values) {
-            if (!importedMinuses.some(imp => imp.raw === val)) {
-                importedMinuses.push({
-                    id: `imp:${Date.now()}_${Math.random()}`,
-                    raw: val,
-                    importedAt: Date.now()
-                });
-            }
-        }
-
-        // Add to history
-        const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        for (const val of values) {
-            addToSentHistory(val, null, [currentPage]);
-        }
-
-        // НЕ очищаем selections здесь - это будет сделано в tryCloseResultPopup после успешного сохранения
-        syncLocalToGlobal();
-        rebuildCampaignMinusList();
-    }
-
-    function findResultPopup() {
-        const c = document.querySelectorAll('[role="dialog"], div, section');
-        for (const el of c) {
-            const t = el.textContent || '';
-            if (!t) continue;
-            if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
-        }
-        return null;
-    }
-
-    function tryCloseResultPopup() {
-        const pop = findResultPopup();
-        if (!pop) return false;
-        const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
-            const s = (el.textContent || '').trim();
-            return ['OK', 'ОК', 'Ok', 'ok'].includes(s);
-        });
-        if (ok) {
-            ok.click();
-
-            // После успешного сохранения очищаем selections и показываем уведомление
-            setTimeout(() => {
-                const count = selections.size;
-                selections.clear();
-                syncLocalToGlobal();
-                resetClearAllButton();
-                updateUI();
-                showYdsqNotification(`Отправлено ${count} минусов`, 'success');
-            }, 100);
-
-            return true;
-        }
-        const close = pop.querySelector('button[aria-label="Закрыть"], [role="button"] svg, button');
-        if (close) { close.click(); return true; }
-        return false;
-    }
-
-    function setupResultPopupObserver() {
-        tryCloseResultPopup();
-        const o = new MutationObserver(() => { tryCloseResultPopup(); });
-        o.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // ==================== PERSISTENCE ====================
-
-    function loadGlobalState() {
-        try {
-            const campaignId = getCampaignId();
-            const key = `yd-sq-state-global:${campaignId}`;
-            const stored = localStorage.getItem(key);
-
-            if (stored) {
-                const data = JSON.parse(stored);
-                sentHistory = data.sentHistory || [];
-                importedMinuses = data.importedMinuses || [];
-                panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
-                phraseCounter = data.phraseCounter || 0;
-
-                // Восстановить selections
-                if (data.selections) {
-                    selections.clear();
-                    for (const [key, val] of Object.entries(data.selections)) {
-                        selections.set(key, val);
+                        return true;
                     }
+                    const close = pop.querySelector('button[aria-label="Закрыть"], [role="button"] svg, button');
+                    if (close) { close.click(); return true; }
+                    return false;
                 }
 
-                rebuildCampaignMinusList();
-            }
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка загрузки состояния:', err);
-        }
-    }
-
-    function syncLocalToGlobal() {
-        try {
-            const campaignId = getCampaignId();
-            const key = `yd-sq-state-global:${campaignId}`;
-
-            const selectionsObj = {};
-            for (const [k, v] of selections) {
-                selectionsObj[k] = v;
-            }
-
-            const data = {
-                selections: selectionsObj,
-                phraseCounter: phraseCounter,
-                sentHistory: sentHistory,
-                importedMinuses: importedMinuses,
-                panelPosition: panelPosition
-            };
-
-            localStorage.setItem(key, JSON.stringify(data));
-        } catch (err) {
-            console.error('[YD-SQ] Ошибка сохранения состояния:', err);
-        }
-    }
-
-    function rebuildCampaignMinusList() {
-        campaignMinusList.clear();
-        for (const imp of importedMinuses) {
-            campaignMinusList.add(imp.raw);
-        }
-    }
-
-
-
-    // ==================== УВЕДОМЛЕНИЯ ====================
-
-    function showYdsqNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `yd-sq-notification yd-sq-notification-${type}`;
-        notification.textContent = message;
-
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.classList.add('yd-sq-notification-show');
-        }, 10);
-
-        setTimeout(() => {
-            notification.classList.remove('yd-sq-notification-show');
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
-    }
-
-    // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
-
-    let clearAllUndoState = null;
-
-    function resetClearAllButton() {
-        const btn = document.getElementById('yd-sq-clear-all');
-        if (btn && btn.dataset.undoMode === 'true') {
-            btn.textContent = 'Очистить все';
-            delete btn.dataset.undoMode;
-            btn.style.background = '';
-            btn.style.color = '';
-            clearAllUndoState = null;
-        }
-    }
-
-    function setupGlobalListeners() {
-        // Скролл пользователя
-        window.addEventListener('scroll', () => {
-            lastManualScrollTime = Date.now();
-        }, { passive: true });
-
-        // Завершение фразы при клике вне слов активной строки
-        document.addEventListener('click', (e) => {
-            if (phraseInProgress) {
-                // Ignore clicks on phrase buttons
-                if (e.target.closest('.yd-phrase-actions')) return;
-
-                // Check if click is on a word
-                const clickedWord = e.target.closest('.yd-word');
-                if (clickedWord) return;
-
-                // Check if click is inside the active row
-                const clickedRow = e.target.closest('[data-yd-row-id]');
-                if (clickedRow && clickedRow.dataset.ydRowId === phraseInProgress.rowId) {
-                    // Click inside active row but not on a word - ignore
-                    return;
+                function setupResultPopupObserver() {
+                    tryCloseResultPopup();
+                    const o = new MutationObserver(() => { tryCloseResultPopup(); });
+                    o.observe(document.body, { childList: true, subtree: true });
                 }
 
-                // Click is outside active row - show confirm
-                if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
-                    cancelPhraseBuilding();
-                }
-            }
-        });
+                // ==================== PERSISTENCE ====================
 
-        // Клавиши
-        document.addEventListener('keydown', (e) => {
-            if (phraseInProgress) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    finalizePhraseBuilding(false);
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    cancelPhraseBuilding();
-                }
-            }
-        });
+                function loadGlobalState() {
+                    try {
+                        const campaignId = getCampaignId();
+                        const key = `yd-sq-state-global:${campaignId}`;
+                        const stored = localStorage.getItem(key);
 
-        // Делегирование для кнопок панели
-        document.body.addEventListener('click', (e) => {
-            // Кнопка "Очист ить все"
-            const clearAllBtn = e.target.closest('#yd-sq-clear-all');
-            if (clearAllBtn) {
-                console.log('[YD-SQ] Кнопка "Очистить все" нажата');
-                console.log('[YD-SQ] undoMode:', clearAllBtn.dataset.undoMode);
-                console.log('[YD-SQ] selections.size:', selections.size);
+                        if (stored) {
+                            const data = JSON.parse(stored);
+                            sentHistory = data.sentHistory || [];
+                            importedMinuses = data.importedMinuses || [];
+                            panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
+                            phraseCounter = data.phraseCounter || 0;
 
-                if (clearAllBtn.dataset.undoMode === 'true') {
-                    console.log('[YD-SQ] Режим Вернуть');
-                    // Режим "Вернуть" - восстанавливаем состояние
-                    if (clearAllUndoState) {
-                        selections.clear();
-                        for (const [key, val] of clearAllUndoState) {
-                            selections.set(key, val);
-                        }
-
-                        // Восстанавливаем чекбоксы
-                        for (const sel of selections.values()) {
-                            if (sel.pageKey === currentPageKey && sel.rowId) {
-                                ensureRowChecked(sel.rowId);
+                            // Восстановить selections
+                            if (data.selections) {
+                                selections.clear();
+                                for (const [key, val] of Object.entries(data.selections)) {
+                                    selections.set(key, val);
+                                }
                             }
+
+                            rebuildCampaignMinusList();
                         }
-
-                        syncLocalToGlobal();
-                        updateUI();
-                        showYdsqNotification('Очистка отменена', 'success');
+                    } catch (err) {
+                        console.error('[YD-SQ] Ошибка загрузки состояния:', err);
                     }
-                    resetClearAllButton();
-                } else {
-                    console.log('[YD-SQ] Режим Очистить');
-                    // Режим "Очистить"
-                    if (selections.size === 0) {
-                        console.log('[YD-SQ] Нет выделений');
-                        showYdsqNotification('Нет выделений для очистки', 'info');
-                        return;
-                    }
-
-                    console.log('[YD-SQ] Сохраняем состояние, размер:', selections.size);
-                    // Сохраняем состояние
-                    clearAllUndoState = new Map(selections);
-
-                    console.log('[YD-SQ] Снимаем чекбоксы');
-                    // Снимаем чекбоксы для текущей страницы
-                    for (const sel of selections.values()) {
-                        if (sel.pageKey === currentPageKey && sel.rowId) {
-                            const cb = getRowCheckbox(sel.rowId);
-                            if (cb && cb.checked) {
-                                clickCheckbox(cb, false);
-                                delete cb.dataset.ydAuto;
-                            }
-                        }
-                    }
-
-                    console.log('[YD-SQ] Очищаем selections');
-                    selections.clear();
-                    pushUndo('clear_all', 'Очищены все выделения');
-                    syncLocalToGlobal();
-                    console.log('[YD-SQ] Вызываем updateUI');
-                    updateUI();
-                    console.log('[YD-SQ] Переключаем кнопку');
-
-                    // Переключаем кнопку в режим "Вернуть"
-                    clearAllBtn.textContent = 'Вернуть ↩';
-                    clearAllBtn.dataset.undoMode = 'true';
-                    clearAllBtn.style.background = '#e6f7ff';
-                    clearAllBtn.style.color = '#1890ff';
-                    console.log('[YD-SQ] Готово');
-                }
-            }
-
-            // Кнопка "Очистить импортированные"
-            const clearImpBtn = e.target.closest('#yd-sq-clear-imported');
-            if (clearImpBtn) {
-                if (importedMinuses.length === 0) {
-                    showYdsqNotification('Список импортированных пуст', 'info');
-                    return;
                 }
 
-                if (clearImpBtn.dataset.confirming === 'true') {
-                    // Второе нажатие - выполняем очистку
-                    importedMinuses = [];
-                    syncLocalToGlobal();
-                    updateHighlights();
-                    updateUI();
-                    showYdsqNotification('Список импортированных очищен', 'success');
+                function syncLocalToGlobal() {
+                    try {
+                        const campaignId = getCampaignId();
+                        const key = `yd-sq-state-global:${campaignId}`;
 
-                    // Сброс кнопки
-                    clearImpBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
-                    delete clearImpBtn.dataset.confirming;
-                    clearImpBtn.style.background = '';
-                    clearImpBtn.style.color = '';
-                } else {
-                    // Первое нажатие - запрашиваем подтверждение
-                    clearImpBtn.dataset.confirming = 'true';
-                    const originalHtml = clearImpBtn.innerHTML;
-                    clearImpBtn.textContent = 'Точно?';
-                    clearImpBtn.style.background = '#ff4d4f';
-                    clearImpBtn.style.color = 'white';
+                        const selectionsObj = {};
+                        for (const [k, v] of selections) {
+                            selectionsObj[k] = v;
+                        }
 
-                    // Сброс через 3 секунды
+                        const data = {
+                            selections: selectionsObj,
+                            phraseCounter: phraseCounter,
+                            sentHistory: sentHistory,
+                            importedMinuses: importedMinuses,
+                            panelPosition: panelPosition
+                        };
+
+                        localStorage.setItem(key, JSON.stringify(data));
+                    } catch (err) {
+                        console.error('[YD-SQ] Ошибка сохранения состояния:', err);
+                    }
+                }
+
+                function rebuildCampaignMinusList() {
+                    campaignMinusList.clear();
+                    for (const imp of importedMinuses) {
+                        campaignMinusList.add(imp.raw);
+                    }
+                }
+
+
+
+                // ==================== УВЕДОМЛЕНИЯ ====================
+
+                function showYdsqNotification(message, type = 'info') {
+                    const notification = document.createElement('div');
+                    notification.className = `yd-sq-notification yd-sq-notification-${type}`;
+                    notification.textContent = message;
+
+                    document.body.appendChild(notification);
+
                     setTimeout(() => {
-                        if (clearImpBtn.dataset.confirming === 'true') {
-                            clearImpBtn.innerHTML = originalHtml;
-                            delete clearImpBtn.dataset.confirming;
-                            clearImpBtn.style.background = '';
-                            clearImpBtn.style.color = '';
-                        }
-                    }, 3000);
+                        notification.classList.add('yd-sq-notification-show');
+                    }, 10);
+
+                    setTimeout(() => {
+                        notification.classList.remove('yd-sq-notification-show');
+                        setTimeout(() => notification.remove(), 300);
+                    }, 4000);
                 }
-            }
-        });
-    }
 
-    function setupMinusModalObserver() {
-        const observer = new MutationObserver(() => {
-            const textarea = findMinusPhrasesTextarea();
-            if (textarea && !textarea.dataset.ydSqObserved) {
-                textarea.dataset.ydSqObserved = 'true';
-                syncCampaignDataFromTextarea(textarea);
+                // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
 
-                textarea.addEventListener('input', () => {
-                    syncCampaignDataFromTextarea(textarea);
-                });
+                let clearAllUndoState = null;
 
-                textarea.addEventListener('change', () => {
-                    syncCampaignDataFromTextarea(textarea);
-                });
-            }
-        });
+                function resetClearAllButton() {
+                    const btn = document.getElementById('yd-sq-clear-all');
+                    if (btn && btn.dataset.undoMode === 'true') {
+                        btn.textContent = 'Очистить все';
+                        delete btn.dataset.undoMode;
+                        btn.style.background = '';
+                        btn.style.color = '';
+                        clearAllUndoState = null;
+                    }
+                }
 
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
+                function setupGlobalListeners() {
+                    // Скролл пользователя
+                    window.addEventListener('scroll', () => {
+                        lastManualScrollTime = Date.now();
+                    }, { passive: true });
 
-    function findMinusPhrasesTextarea() {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        for (const dialog of dialogs) {
-            const title = dialog.querySelector('h3, .title, [class*="Title"]');
-            if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
-                return dialog.querySelector('textarea');
-            }
-        }
-        return null;
-    }
+                    // Завершение фразы при клике вне слов активной строки
+                    document.addEventListener('click', (e) => {
+                        if (phraseInProgress) {
+                            // Ignore clicks on phrase buttons
+                            if (e.target.closest('.yd-phrase-actions')) return;
 
-    function syncCampaignDataFromTextarea(textarea) {
-        const text = textarea.value || '';
-        const phrases = normalizeMinusInput(text);
+                            // Check if click is on a word
+                            const clickedWord = e.target.closest('.yd-word');
+                            if (clickedWord) return;
 
-        const existingMap = new Map(importedMinuses.map(m => [m.raw, m]));
-        const newImported = [];
-        let changed = false;
+                            // Check if click is inside the active row
+                            const clickedRow = e.target.closest('[data-yd-row-id]');
+                            if (clickedRow && clickedRow.dataset.ydRowId === phraseInProgress.rowId) {
+                                // Click inside active row but not on a word - ignore
+                                return;
+                            }
 
-        for (const phrase of phrases) {
-            if (existingMap.has(phrase)) {
-                newImported.push(existingMap.get(phrase));
-            } else {
-                newImported.push({
-                    id: `imp:${Date.now()}_${Math.random()}`,
-                    raw: phrase,
-                    importedAt: Date.now()
-                });
-                changed = true;
-            }
-        }
+                            // Click is outside active row - show confirm
+                            if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
+                                cancelPhraseBuilding();
+                            }
+                        }
+                    });
 
-        if (newImported.length !== importedMinuses.length) {
-            changed = true;
-        }
+                    // Клавиши
+                    document.addEventListener('keydown', (e) => {
+                        if (phraseInProgress) {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                finalizePhraseBuilding(false);
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                cancelPhraseBuilding();
+                            }
+                        }
+                    });
 
-        if (changed) {
-            importedMinuses = newImported;
-            syncLocalToGlobal();
-            rebuildCampaignMinusList();
-            updateHighlights();
-            updateUI();
-        }
-    }
+                    // Делегирование для кнопок панели
+                    document.body.addEventListener('click', (e) => {
+                        // Кнопка "Очист ить все"
+                        const clearAllBtn = e.target.closest('#yd-sq-clear-all');
+                        if (clearAllBtn) {
+                            console.log('[YD-SQ] Кнопка "Очистить все" нажата');
+                            console.log('[YD-SQ] undoMode:', clearAllBtn.dataset.undoMode);
+                            console.log('[YD-SQ] selections.size:', selections.size);
 
-    // ==================== CSS СТИЛИ ====================
+                            if (clearAllBtn.dataset.undoMode === 'true') {
+                                console.log('[YD-SQ] Режим Вернуть');
+                                // Режим "Вернуть" - восстанавливаем состояние
+                                if (clearAllUndoState) {
+                                    selections.clear();
+                                    for (const [key, val] of clearAllUndoState) {
+                                        selections.set(key, val);
+                                    }
 
-    function injectStyles() {
-        if (document.getElementById('yd-sq-styles')) return;
+                                    // Восстанавливаем чекбоксы
+                                    for (const sel of selections.values()) {
+                                        if (sel.pageKey === currentPageKey && sel.rowId) {
+                                            ensureRowChecked(sel.rowId);
+                                        }
+                                    }
 
-        const style = document.createElement('style');
-        style.id = 'yd-sq-styles';
-        style.textContent = `
+                                    syncLocalToGlobal();
+                                    updateUI();
+                                    showYdsqNotification('Очистка отменена', 'success');
+                                }
+                                resetClearAllButton();
+                            } else {
+                                console.log('[YD-SQ] Режим Очистить');
+                                // Режим "Очистить"
+                                if (selections.size === 0) {
+                                    console.log('[YD-SQ] Нет выделений');
+                                    showYdsqNotification('Нет выделений для очистки', 'info');
+                                    return;
+                                }
+
+                                console.log('[YD-SQ] Сохраняем состояние, размер:', selections.size);
+                                // Сохраняем состояние
+                                clearAllUndoState = new Map(selections);
+
+                                console.log('[YD-SQ] Снимаем чекбоксы');
+                                // Снимаем чекбоксы для текущей страницы
+                                for (const sel of selections.values()) {
+                                    if (sel.pageKey === currentPageKey && sel.rowId) {
+                                        const cb = getRowCheckbox(sel.rowId);
+                                        if (cb && cb.checked) {
+                                            clickCheckbox(cb, false);
+                                            delete cb.dataset.ydAuto;
+                                        }
+                                    }
+                                }
+
+                                console.log('[YD-SQ] Очищаем selections');
+                                selections.clear();
+                                pushUndo('clear_all', 'Очищены все выделения');
+                                syncLocalToGlobal();
+                                console.log('[YD-SQ] Вызываем updateUI');
+                                updateUI();
+                                console.log('[YD-SQ] Переключаем кнопку');
+
+                                // Переключаем кнопку в режим "Вернуть"
+                                clearAllBtn.textContent = 'Вернуть ↩';
+                                clearAllBtn.dataset.undoMode = 'true';
+                                clearAllBtn.style.background = '#e6f7ff';
+                                clearAllBtn.style.color = '#1890ff';
+                                console.log('[YD-SQ] Готово');
+                            }
+                        }
+
+                        // Кнопка "Очистить импортированные"
+                        const clearImpBtn = e.target.closest('#yd-sq-clear-imported');
+                        if (clearImpBtn) {
+                            if (importedMinuses.length === 0) {
+                                showYdsqNotification('Список импортированных пуст', 'info');
+                                return;
+                            }
+
+                            if (clearImpBtn.dataset.confirming === 'true') {
+                                // Второе нажатие - выполняем очистку
+                                importedMinuses = [];
+                                syncLocalToGlobal();
+                                updateHighlights();
+                                updateUI();
+                                showYdsqNotification('Список импортированных очищен', 'success');
+
+                                // Сброс кнопки
+                                clearImpBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+                                delete clearImpBtn.dataset.confirming;
+                                clearImpBtn.style.background = '';
+                                clearImpBtn.style.color = '';
+                            } else {
+                                // Первое нажатие - запрашиваем подтверждение
+                                clearImpBtn.dataset.confirming = 'true';
+                                const originalHtml = clearImpBtn.innerHTML;
+                                clearImpBtn.textContent = 'Точно?';
+                                clearImpBtn.style.background = '#ff4d4f';
+                                clearImpBtn.style.color = 'white';
+
+                                // Сброс через 3 секунды
+                                setTimeout(() => {
+                                    if (clearImpBtn.dataset.confirming === 'true') {
+                                        clearImpBtn.innerHTML = originalHtml;
+                                        delete clearImpBtn.dataset.confirming;
+                                        clearImpBtn.style.background = '';
+                                        clearImpBtn.style.color = '';
+                                    }
+                                }, 3000);
+                            }
+                        }
+                    });
+                }
+
+                function setupMinusModalObserver() {
+                    const observer = new MutationObserver(() => {
+                        const textarea = findMinusPhrasesTextarea();
+                        if (textarea && !textarea.dataset.ydSqObserved) {
+                            textarea.dataset.ydSqObserved = 'true';
+                            syncCampaignDataFromTextarea(textarea);
+
+                            textarea.addEventListener('input', () => {
+                                syncCampaignDataFromTextarea(textarea);
+                            });
+
+                            textarea.addEventListener('change', () => {
+                                syncCampaignDataFromTextarea(textarea);
+                            });
+                        }
+                    });
+
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+
+                function findMinusPhrasesTextarea() {
+                    const dialogs = document.querySelectorAll('[role="dialog"]');
+                    for (const dialog of dialogs) {
+                        const title = dialog.querySelector('h3, .title, [class*="Title"]');
+                        if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
+                            return dialog.querySelector('textarea');
+                        }
+                    }
+                    return null;
+                }
+
+                function syncCampaignDataFromTextarea(textarea) {
+                    const text = textarea.value || '';
+                    const phrases = normalizeMinusInput(text);
+
+                    const existingMap = new Map(importedMinuses.map(m => [m.raw, m]));
+                    const newImported = [];
+                    let changed = false;
+
+                    for (const phrase of phrases) {
+                        if (existingMap.has(phrase)) {
+                            newImported.push(existingMap.get(phrase));
+                        } else {
+                            newImported.push({
+                                id: `imp:${Date.now()}_${Math.random()}`,
+                                raw: phrase,
+                                importedAt: Date.now()
+                            });
+                            changed = true;
+                        }
+                    }
+
+                    if (newImported.length !== importedMinuses.length) {
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        importedMinuses = newImported;
+                        syncLocalToGlobal();
+                        rebuildCampaignMinusList();
+                        updateHighlights();
+                        updateUI();
+                    }
+                }
+
+                // ==================== CSS СТИЛИ ====================
+
+                function injectStyles() {
+                    if (document.getElementById('yd-sq-styles')) return;
+
+                    const style = document.createElement('style');
+                    style.id = 'yd-sq-styles';
+                    style.textContent = `
             /* ПАНЕЛЬ */
             #yd-sq-panel {
                 position: fixed;
@@ -3080,18 +2742,19 @@
             }
         `;
 
-        document.head.appendChild(style);
-    }
+                    document.head.appendChild(style);
+                }
 
-    // ==================== ЗАПУСК ====================
+                // ==================== ЗАПУСК ====================
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', init);
+                } else {
+                    init();
+                }
 
-})();
+            }) ();
+
 
 
 
