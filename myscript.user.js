@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.61
+// @version 0.121.62
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -69,6 +69,7 @@
         }
 
         loadGlobalState();
+        setupGlobalListeners();
         detectPageChange();
         waitForTableAndInit();
     }
@@ -118,7 +119,6 @@
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
-            setupGlobalListeners();
             updateHighlights();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
@@ -3167,6 +3167,7 @@
     }
 
 })();
+
 
 
 
