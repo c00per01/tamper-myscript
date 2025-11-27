@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.50
+// @version 0.121.51
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -12,7 +12,7 @@
 (function () {
     'use strict';
     let inited = false;
-    let currentPageKey = null; // Will be set in init()
+    let currentPageKey = 'page:1:default';
     let selections = new Map();
     let phraseCounter = 0;
     let phraseInProgress = null;
@@ -69,7 +69,6 @@
         }
 
         loadGlobalState();
-        currentPageKey = getCurrentPageKey(); // Initialize correctly
         detectPageChange();
         waitForTableAndInit();
     }
@@ -199,10 +198,6 @@
             delete cb.dataset.ydAuto;
         });
 
-        // Reset "Clear All" button state
-        clearAllUndoState = null;
-        resetClearAllButton();
-
         console.log('[YD-SQ] Состояние страницы очищено');
     }
 
@@ -226,11 +221,9 @@
 
     function getCurrentPageKey() {
         const params = new URLSearchParams(window.location.search);
-        const page = params.get('page') || params.get('p') || '1';
+        const page = params.get('page') || '1';
         const tab = params.get('tab') || 'default';
-        // Add hash to detect SPA navigation if params don't change
-        const hash = window.location.hash;
-        return `page:${page}:${tab}:${hash}`;
+        return `page:${page}:${tab}`;
     }
 
     function getCampaignId() {
@@ -478,13 +471,13 @@
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
 
-        // 🛑 ISOLATION LOCKDOWN: Блокировка импортированных минус-слов
-        if (targetSpan.classList.contains('yd-imported-minus')) {
-            e.stopPropagation();
+        const span = targetSpan;
+
+        // Блокировка клика по импортированным минусам
+        if (span.classList.contains('yd-imported-minus')) {
             return;
         }
 
-        const span = targetSpan;
         const stem = span.dataset.stem;
         const wordLower = span.dataset.wordLower;
         const word = span.dataset.word;
@@ -586,13 +579,13 @@
     function onWordDoubleClick(e, targetSpan) {
         e.stopPropagation();
 
-        // 🛑 ISOLATION LOCKDOWN: Блокировка импортированных минус-слов
-        if (targetSpan.classList.contains('yd-imported-minus')) {
-            e.stopPropagation();
+        const span = targetSpan;
+
+        // Блокировка клика по импортированным минусам
+        if (span.classList.contains('yd-imported-minus')) {
             return;
         }
 
-        const span = targetSpan;
         const word = span.dataset.word;
         const rowId = span.dataset.rowId;
 
@@ -997,13 +990,19 @@
 
     // ==================== HIGHLIGHTS ====================
 
-    // ==================== HIGHLIGHTS ====================
+    // Cache for parsed rules to avoid re-parsing on every update
+    let cachedImportedRules = null;
+    let lastImportedMinusesRef = null;
 
     function updateHighlights() {
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
             sp.className = 'yd-word'; // Reset to base class
+            // Restore original classes if any? 
+            // Actually wordSpans only have 'yd-word' initially.
+            // But wait, if we have other classes?
+            // Safer to remove specific classes.
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
@@ -1015,14 +1014,18 @@
         }
 
         // 2. Prepare Rules
-        // Always parse to avoid stale cache issues with mutated arrays
-        const rules = importedMinuses.map(imp => {
-            const r = parseMinusRule(imp.raw);
-            r.source = 'imported';
-            return r;
-        });
+        // Check if importedMinuses array reference changed
+        if (lastImportedMinusesRef !== importedMinuses) {
+            cachedImportedRules = importedMinuses.map(imp => {
+                const r = parseMinusRule(imp.raw);
+                r.source = 'imported';
+                return r;
+            });
+            lastImportedMinusesRef = importedMinuses;
+        }
 
-        console.log('[YD-SQ] updateHighlights: rules count:', rules.length, 'importedMinuses count:', importedMinuses.length);
+        // Combine cached imported rules with current selections
+        const rules = [...(cachedImportedRules || [])];
 
         for (const sel of selections.values()) {
             if (sel.display) {
@@ -1162,12 +1165,6 @@
                 if (isMatch) {
                     for (const idx of matchedIndices) {
                         const span = rowWordsData[idx].span;
-
-                        // 🛑 PROTECTION: Skip coloring if already imported
-                        if (span.classList.contains('yd-imported-minus')) {
-                            continue;
-                        }
-
                         if (rule.type === 'broad' && strictIndices.has(idx)) {
                             span.classList.add('yd-selected-strict');
                         } else {
@@ -2947,8 +2944,12 @@
                 background: rgba(0, 0, 0, 0.04) !important;
                 color: #aaa !important;
                 text-decoration: none !important;
-                opacity: 0.8;
-                cursor: default;
+                cursor: default !important;
+            }
+
+            .yd-imported-minus::after, .yd-imported-minus::before {
+                content: none !important;
+                display: none !important;
             }
 
             .yd-row-deactivated {
@@ -3091,11 +3092,6 @@
     }
 
 })();
-
-
-
-
-
 
 
 
