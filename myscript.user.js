@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.57
+// @version 0.121.58
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -20,7 +20,6 @@
     let importedMinuses = [];
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
-    let lastSentCount = 0; // Количество элементов в последней отправке
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
@@ -199,11 +198,7 @@
             delete cb.dataset.ydAuto;
         });
 
-        // Сбросить кнопку "Очистить все" если она в режиме Undo
         resetClearAllButton();
-
-        // Сбросить счетчик отправленных элементов
-        lastSentCount = 0;
 
         console.log('[YD-SQ] Состояние страницы очищено');
     }
@@ -2109,9 +2104,6 @@
         if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
         if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
 
-        // Сохраняем количество для уведомления после успешной отправки
-        lastSentCount = values.length;
-
         // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
         const rowsWithSelections = new Set();
         selections.forEach(sel => {
@@ -2298,6 +2290,8 @@
         return null;
     }
 
+    let lastResultPopupSuccessTime = 0;
+
     function tryCloseResultPopup() {
         const pop = findResultPopup();
         if (!pop) return false;
@@ -2308,15 +2302,20 @@
         if (ok) {
             ok.click();
 
+            // Prevent double success logic (debounce 2 seconds)
+            if (Date.now() - lastResultPopupSuccessTime < 2000) return true;
+            lastResultPopupSuccessTime = Date.now();
+
             // После успешного сохранения очищаем selections и показываем уведомление
             setTimeout(() => {
-                const count = lastSentCount; // Используем сохраненное значение
-                selections.clear();
-                syncLocalToGlobal();
-                resetClearAllButton();
-                updateUI();
-                showYdsqNotification(`Отправлено ${count} минусов`, 'success');
-                lastSentCount = 0; // Сбрасываем после использования
+                const count = selections.size;
+                if (count > 0) {
+                    selections.clear();
+                    syncLocalToGlobal();
+                    resetClearAllButton();
+                    updateUI();
+                    showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+                }
             }, 100);
 
             return true;
