@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.58
+// @version 0.121.59
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -16,7 +16,6 @@
     let selections = new Map();
     let phraseCounter = 0;
     let phraseInProgress = null;
-    let sentHistory = [];
     let importedMinuses = [];
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
@@ -1438,30 +1437,6 @@
         }
     }
 
-    // ==================== ИСТОРИЯ И ИМПОРТ ====================
-
-    function addToSentHistory(display, matchType, pageNumbers = []) {
-        const existing = sentHistory.find(s => s.raw === display);
-
-        if (existing) {
-            existing.count++;
-            existing.lastSentAt = Date.now();
-            existing.pageNumbers = [...new Set([...existing.pageNumbers, ...pageNumbers])];
-        } else {
-            sentHistory.push({
-                id: `sent:${Date.now()}_${Math.random()}`,
-                raw: display,
-                matchType: matchType,
-                firstSentAt: Date.now(),
-                lastSentAt: Date.now(),
-                count: 1,
-                pageNumbers: pageNumbers,
-                status: 'confirmed'
-            });
-        }
-
-        syncLocalToGlobal();
-    }
 
     // ==================== SMART DATA PIPELINE ====================
 
@@ -1672,21 +1647,7 @@
         }
     }
 
-    function clearImportedMinuses() {
-        if (importedMinuses.length === 0) {
-            showYdsqNotification('Список импортированных пуст', 'info');
-            return;
-        }
 
-        const confirmed = confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`);
-        if (!confirmed) return;
-
-        importedMinuses = [];
-        syncLocalToGlobal();
-        updateHighlights();
-        updateUI();
-        showYdsqNotification('Список импортированных очищен', 'success');
-    }
 
     // ==================== UI ПАНЕЛЬ ====================
 
@@ -1711,14 +1672,6 @@
                         Выбранные сейчас (<span id="yd-sq-global-count">0</span>)
                     </div>
                     <div id="yd-sq-list" class="yd-sq-list"></div>
-                </div>
-
-                <div class="yd-sq-section">
-                    <div class="yd-sq-section-title">
-                        📤 История отправлений (<span id="yd-sq-sent-count">0</span>)
-                        <button id="yd-sq-sent-toggle" class="yd-sq-expand-btn">▼</button>
-                    </div>
-                    <div id="yd-sq-sent-list" class="yd-sq-list" style="display:none;"></div>
                 </div>
 
                 <div class="yd-sq-section">
@@ -1770,18 +1723,6 @@
             }
         });
 
-        document.getElementById('yd-sq-sent-toggle').addEventListener('click', () => {
-            const list = document.getElementById('yd-sq-sent-list');
-            const btn = document.getElementById('yd-sq-sent-toggle');
-            if (list.style.display === 'none') {
-                list.style.display = '';
-                btn.textContent = '▲';
-            } else {
-                list.style.display = 'none';
-                btn.textContent = '▼';
-            }
-        });
-
         document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
             const list = document.getElementById('yd-sq-imported-list');
             const btn = document.getElementById('yd-sq-imported-toggle');
@@ -1795,8 +1736,6 @@
         });
 
         document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
-
-        document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
 
         document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
 
@@ -1845,7 +1784,6 @@
     function updateUI() {
         updateHighlights();
         renderSelectionList();
-        renderSentHistory();
         renderImportedMinuses();
         updateUndoRedoButtons();
     }
@@ -1917,46 +1855,6 @@
         container.scrollTop = container.scrollHeight;
     }
 
-    function renderSentHistory() {
-        const container = document.getElementById('yd-sq-sent-list');
-        const countIndicator = document.getElementById('yd-sq-sent-count');
-
-        countIndicator.textContent = sentHistory.length;
-
-        if (sentHistory.length === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">История пуста</div>';
-            return;
-        }
-
-        const sorted = [...sentHistory].sort((a, b) => b.lastSentAt - a.lastSentAt);
-
-        container.innerHTML = sorted.map((sent, idx) => {
-            const date = new Date(sent.lastSentAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-            const pages = sent.pageNumbers.length > 0 ? `на стр. ${sent.pageNumbers.join(', ')}` : '';
-
-            return `
-                <div class="yd-sq-item yd-sq-item-sent" data-sent-idx="${idx}">
-                    <div class="yd-sq-left">
-                        <span class="yd-sq-checkmark">✓</span>
-                    </div>
-                    <div class="yd-sq-mid">
-                        <span class="yd-sq-item-text">${escapeHtml(sent.raw)}</span>
-                        <span class="yd-sq-page-hint">×${sent.count} (${date}) ${pages}</span>
-                    </div>
-                    <div class="yd-sq-right">
-                        <button class="yd-sq-item-remove" data-sent-idx="${idx}" title="Удалить из истории">×</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
-            const idx = parseInt(btn.dataset.sentIdx);
-            sentHistory.splice(idx, 1);
-            syncLocalToGlobal();
-            updateUI();
-        });
-    }
 
     function renderImportedMinuses() {
         const container = document.getElementById('yd-sq-imported-list');
@@ -1992,6 +1890,7 @@
             const idx = parseInt(btn.dataset.impIdx);
             importedMinuses.splice(idx, 1);
             syncLocalToGlobal();
+            rebuildCampaignMinusList();
             updateHighlights();
             renderImportedMinuses();
         });
@@ -2257,7 +2156,7 @@
 
         if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
-        // --- Integration of myscript features (History & Imported) ---
+        // --- Integration of myscript features (Imported) ---
         // Add to "In Campaign" list
         for (const val of values) {
             if (!importedMinuses.some(imp => imp.raw === val)) {
@@ -2267,12 +2166,6 @@
                     importedAt: Date.now()
                 });
             }
-        }
-
-        // Add to history
-        const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        for (const val of values) {
-            addToSentHistory(val, null, [currentPage]);
         }
 
         // НЕ очищаем selections здесь - это будет сделано в tryCloseResultPopup после успешного сохранения
@@ -2341,7 +2234,6 @@
 
             if (stored) {
                 const data = JSON.parse(stored);
-                sentHistory = data.sentHistory || [];
                 importedMinuses = data.importedMinuses || [];
                 panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
                 phraseCounter = data.phraseCounter || 0;
@@ -2374,7 +2266,6 @@
             const data = {
                 selections: selectionsObj,
                 phraseCounter: phraseCounter,
-                sentHistory: sentHistory,
                 importedMinuses: importedMinuses,
                 panelPosition: panelPosition
             };
@@ -2557,6 +2448,7 @@
                     // Второе нажатие - выполняем очистку
                     importedMinuses = [];
                     syncLocalToGlobal();
+                    rebuildCampaignMinusList();
                     updateHighlights();
                     updateUI();
                     showYdsqNotification('Список импортированных очищен', 'success');
@@ -3167,6 +3059,7 @@
     }
 
 })();
+
 
 
 
