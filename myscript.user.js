@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.77
+// @version 0.121.78
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1910,8 +1910,8 @@
     }
 
     async function fillMinusModal(values) {
-        // Увеличиваем задержку, чтобы модалка точно отрисовалась
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Увеличиваем задержку для полной загрузки модалки
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         // Ищем модалку
         const modal = document.querySelector('[role="dialog"], .modal, .popup');
@@ -1920,47 +1920,84 @@
             return 0;
         }
 
-        console.log('[YD-SQ] Модалка найдена:', modal);
+        console.log('[YD-SQ] Модалка найдена, ищем поля...');
 
-        // Ищем все текстовые поля в модалке (расширенный поиск как в старой версии)
+        // Расширенный поиск полей (как в старом коде)
         const textareas = modal.querySelectorAll('textarea.textarea__control, textarea');
         const textInputs = modal.querySelectorAll('input.text-input__control, input[type="text"]');
         const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
         const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
 
-        const allInputs = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
-        const uniqueInputs = [...new Set(allInputs)];
+        const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
+        const uniq = [...new Set(all)];
 
-        // Фильтруем только видимые поля
-        const visibleInputs = uniqueInputs.filter(el => {
-            const rect = el.getBoundingClientRect();
-            const style = getComputedStyle(el);
-            return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+        // Фильтруем только видимые элементы
+        const inputs = uniq.filter(el => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
         });
 
-        console.log(`[YD-SQ] Найдено полей в модалке: ${visibleInputs.length}`);
+        console.log(`[YD-SQ] Найдено полей в модалке: ${inputs.length}`);
 
-        const filledCount = Math.min(values.length, visibleInputs.length);
+        // Если поля не найдены сразу - ждем еще
+        if (inputs.length === 0) {
+            console.log('[YD-SQ] Поля не найдены, ждем еще 500ms...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Повторный поиск
+            const textareas2 = modal.querySelectorAll('textarea.textarea__control, textarea');
+            const textInputs2 = modal.querySelectorAll('input.text-input__control, input[type="text"]');
+            const otherInputs2 = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
+            const contentEditables2 = modal.querySelectorAll('[contenteditable="true"]');
+
+            const all2 = [...textareas2, ...textInputs2, ...otherInputs2, ...contentEditables2];
+            const uniq2 = [...new Set(all2)];
+            const inputs2 = uniq2.filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+            });
+
+            console.log(`[YD-SQ] После повторного поиска найдено: ${inputs2.length}`);
+
+            if (inputs2.length === 0) {
+                console.error('[YD-SQ] Поля так и не найдены');
+                return 0;
+            }
+
+            return await fillFieldsAndSubmit(modal, inputs2, values);
+        }
+
+        return await fillFieldsAndSubmit(modal, inputs, values);
+    }
+
+    async function fillFieldsAndSubmit(modal, inputs, values) {
+        const filledCount = Math.min(values.length, inputs.length);
 
         // Заполняем по одному минусу в поле
         for (let i = 0; i < filledCount; i++) {
-            const input = visibleInputs[i];
+            const el = inputs[i];
             const value = values[i];
 
-            // Устанавливаем значение в зависимости от типа элемента
-            if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') {
-                input.value = value;
-            } else if (input.isContentEditable) {
-                input.textContent = value;
+            // Очищаем поле
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.value = '';
+            } else {
+                el.textContent = '';
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+
+            // Заполняем значением
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.value = value;
+            } else {
+                el.textContent = value;
             }
 
-            // Тр игерим все необходимые события
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            input.dispatchEvent(new Event('blur', { bubbles: true }));
-
-            if (input.isContentEditable) {
-                input.dispatchEvent(new Event('keyup', { bubbles: true }));
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            if (el.isContentEditable) {
+                el.dispatchEvent(new Event('keyup', { bubbles: true }));
             }
         }
 
