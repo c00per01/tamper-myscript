@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.70
+// @version 0.121.71
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -504,6 +504,54 @@
 
         queryCell.style.position = 'relative';
         queryCell.appendChild(btn);
+    }
+
+    // ==================== АВТОСКРОЛЛ ====================
+
+    function trackManualScroll() {
+        lastManualScrollTime = Date.now();
+    }
+
+    function autoScrollToRow(rowId) {
+        // Не скроллим, если была ручная прокрутка менее 500ms назад
+        if (Date.now() - lastManualScrollTime < 500) return;
+
+        const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+        if (!row) return;
+
+        const rowRect = row.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+
+        // Скроллим только если строка в нижней 40% экрана или вне видимости
+        const rowCenter = rowRect.top + rowRect.height / 2;
+        if (rowCenter > viewportHeight * 0.6 || rowCenter < 0) {
+            // Позиционируем строку на 30% от верха экрана (вместо 50%)
+            const targetY = rowRect.top + window.scrollY - viewportHeight * 0.3;
+            window.scrollTo({
+                top: targetY,
+                behavior: 'smooth'
+            });
+        }
+    }
+
+    // Отслеживаем ручную прокрутку
+    document.addEventListener('scroll', trackManualScroll, { passive: true });
+    document.addEventListener('wheel', trackManualScroll, { passive: true });
+    document.addEventListener('touchmove', trackManualScroll, { passive: true });
+
+    function debounceAutoScroll(rowId, delay = 180) {
+        // Clear existing timeout for this row
+        if (autoScrollDebounceMap.has(rowId)) {
+            clearTimeout(autoScrollDebounceMap.get(rowId));
+        }
+
+        // Set new timeout
+        const timeoutId = setTimeout(() => {
+            autoScrollToRow(rowId);
+            autoScrollDebounceMap.delete(rowId);
+        }, delay);
+
+        autoScrollDebounceMap.set(rowId, timeoutId);
     }
 
     // ==================== ВЗАИМОДЕЙСТВИЕ С СЛОВАМИ ====================
@@ -3274,6 +3322,7 @@
     }
 
 })();
+
 
 
 
