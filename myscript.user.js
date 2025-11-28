@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.79
+// @version 0.121.80
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2194,83 +2194,99 @@
     }
 
     async function sendToMinusPhrases() {
-        if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
-        if (isSending) return;
-        isSending = true;
-        console.log('[YD SQ] === ОТПРАВКА ===');
-        await delay(150);
-
-        const values = [];
-        const unassigned = [];
-        selections.forEach(sel => {
-            if (!sel.unassignedOnThisPage) values.push(sel.display);
-            else unassigned.push(sel.raw);
-        });
-
-        if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
-        if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
-
-        // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
-        const rowsWithSelections = new Set();
-        selections.forEach(sel => {
-            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                rowsWithSelections.add(sel.rowId);
-            }
-        });
-
-        const allRows = getAllRowsOnPage();
-        allRows.forEach(row => {
-            const cb = row.querySelector('input[type="checkbox"]');
-            const rowId = row.dataset.ydRowId;
-            if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
-                // Снять чекбокс, если строка не содержит selections
-                clickCheckbox(cb, false);
-                delete cb.dataset.ydAuto;
-                delete row.dataset.ydAutoRow;
-            }
-        });
-
-        const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        const neededTotal = values.length;
-        totalPlannedMinuses = neededTotal;
-
-        const deficit = neededTotal - checkedCount;
-        if (deficit > 0) {
-            createVirtualRows(deficit);
-        }
-
-        await delay(250);
-
-        // Проверка общего количества чекбоксов (реальные + виртуальные)
-        const allChecked = document.querySelectorAll('table tbody input[type="checkbox"]:checked').length;
-
-        if (values.length > allChecked) {
-            showYdsqNotification(`Ошибка: недостаточно строк (нужно ${values.length}, есть ${allChecked})`, 'error');
-            removeVirtualRows();
-            totalPlannedMinuses = 0;
-            isSending = false;
-            return;
-        }
-
-        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
-        if (!addBtn) {
-            showYdsqNotification('Кнопка не найдена', 'error');
-            removeVirtualRows();
-            totalPlannedMinuses = 0;
-            isSending = false;
-            return;
-        }
-
-        addBtn.click();
-
         try {
-            await waitForMinusModal(values);
-        } catch (error) {
-            console.error('[YD SQ] Ошибка:', error);
-            showYdsqNotification('Ошибка при обработке окна', 'error');
-        } finally {
-            setTimeout(() => { isSending = false; }, 500);
+            if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
+            if (isSending) return;
+            isSending = true;
+            console.log('[YD SQ] === ОТПРАВКА ===');
+            await delay(150);
+
+            const values = [];
+            const unassigned = [];
+            selections.forEach(sel => {
+                if (!sel.unassignedOnThisPage) values.push(sel.display);
+                else unassigned.push(sel.raw);
+            });
+            console.log(`[YD SQ] Подготовлено ${values.length} фраз`);
+
+            if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
+            if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
+
+            // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
+            const rowsWithSelections = new Set();
+            selections.forEach(sel => {
+                if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                    rowsWithSelections.add(sel.rowId);
+                }
+            });
+
+            console.log('[YD SQ] Синхронизация чекбоксов...');
+            const allRows = getAllRowsOnPage();
+            console.log(`[YD SQ] Найдено ${allRows.length} строк`);
+
+            allRows.forEach(row => {
+                const cb = row.querySelector('input[type="checkbox"]');
+                const rowId = row.dataset.ydRowId;
+                if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
+                    // Снять чекбокс, если строка не содержит selections
+                    clickCheckbox(cb, false);
+                    delete cb.dataset.ydAuto;
+                    delete row.dataset.ydAutoRow;
+                }
+            });
+
+            const rows = getAllRowsOnPage();
+            let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+            const neededTotal = values.length;
+            totalPlannedMinuses = neededTotal;
+            console.log(`[YD SQ] Отмечено ${checkedCount}, нужно ${neededTotal}`);
+
+            const deficit = neededTotal - checkedCount;
+            if (deficit > 0) {
+                console.log(`[YD SQ] Создаем ${deficit} виртуальных строк`);
+                createVirtualRows(deficit);
+            }
+
+            await delay(250);
+
+            // Проверка общего количества чекбоксов (реальные + виртуальные)
+            const allChecked = document.querySelectorAll('table tbody input[type="checkbox"]:checked').length;
+            console.log(`[YD SQ] Всего отмечено (включая виртуальные): ${allChecked}`);
+
+            if (values.length > allChecked) {
+                showYdsqNotification(`Ошибка: недостаточно строк (нужно ${values.length}, есть ${allChecked})`, 'error');
+                removeVirtualRows();
+                totalPlannedMinuses = 0;
+                isSending = false;
+                return;
+            }
+
+            const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
+            if (!addBtn) {
+                showYdsqNotification('Кнопка не найдена', 'error');
+                removeVirtualRows();
+                totalPlannedMinuses = 0;
+                isSending = false;
+                return;
+            }
+
+            console.log('[YD SQ] Нажимаем кнопку добавления...');
+            addBtn.click();
+
+            try {
+                await waitForMinusModal(values);
+            } catch (error) {
+                console.error('[YD SQ] Ошибка при ожидании модалки:', error);
+                showYdsqNotification('Ошибка при обработке окна', 'error');
+            } finally {
+                setTimeout(() => { isSending = false; }, 500);
+            }
+        } catch (e) {
+            console.error('[YD SQ] Критическая ошибка в sendToMinusPhrases:', e);
+            showYdsqNotification('Ошибка скрипта при отправке', 'error');
+            isSending = false;
+            removeVirtualRows();
+            totalPlannedMinuses = 0;
         }
     }
 
@@ -3330,6 +3346,7 @@
     }
 
 })();
+
 
 
 
