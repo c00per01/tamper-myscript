@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.69
+// @version 0.121.70
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -168,6 +168,7 @@
                 setTimeout(() => {
                     cleanWordSpans();
                     wrapTableWords(table);
+                    restoreCheckboxes(); // Восстанавливаем чекбоксы после перерисовки таблицы
                     updateHighlights();
                     isWrapping = false;
                 }, 50);
@@ -3273,6 +3274,7 @@
     }
 
 })();
+
 
 
 
