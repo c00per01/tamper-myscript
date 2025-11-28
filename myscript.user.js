@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.80
+// @version 0.121.81
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -19,12 +19,16 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
-    let totalPlannedMinuses = 0; // Общее количество запланированных к отправке минусов
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
+
+    // Virtual rows for sending
+    let totalPlanned = 0; // Планируемое количество минусов к отправке
+    let sentCount = 0; // Фактически отправленное количество
+    let virtualRowsCreated = []; // Массив созданных виртуальных чекбоксов
 
     // Undo/Redo
     let undoStack = {
@@ -1501,6 +1505,252 @@
         return freeRows;
     }
 
+    // ==================== ВИРТУАЛЬНЫЕ СТРОКИ И ОТПРАВКА ====================
+
+    function createVirtualRows(count) {
+        const tbody = document.querySelector('table tbody');
+        if (!tbody) {
+            console.warn('[YD-SQ] tbody не найден, виртуальные строки не созданы');
+            return [];
+        }
+
+        const created = [];
+
+        for (let i = 0; i < count; i++) {
+            const tr = document.createElement('tr');
+            tr.dataset.ydVirtual = "true";
+            tr.style.display = "none";
+
+            const td = document.createElement('td');
+            const cb = document.createElement('input');
+            cb.type = "checkbox";
+            cb.checked = true;
+            cb.dataset.ydVirtual = "true";
+
+            td.appendChild(cb);
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+
+            created.push(cb);
+        }
+
+        console.log(`[YD-SQ] Создано ${count} виртуальных строк`);
+        return created;
+    }
+
+    function removeVirtualRows() {
+        const rows = document.querySelectorAll('tr[data-yd-virtual="true"]');
+        rows.forEach(el => el.remove());
+        virtualRowsCreated = [];
+        console.log(`[YD-SQ] Удалено ${rows.length} виртуальных строк`);
+    }
+
+    async function sendToMinusPhrases() {
+        if (isSending) {
+            showYdsqNotification('Отправка уже выполняется', 'warn');
+            return;
+        }
+
+        if (selections.size === 0) {
+            showYdsqNotification('Нечего отправлять', 'warn');
+            return;
+        }
+
+        isSending = true;
+        totalPlanned = selections.size;
+        sentCount = 0;
+
+        console.log(`[YD-SQ] Начало отправки ${totalPlanned} минусов`);
+
+        // Подготовка минусов
+        const values = Array.from(selections.values()).map(sel => {
+            let raw = sel.raw;
+
+            // Применение типов соответствия
+            if (sel.matchType === 'strict') {
+                raw = '!' + raw;
+            } else if (sel.matchType === 'quote') {
+                raw = '"' + raw + '"';
+            } else if (sel.matchType === 'bracket') {
+                raw = '[' + raw + ']';
+            }
+
+            return raw;
+        });
+
+        // Сохранение минусов для обработки после подтверждения
+        pendingSentMinuses = values.map((raw, idx) => ({
+            raw: Array.from(selections.values())[idx].raw,
+            matchType: Array.from(selections.values())[idx].matchType,
+            addedAt: Date.now()
+        }));
+
+        // Подсчет реальных отмеченных чекбоксов
+        const realChecked = document.querySelectorAll('input[type="checkbox"]:checked:not([data-yd-virtual])').length;
+        const neededTotal = values.length;
+        const deficit = neededTotal - realChecked;
+
+        console.log(`[YD-SQ] Нужно: ${neededTotal}, отмечено: ${realChecked}, дефицит: ${deficit}`);
+
+        // Создание виртуальных строк при необходимости
+        if (deficit > 0) {
+            virtualRowsCreated = createVirtualRows(deficit);
+        }
+
+        // Ждем немного для применения DOM
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Поиск кнопки "Добавить в минус-фразы" Директа
+        const directButton = await findDirectMinusButton();
+
+        if (!directButton) {
+            showYdsqNotification('Кнопка "Добавить в минус-фразы" не найдена', 'error');
+            removeVirtualRows();
+            isSending = false;
+            return;
+        }
+
+        // Клик по кнопке Директа
+        directButton.click();
+        console.log('[YD-SQ] Кнопка Директа нажата, ожидание модалки...');
+
+        // Ожидание появления модалки
+        await waitForModal(values);
+    }
+
+    async function findDirectMinusButton() {
+        // Поиск кнопки с текстом "Добавить в минус-фразы" или похожим
+        const buttons = Array.from(document.querySelectorAll('button, a'));
+        const button = buttons.find(btn => {
+            const text = btn.textContent.toLowerCase();
+            return text.includes('минус-фразы') || text.includes('минус-слова');
+        });
+
+        if (button) {
+            console.log('[YD-SQ] Найдена кнопка:', button.textContent);
+        }
+
+        return button;
+    }
+
+    async function waitForModal(values) {
+        const maxAttempts = 50; // 5 секунд
+        let attempts = 0;
+
+        const checkInterval = setInterval(async () => {
+            attempts++;
+
+            // Поиск модалки (может быть dialog, div с role="dialog", или специфичный класс Директа)
+            const modal = document.querySelector('dialog[open], [role="dialog"], .modal');
+
+            if (modal) {
+                clearInterval(checkInterval);
+                console.log('[YD-SQ] Модалка найдена');
+                await fillMinusModal(modal, values);
+                return;
+            }
+
+            if (attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                console.warn('[YD-SQ] Модалка не появилась');
+                showYdsqNotification('Модалка не появилась, попробуйте снова', 'error');
+                removeVirtualRows();
+                isSending = false;
+            }
+        }, 100);
+    }
+
+    async function fillMinusModal(modal, values) {
+        // Ждем отрисовки модалки
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Поиск полей ввода в модалке
+        const inputs = Array.from(modal.querySelectorAll('input[type="text"], textarea'));
+
+        console.log(`[YD-SQ] Найдено полей в модалке: ${inputs.length}`);
+
+        if (inputs.length === 0) {
+            showYdsqNotification('Поля ввода в модалке не найдены', 'error');
+            removeVirtualRows();
+            isSending = false;
+            return;
+        }
+
+        // Заполнение полей
+        const toFill = Math.min(values.length, inputs.length);
+        sentCount = toFill;
+
+        for (let i = 0; i < toFill; i++) {
+            inputs[i].value = values[i];
+            // Trigger change event
+            inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+            inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        console.log(`[YD-SQ] Заполнено ${sentCount} из ${totalPlanned} минусов`);
+
+        // Установка наблюдателя за закрытием модалки
+        setupModalCloseObserver(modal);
+    }
+
+    function setupModalCloseObserver(modal) {
+        // Отслеживание исчезновения модалки
+        const observer = new MutationObserver(() => {
+            if (!document.contains(modal) || modal.style.display === 'none' || !modal.hasAttribute('open')) {
+                observer.disconnect();
+                handleModalClosed();
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Также отслеживание атрибутов самой модалки
+        observer.observe(modal, { attributes: true });
+    }
+
+    function handleModalClosed() {
+        console.log('[YD-SQ] Модалка закрыта');
+
+        // Небольшая задержка для обработки
+        setTimeout(() => {
+            // Формирование уведомления
+            if (sentCount === totalPlanned) {
+                showYdsqNotification(`Успешно отправлено ${sentCount} из ${totalPlanned} минус-фраз.`, 'success');
+            } else if (sentCount > 0 && sentCount < totalPlanned) {
+                const failed = totalPlanned - sentCount;
+                showYdsqNotification(`Отправлено ${sentCount} из ${totalPlanned} минус-фраз.\n${failed} фраз не удалось отправить.`, 'warn');
+            } else {
+                showYdsqNotification('Не удалось отправить минус-фразы. Попробуйте снова.', 'error');
+            }
+
+            // Очистка
+            removeVirtualRows();
+
+            // Перенос pendingSentMinuses в importedMinuses только при успешной отправке
+            if (sentCount > 0) {
+                pendingSentMinuses.slice(0, sentCount).forEach(minus => {
+                    if (!importedMinuses.find(imp => imp.raw === minus.raw)) {
+                        importedMinuses.push({
+                            raw: minus.raw,
+                            matchType: minus.matchType,
+                            addedAt: minus.addedAt,
+                            deleted: false
+                        });
+                    }
+                });
+
+                rebuildCampaignMinusList();
+                syncLocalToGlobal();
+            }
+
+            pendingSentMinuses = [];
+            isSending = false;
+            totalPlanned = 0;
+            sentCount = 0;
+
+            console.log('[YD-SQ] Отправка завершена');
+        }, 500);
+    }
 
     // ==================== ИСТОРИЯ И ИМПОРТ ====================
 
@@ -2160,133 +2410,91 @@
 
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    function ensureRowChecked(rowId) {
-        const row = document.querySelector(`tr[data-yd-row-id="${rowId}"]`);
-        if (row) {
-            const cb = row.querySelector('input[type="checkbox"]');
-            if (cb) clickCheckbox(cb, true);
-        }
-    }
-
-    function createVirtualRows(count) {
-        const tbody = document.querySelector('table tbody');
-        if (!tbody) return;
-
-        for (let i = 0; i < count; i++) {
-            const tr = document.createElement('tr');
-            tr.dataset.ydVirtual = "true";
-            tr.style.display = "none";
-
-            const td = document.createElement('td');
-            const cb = document.createElement('input');
-            cb.type = "checkbox";
-            cb.checked = true;
-            cb.dataset.ydVirtual = "true";
-
-            td.appendChild(cb);
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-        }
-    }
-
-    function removeVirtualRows() {
-        document.querySelectorAll('tr[data-yd-virtual="true"]').forEach(el => el.remove());
-    }
-
     async function sendToMinusPhrases() {
-        try {
-            if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
-            if (isSending) return;
-            isSending = true;
-            console.log('[YD SQ] === ОТПРАВКА ===');
-            await delay(150);
+        if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
+        if (isSending) return;
+        isSending = true;
+        console.log('[YD SQ] === ОТПРАВКА ===');
+        await delay(150);
 
-            const values = [];
-            const unassigned = [];
-            selections.forEach(sel => {
-                if (!sel.unassignedOnThisPage) values.push(sel.display);
-                else unassigned.push(sel.raw);
-            });
-            console.log(`[YD SQ] Подготовлено ${values.length} фраз`);
+        const values = [];
+        const unassigned = [];
+        selections.forEach(sel => {
+            if (!sel.unassignedOnThisPage) values.push(sel.display);
+            else unassigned.push(sel.raw);
+        });
 
-            if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
-            if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
+        if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
+        if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
 
-            // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
-            const rowsWithSelections = new Set();
-            selections.forEach(sel => {
-                if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                    rowsWithSelections.add(sel.rowId);
-                }
-            });
+        // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
+        const rowsWithSelections = new Set();
+        selections.forEach(sel => {
+            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                rowsWithSelections.add(sel.rowId);
+            }
+        });
 
-            console.log('[YD SQ] Синхронизация чекбоксов...');
-            const allRows = getAllRowsOnPage();
-            console.log(`[YD SQ] Найдено ${allRows.length} строк`);
+        const allRows = getAllRowsOnPage();
+        allRows.forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            const rowId = row.dataset.ydRowId;
+            if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
+                // Снять чекбокс, если строка не содержит selections
+                clickCheckbox(cb, false);
+                delete cb.dataset.ydAuto;
+                delete row.dataset.ydAutoRow;
+            }
+        });
 
-            allRows.forEach(row => {
+        const rows = getAllRowsOnPage();
+        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        const neededTotal = values.length;
+
+        if (checkedCount < neededTotal) {
+            const toReserve = neededTotal - checkedCount;
+            let lastUsedRowId = null;
+            const selsOnPage = Array.from(selections.values()).filter(s => s.pageKey === currentPageKey && !s.unassignedOnThisPage);
+            if (selsOnPage.length > 0) lastUsedRowId = selsOnPage[selsOnPage.length - 1]?.rowId;
+
+            const freeRows = findFreeRows(lastUsedRowId);
+            if (toReserve > freeRows.length) {
+                showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
+                isSending = false;
+                return;
+            }
+
+            let reserved = 0;
+            for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
+                const row = freeRows[i];
                 const cb = row.querySelector('input[type="checkbox"]');
-                const rowId = row.dataset.ydRowId;
-                if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
-                    // Снять чекбокс, если строка не содержит selections
-                    clickCheckbox(cb, false);
-                    delete cb.dataset.ydAuto;
-                    delete row.dataset.ydAutoRow;
+                if (cb && !cb.checked) {
+                    clickCheckbox(cb, true);
+                    cb.dataset.ydAuto = 'true';
+                    row.dataset.ydAutoRow = 'true';
+                    reserved++;
                 }
-            });
-
-            const rows = getAllRowsOnPage();
-            let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-            const neededTotal = values.length;
-            totalPlannedMinuses = neededTotal;
-            console.log(`[YD SQ] Отмечено ${checkedCount}, нужно ${neededTotal}`);
-
-            const deficit = neededTotal - checkedCount;
-            if (deficit > 0) {
-                console.log(`[YD SQ] Создаем ${deficit} виртуальных строк`);
-                createVirtualRows(deficit);
             }
+            checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        }
 
-            await delay(250);
+        await delay(250);
+        const finalChecked = getAllRowsOnPage().filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-            // Проверка общего количества чекбоксов (реальные + виртуальные)
-            const allChecked = document.querySelectorAll('table tbody input[type="checkbox"]:checked').length;
-            console.log(`[YD SQ] Всего отмечено (включая виртуальные): ${allChecked}`);
+        if (values.length > finalChecked) { showYdsqNotification(`Ошибка: недостаточно строк`, 'error'); isSending = false; return; }
 
-            if (values.length > allChecked) {
-                showYdsqNotification(`Ошибка: недостаточно строк (нужно ${values.length}, есть ${allChecked})`, 'error');
-                removeVirtualRows();
-                totalPlannedMinuses = 0;
-                isSending = false;
-                return;
-            }
+        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
+        if (!addBtn) { showYdsqNotification('Кнопка не найдена', 'error'); isSending = false; return; }
 
-            const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
-            if (!addBtn) {
-                showYdsqNotification('Кнопка не найдена', 'error');
-                removeVirtualRows();
-                totalPlannedMinuses = 0;
-                isSending = false;
-                return;
-            }
+        addBtn.click();
 
-            console.log('[YD SQ] Нажимаем кнопку добавления...');
-            addBtn.click();
-
-            try {
-                await waitForMinusModal(values);
-            } catch (error) {
-                console.error('[YD SQ] Ошибка при ожидании модалки:', error);
-                showYdsqNotification('Ошибка при обработке окна', 'error');
-            } finally {
-                setTimeout(() => { isSending = false; }, 500);
-            }
-        } catch (e) {
-            console.error('[YD SQ] Критическая ошибка в sendToMinusPhrases:', e);
-            showYdsqNotification('Ошибка скрипта при отправке', 'error');
-            isSending = false;
-            removeVirtualRows();
-            totalPlannedMinuses = 0;
+        try {
+            await waitForMinusModal(values);
+        } catch (error) {
+            console.error('[YD SQ] Ошибка:', error);
+            showYdsqNotification('Ошибка при обработке окна', 'error');
+        } finally {
+            setTimeout(() => { isSending = false; }, 500);
         }
     }
 
@@ -2294,7 +2502,7 @@
         const modal = findMinusModal();
         if (modal) fillMinusModal(modal, values);
         else if (attempt < 50) setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; removeVirtualRows(); totalPlannedMinuses = 0; }
+        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; }
     }
 
     function findMinusModal() {
@@ -2328,8 +2536,6 @@
             console.error('[YD SQ] Поля не найдены');
             showYdsqNotification('Поля ввода не найдены', 'error');
             isSending = false;
-            removeVirtualRows();
-            totalPlannedMinuses = 0;
             return;
         }
         setTimeout(() => {
@@ -2372,15 +2578,12 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        if (values.length > inputs.length) {
-            console.warn(`[YD SQ] Частичная отправка: полей ${inputs.length}, значений ${values.length}`);
-        }
+        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
-        // Сохраняем отправляемые минусы во временный массив (только те, что поместились)
+        // Сохраняем отправляемые минусы во временный массив
+        // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
         const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        const nSent = Math.min(inputs.length, values.length);
-
-        pendingSentMinuses = values.slice(0, nSent).map(val => ({
+        pendingSentMinuses = values.map(val => ({
             raw: val,
             page: currentPage
         }));
@@ -2418,20 +2621,10 @@
             lastResultPopupSuccessTime = Date.now();
 
             // После успешного сохранения:
+            // 1. Переносим pendingSentMinuses в importedMinuses и sentHistory
+            // 2. Очищаем selections
             setTimeout(() => {
-                // Если отправка не была инициирована скриптом, не показываем уведомления
-                if (totalPlannedMinuses === 0) return;
-
-                const sentCount = pendingSentMinuses.length;
-                const total = totalPlannedMinuses;
-
-                if (sentCount > 0 && sentCount === total) {
-                    showYdsqNotification(`Успешно отправлено ${sentCount} из ${total} минус-фраз.`, 'success');
-                } else if (sentCount > 0 && sentCount < total) {
-                    showYdsqNotification(`Отправлено ${sentCount} из ${total} минус-фраз.\n${total - sentCount} фраз не удалось отправить.`, 'warn');
-                } else {
-                    showYdsqNotification(`Не удалось отправить минус-фразы. Попробуйте снова.`, 'error');
-                }
+                const count = selections.size;
 
                 // Переносим отправленные минусы в "Уже в кампании"
                 if (pendingSentMinuses.length > 0) {
@@ -2441,8 +2634,7 @@
                             importedMinuses.push({
                                 id: `imp:${Date.now()}_${Math.random()}`,
                                 raw: item.raw,
-                                importedAt: Date.now(),
-                                deleted: false
+                                importedAt: Date.now()
                             });
                         }
 
@@ -2457,17 +2649,17 @@
                     syncLocalToGlobal();
                     rebuildCampaignMinusList();
                     updateHighlights();
-
-                    // Очищаем selections
-                    selections.clear();
-                    resetClearAllButton();
-                    updateUI();
                 }
 
-                removeVirtualRows();
-                totalPlannedMinuses = 0;
-
-            }, 500);
+                // Очищаем selections
+                if (count > 0) {
+                    selections.clear();
+                    syncLocalToGlobal();
+                    resetClearAllButton();
+                    updateUI();
+                    showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+                }
+            }, 100);
 
             return true;
         }
@@ -3346,7 +3538,6 @@
     }
 
 })();
-
 
 
 
