@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.71
+// @version 0.121.72
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -73,6 +73,13 @@
         setupGlobalListeners();
         detectPageChange();
         waitForTableAndInit();
+    }
+
+    function setupGlobalListeners() {
+        // Отслеживаем ручную прокрутку для автоскролла
+        document.addEventListener('scroll', trackManualScroll, { passive: true });
+        document.addEventListener('wheel', trackManualScroll, { passive: true });
+        document.addEventListener('touchmove', trackManualScroll, { passive: true });
     }
 
     function waitForTableAndInit(attempt = 0) {
@@ -514,30 +521,31 @@
 
     function autoScrollToRow(rowId) {
         // Не скроллим, если была ручная прокрутка менее 500ms назад
-        if (Date.now() - lastManualScrollTime < 500) return;
+        const timeSinceLastScroll = Date.now() - lastManualScrollTime;
+        if (lastManualScrollTime > 0 && timeSinceLastScroll < 500) {
+            console.log('[YD-SQ] Скролл отменен: ручная прокрутка', timeSinceLastScroll, 'ms назад');
+            return;
+        }
 
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
-        if (!row) return;
+        if (!row) {
+            console.log('[YD-SQ] Строка не найдена:', rowId);
+            return;
+        }
 
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // Скроллим только если строка в нижней 40% экрана или вне видимости
-        const rowCenter = rowRect.top + rowRect.height / 2;
-        if (rowCenter > viewportHeight * 0.6 || rowCenter < 0) {
-            // Позиционируем строку на 30% от верха экрана (вместо 50%)
-            const targetY = rowRect.top + window.scrollY - viewportHeight * 0.3;
-            window.scrollTo({
-                top: targetY,
-                behavior: 'smooth'
-            });
-        }
-    }
+        // Позиционируем строку на 30% от верха экрана
+        const targetY = rowRect.top + window.scrollY - viewportHeight * 0.3;
 
-    // Отслеживаем ручную прокрутку
-    document.addEventListener('scroll', trackManualScroll, { passive: true });
-    document.addEventListener('wheel', trackManualScroll, { passive: true });
-    document.addEventListener('touchmove', trackManualScroll, { passive: true });
+        console.log('[YD-SQ] Скроллим к строке:', rowId, 'targetY:', targetY);
+
+        window.scrollTo({
+            top: targetY,
+            behavior: 'smooth'
+        });
+    }
 
     function debounceAutoScroll(rowId, delay = 180) {
         // Clear existing timeout for this row
@@ -1492,42 +1500,6 @@
         return freeRows;
     }
 
-    // ==================== AUTO-SCROLL ====================
-
-    function debounceAutoScroll(rowId, delay) {
-        if (autoScrollDebounceMap.has(rowId)) {
-            clearTimeout(autoScrollDebounceMap.get(rowId));
-        }
-
-        const timeout = setTimeout(() => {
-            autoScrollIfAllowed(rowId);
-            autoScrollDebounceMap.delete(rowId);
-        }, delay);
-
-        autoScrollDebounceMap.set(rowId, timeout);
-    }
-
-    function autoScrollIfAllowed(rowId) {
-        if (isSending) return;
-        if (phraseInProgress) return;
-        if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-        if (Date.now() - lastManualScrollTime < 600) return;
-
-        const row = getAllRowsOnPage().find(r => r.dataset.ydRowId === rowId);
-        if (!row) return;
-
-        const rect = row.getBoundingClientRect();
-        const table = row.closest('table');
-        const header = table ? table.querySelector('thead') : null;
-        const headerHeight = header ? header.getBoundingClientRect().height : 0;
-        const rowHeight = rect.height;
-        const desiredOffset = headerHeight + (rowHeight * 2);
-
-        if (rect.top < desiredOffset || rect.top > window.innerHeight - 100) {
-            const targetScrollTop = window.scrollY + rect.top - desiredOffset;
-            window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-        }
-    }
 
     // ==================== ИСТОРИЯ И ИМПОРТ ====================
 
@@ -3322,6 +3294,7 @@
     }
 
 })();
+
 
 
 
