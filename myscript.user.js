@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.73
+// @version 0.121.74
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1931,25 +1931,18 @@
             return;
         }
 
-        const items = Array.from(selections.values()).sort((a, b) => {
-            if (a.pageKey === currentPageKey && b.pageKey !== currentPageKey) return -1;
-            if (a.pageKey !== currentPageKey && b.pageKey === currentPageKey) return 1;
-            return 0;
-        });
+        // Убрана сортировка по pageKey - все минусы в порядке добавления
+        const items = Array.from(selections.values());
 
         container.innerHTML = items.map(sel => {
             const isBuilding = sel._building;
-            const isUnassigned = sel.unassignedOnThisPage;
-            const isForeign = sel.pageKey !== currentPageKey;
 
+            // Убраны классы yd-sq-item-foreign и yd-sq-item-unassigned для единообразия
             let classes = 'yd-sq-item';
             if (isBuilding) classes += ' yd-sq-item-building';
-            if (isUnassigned) classes += ' yd-sq-item-unassigned';
-            if (isForeign) classes += ' yd-sq-item-foreign';
 
-            const pageHint = isForeign ? `<span class="yd-sq-page-hint">(стр. ${sel.pageKey.split(':')[1]})</span>` :
-                isUnassigned ? `<span class="yd-sq-page-hint">(не найдена на странице)</span>` :
-                    isBuilding ? `<span class="yd-sq-page-hint">(Дб.клик...)</span>` : '';
+            // Убраны подсказки о странице - все элементы одинаковые
+            const pageHint = isBuilding ? `<span class="yd-sq-page-hint">(Дб.клик...)</span>` : '';
 
             return `
                 <div class="${classes}" data-sel-id="${escapeHtml(sel.id)}">
@@ -3294,6 +3287,7 @@
     }
 
 })();
+
 
 
 
