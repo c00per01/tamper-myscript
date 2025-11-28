@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.72
+// @version 0.121.73
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -536,8 +536,8 @@
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // Позиционируем строку на 30% от верха экрана
-        const targetY = rowRect.top + window.scrollY - viewportHeight * 0.3;
+        // Позиционируем строку на 15% от верха экрана (на 50% выше чем было 30%)
+        const targetY = rowRect.top + window.scrollY - viewportHeight * 0.15;
 
         console.log('[YD-SQ] Скроллим к строке:', rowId, 'targetY:', targetY);
 
@@ -3294,6 +3294,7 @@
     }
 
 })();
+
 
 
 
