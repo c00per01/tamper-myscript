@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.64
+// @version 0.121.65
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -18,6 +18,7 @@
     let phraseInProgress = null;
     let sentHistory = [];
     let importedMinuses = [];
+    let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -1024,9 +1025,14 @@
         }
 
         // 2. Prepare Rules
-        // Check if importedMinuses array reference changed
-        if (lastImportedMinusesRef !== importedMinuses) {
-            cachedImportedRules = importedMinuses.map(imp => {
+        // Пересчитываем кэш, если изменился массив или количество активных элементов
+        const activeImported = importedMinuses.filter(imp => !imp.deleted);
+        const shouldRebuild = lastImportedMinusesRef !== importedMinuses ||
+            !cachedImportedRules ||
+            cachedImportedRules.length !== activeImported.length;
+
+        if (shouldRebuild) {
+            cachedImportedRules = activeImported.map(imp => {
                 const r = parseMinusRule(imp.raw);
                 r.source = 'imported';
                 return r;
@@ -1688,6 +1694,32 @@
         showYdsqNotification('Список импортированных очищен', 'success');
     }
 
+    async function copyImportedToClipboard() {
+        const activeMinuses = importedMinuses.filter(imp => !imp.deleted);
+
+        if (activeMinuses.length === 0) {
+            showYdsqNotification('Нет активных минусов для копирования', 'warn');
+            return;
+        }
+
+        // Конвертируем каждый минус в формат с префиксом "-"
+        const formatted = activeMinuses.map(imp => {
+            const raw = imp.raw;
+            // Сохраняем оригинальный формат
+            return `-${raw}`;
+        });
+
+        const text = formatted.join('\n');
+
+        try {
+            await navigator.clipboard.writeText(text);
+            showYdsqNotification(`Скопировано ${activeMinuses.length} минусов`, 'success');
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка копирования:', err);
+            showYdsqNotification('Ошибка копирования в буфер', 'error');
+        }
+    }
+
     // ==================== UI ПАНЕЛЬ ====================
 
     function createPanel() {
@@ -1723,6 +1755,7 @@
 
                 <div class="yd-sq-section yd-sq-controls">
                     <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary yd-sq-btn-import">📋 Импорт</button>
+                    <button id="yd-sq-copy-imported" class="yd-sq-btn-secondary yd-sq-btn-copy-imported">📋 Копировать</button>
                     <button id="yd-sq-clear-imported" class="yd-sq-btn-secondary yd-sq-btn-clear-imported">🗑 Удалить</button>
                 </div>
 
@@ -1774,6 +1807,8 @@
         });
 
         document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
+
+        document.getElementById('yd-sq-copy-imported').addEventListener('click', copyImportedToClipboard);
 
         document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
 
@@ -1940,7 +1975,8 @@
         const container = document.getElementById('yd-sq-imported-list');
         const countIndicator = document.getElementById('yd-sq-imported-count');
 
-        countIndicator.textContent = importedMinuses.length;
+        const activeCount = importedMinuses.filter(imp => !imp.deleted).length;
+        countIndicator.textContent = activeCount;
 
         if (importedMinuses.length === 0) {
             container.innerHTML = '<div class="yd-sq-empty">Минусы не загружены</div>';
@@ -1949,29 +1985,37 @@
 
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const date = new Date(imp.importedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            const isDeleted = imp.deleted;
+            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}`;
 
             return `
-                <div class="yd-sq-item yd-sq-item-imported" data-imp-idx="${idx}">
+                <div class="${itemClass}" data-imp-idx="${idx}">
                     <div class="yd-sq-left">
-                        <span class="yd-sq-import-icon">📥</span>
+                        <span class="yd-sq-import-icon">${isDeleted ? '🗑' : '📥'}</span>
                     </div>
                     <div class="yd-sq-mid">
                         <span class="yd-sq-item-text">${escapeHtml(imp.raw)}</span>
                         <span class="yd-sq-page-hint">загружено ${date}</span>
                     </div>
                     <div class="yd-sq-right">
-                        <button class="yd-sq-item-remove" data-imp-idx="${idx}" title="Удалить">×</button>
+                        <button class="yd-sq-item-toggle-delete" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
+                            ${isDeleted ? '↶' : '×'}
+                        </button>
                     </div>
                 </div>
             `;
         }).join('');
 
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+        addClickListener(container, '.yd-sq-item-toggle-delete', (e, btn) => {
             const idx = parseInt(btn.dataset.impIdx);
-            importedMinuses.splice(idx, 1);
+            const imp = importedMinuses[idx];
+
+            // Переключаем флаг deleted
+            imp.deleted = !imp.deleted;
+
             syncLocalToGlobal();
-            updateHighlights();
-            renderImportedMinuses();
+            updateHighlights(); // Обновляем подсветку в таблице
+            renderImportedMinuses(); // Перерисовываем список
         });
     }
 
@@ -2235,25 +2279,16 @@
 
         if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
-        // --- Integration of myscript features (History & Imported) ---
-        // Add to "In Campaign" list
-        for (const val of values) {
-            if (!importedMinuses.some(imp => imp.raw === val)) {
-                importedMinuses.push({
-                    id: `imp:${Date.now()}_${Math.random()}`,
-                    raw: val,
-                    importedAt: Date.now()
-                });
-            }
-        }
-
-        // Add to history
+        // Сохраняем отправляемые минусы во временный массив
+        // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
         const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        for (const val of values) {
-            addToSentHistory(val, null, [currentPage]);
-        }
+        pendingSentMinuses = values.map(val => ({
+            raw: val,
+            page: currentPage
+        }));
 
-        // НЕ очищаем selections здесь - это будет сделано в tryCloseResultPopup после успешного сохранения
+        // НЕ добавляем в importedMinuses и sentHistory здесь!
+        // Это будет сделано в tryCloseResultPopup после успешного сохранения
         syncLocalToGlobal();
         rebuildCampaignMinusList();
     }
@@ -2284,9 +2319,38 @@
             if (Date.now() - lastResultPopupSuccessTime < 2000) return true;
             lastResultPopupSuccessTime = Date.now();
 
-            // После успешного сохранения очищаем selections и показываем уведомление
+            // После успешного сохранения:
+            // 1. Переносим pendingSentMinuses в importedMinuses и sentHistory
+            // 2. Очищаем selections
             setTimeout(() => {
                 const count = selections.size;
+
+                // Переносим отправленные минусы в "Уже в кампании"
+                if (pendingSentMinuses.length > 0) {
+                    for (const item of pendingSentMinuses) {
+                        // Добавляем в importedMinuses
+                        if (!importedMinuses.some(imp => imp.raw === item.raw)) {
+                            importedMinuses.push({
+                                id: `imp:${Date.now()}_${Math.random()}`,
+                                raw: item.raw,
+                                importedAt: Date.now()
+                            });
+                        }
+
+                        // Добавляем в историю
+                        addToSentHistory(item.raw, null, [item.page]);
+                    }
+
+                    // Очищаем временный массив
+                    pendingSentMinuses = [];
+
+                    // Обновляем UI и синхронизируем
+                    syncLocalToGlobal();
+                    rebuildCampaignMinusList();
+                    updateHighlights();
+                }
+
+                // Очищаем selections
                 if (count > 0) {
                     selections.clear();
                     syncLocalToGlobal();
@@ -2763,6 +2827,16 @@
                 opacity: 0.75;
             }
 
+            #yd-sq-panel .yd-sq-item-deleted {
+                opacity: 0.5;
+                background: #f5f5f5;
+            }
+
+            #yd-sq-panel .yd-sq-item-deleted .yd-sq-item-text {
+                text-decoration: line-through;
+                color: #999;
+            }
+
             #yd-sq-panel .yd-sq-page-hint {
                 font-size: 10px;
                 color: #999;
@@ -2908,6 +2982,11 @@
             }
 
             #yd-sq-panel .yd-sq-btn-import {
+                flex: 1;
+                min-width: 100px;
+            }
+
+            #yd-sq-panel .yd-sq-btn-copy-imported {
                 flex: 1;
                 min-width: 100px;
             }
@@ -3162,6 +3241,7 @@
     }
 
 })();
+
 
 
 
