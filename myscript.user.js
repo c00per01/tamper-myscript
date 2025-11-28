@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.67
+// @version 0.121.68
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -19,7 +19,6 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
-    let checkedRows = new Set(); // Отмеченные чекбоксы строк (сохраняются между страницами)
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -121,11 +120,34 @@
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
+            restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
             updateHighlights();
             updateUI();
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
             console.error('[YD-SQ] Ошибка инициализации:', err);
+        }
+    }
+
+    function restoreCheckboxes() {
+        // Восстанавливаем чекбоксы для строк, которые есть в selections на текущей странице
+        const rowsWithSelections = new Set();
+
+        for (const sel of selections.values()) {
+            if (sel.pageKey === currentPageKey && sel.rowId) {
+                rowsWithSelections.add(sel.rowId);
+            }
+        }
+
+        // Устанавливаем чекбоксы для найденных строк
+        for (const rowId of rowsWithSelections) {
+            const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+            if (row) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                }
+            }
         }
     }
 
@@ -377,21 +399,6 @@
 
                 addCopyButtonToRow(row, queryCell);
                 wrapCellWordsPreserving(queryCell, rowId);
-
-                // Отслеживаем изменения чекбокса
-                checkbox.addEventListener('change', () => {
-                    if (checkbox.checked) {
-                        checkedRows.add(rowId);
-                    } else {
-                        checkedRows.delete(rowId);
-                    }
-                    syncLocalToGlobal();
-                });
-
-                // Восстанавливаем состояние чекбокса для этой строки
-                if (checkedRows.has(rowId)) {
-                    checkbox.checked = true;
-                }
             }
         }
     }
@@ -686,6 +693,16 @@
 
         // Show notification
         showYdsqNotification('Режим фразы', 'info');
+
+        ensureRowChecked(rowId);
+        updateUI();
+    }
+
+    function finalizePhraseBuilding(isCancel) {
+        if (!phraseInProgress) return;
+
+        const sel = selections.get(phraseInProgress.id);
+        const rowId = phraseInProgress.rowId;
 
         // Remove buttons
         removePhraseButtons(rowId);
@@ -2411,11 +2428,6 @@
                     }
                 }
 
-                // Восстановить checkedRows
-                if (data.checkedRows) {
-                    checkedRows = new Set(data.checkedRows);
-                }
-
                 rebuildCampaignMinusList();
 
                 // Форсируем пересчет кэша импортированных правил
@@ -2442,7 +2454,6 @@
                 phraseCounter: phraseCounter,
                 sentHistory: sentHistory,
                 importedMinuses: importedMinuses,
-                checkedRows: Array.from(checkedRows),
                 panelPosition: panelPosition
             };
 
