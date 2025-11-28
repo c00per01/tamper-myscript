@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.65
+// @version 0.121.66
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2385,6 +2385,15 @@
                 const data = JSON.parse(stored);
                 sentHistory = data.sentHistory || [];
                 importedMinuses = data.importedMinuses || [];
+
+                // МИГРАЦИЯ: Добавляем deleted: false к старым записям
+                importedMinuses = importedMinuses.map(imp => {
+                    if (imp.deleted === undefined) {
+                        imp.deleted = false;
+                    }
+                    return imp;
+                });
+
                 panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
                 phraseCounter = data.phraseCounter || 0;
 
@@ -2397,6 +2406,10 @@
                 }
 
                 rebuildCampaignMinusList();
+
+                // Форсируем пересчет кэша импортированных правил
+                lastImportedMinusesRef = null;
+                cachedImportedRules = null;
             }
         } catch (err) {
             console.error('[YD-SQ] Ошибка загрузки состояния:', err);
@@ -3068,23 +3081,6 @@
                 font-weight: 600;
             }
 
-            .yd-sent-history {
-                background: #f5f5f5 !important;
-                opacity: 0.65;
-                border-bottom: 1px solid #28a745;
-                position: relative;
-            }
-
-            .yd-sent-history::after {
-                content: '✓';
-                position: absolute;
-                right: -6px;
-                top: -4px;
-                font-size: 10px;
-                color: #28a745;
-                font-weight: bold;
-            }
-
             .yd-imported-minus {
                 background: rgba(0, 0, 0, 0.04) !important;
                 color: #aaa !important;
@@ -3241,6 +3237,7 @@
     }
 
 })();
+
 
 
 
