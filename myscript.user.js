@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.76
+// @version 0.121.77
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1910,7 +1910,8 @@
     }
 
     async function fillMinusModal(values) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Увеличиваем задержку, чтобы модалка точно отрисовалась
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Ищем модалку
         const modal = document.querySelector('[role="dialog"], .modal, .popup');
@@ -1919,20 +1920,48 @@
             return 0;
         }
 
-        // Ищем все текстовые поля в модалке
-        const inputs = modal.querySelectorAll('input[type="text"], textarea');
-        console.log(`[YD-SQ] Найдено полей в модалке: ${inputs.length}`);
+        console.log('[YD-SQ] Модалка найдена:', modal);
 
-        const filledCount = Math.min(values.length, inputs.length);
+        // Ищем все текстовые поля в модалке (расширенный поиск как в старой версии)
+        const textareas = modal.querySelectorAll('textarea.textarea__control, textarea');
+        const textInputs = modal.querySelectorAll('input.text-input__control, input[type="text"]');
+        const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
+        const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
+
+        const allInputs = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
+        const uniqueInputs = [...new Set(allInputs)];
+
+        // Фильтруем только видимые поля
+        const visibleInputs = uniqueInputs.filter(el => {
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+        });
+
+        console.log(`[YD-SQ] Найдено полей в модалке: ${visibleInputs.length}`);
+
+        const filledCount = Math.min(values.length, visibleInputs.length);
 
         // Заполняем по одному минусу в поле
         for (let i = 0; i < filledCount; i++) {
-            const input = inputs[i];
+            const input = visibleInputs[i];
             const value = values[i];
 
-            input.value = value;
+            // Устанавливаем значение в зависимости от типа элемента
+            if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') {
+                input.value = value;
+            } else if (input.isContentEditable) {
+                input.textContent = value;
+            }
+
+            // Тр игерим все необходимые события
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+            if (input.isContentEditable) {
+                input.dispatchEvent(new Event('keyup', { bubbles: true }));
+            }
         }
 
         console.log(`[YD-SQ] Заполнено ${filledCount} полей`);
@@ -1943,12 +1972,14 @@
         }
 
         // Ищем кнопку подтверждения в модалке
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         const confirmButton = modal.querySelector('button[type="submit"], button.submit, button:not([type="button"])');
         if (confirmButton) {
             console.log('[YD-SQ] Нажимаем кнопку подтверждения модалки');
             confirmButton.click();
+        } else {
+            console.warn('[YD-SQ] Кнопка подтверждения не найдена');
         }
 
         return filledCount;
@@ -3282,6 +3313,7 @@
     }
 
 })();
+
 
 
 
