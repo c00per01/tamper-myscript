@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.68
+// @version 0.121.69
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -372,10 +372,6 @@
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (!checkbox) continue;
 
-            rowCounter++;
-            const rowId = `${currentPageKey}:${rowCounter}`;
-            row.dataset.ydRowId = rowId;
-
             let queryCell = null;
 
             // Найти ячейку с запросом
@@ -397,10 +393,27 @@
                 // Check if already wrapped to avoid double processing
                 if (queryCell.querySelector('.yd-word')) continue;
 
+                // Используем текст запроса для создания стабильного rowId
+                const queryText = getTextContent(queryCell).trim();
+                const queryHash = simpleHash(queryText);
+                const rowId = `${currentPageKey}:${queryHash}`;
+                row.dataset.ydRowId = rowId;
+
                 addCopyButtonToRow(row, queryCell);
                 wrapCellWordsPreserving(queryCell, rowId);
             }
         }
+    }
+
+    // Простая хеш-функция для создания уникального ID из текста
+    function simpleHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return Math.abs(hash).toString(36);
     }
 
     function wrapCellWordsPreserving(cell, rowId) {
@@ -3260,6 +3273,7 @@
     }
 
 })();
+
 
 
 
