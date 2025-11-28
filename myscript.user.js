@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.66
+// @version 0.121.67
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -19,6 +19,7 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
+    let checkedRows = new Set(); // Отмеченные чекбоксы строк (сохраняются между страницами)
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -376,6 +377,21 @@
 
                 addCopyButtonToRow(row, queryCell);
                 wrapCellWordsPreserving(queryCell, rowId);
+
+                // Отслеживаем изменения чекбокса
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        checkedRows.add(rowId);
+                    } else {
+                        checkedRows.delete(rowId);
+                    }
+                    syncLocalToGlobal();
+                });
+
+                // Восстанавливаем состояние чекбокса для этой строки
+                if (checkedRows.has(rowId)) {
+                    checkbox.checked = true;
+                }
             }
         }
     }
@@ -670,16 +686,6 @@
 
         // Show notification
         showYdsqNotification('Режим фразы', 'info');
-
-        ensureRowChecked(rowId);
-        updateUI();
-    }
-
-    function finalizePhraseBuilding(isCancel) {
-        if (!phraseInProgress) return;
-
-        const sel = selections.get(phraseInProgress.id);
-        const rowId = phraseInProgress.rowId;
 
         // Remove buttons
         removePhraseButtons(rowId);
@@ -1748,9 +1754,9 @@
                 <div class="yd-sq-section">
                     <div class="yd-sq-section-title">
                         📥 Уже в кампании (<span id="yd-sq-imported-count">0</span>)
-                        <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▲</button>
+                        <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▼</button>
                     </div>
-                    <div id="yd-sq-imported-list" class="yd-sq-list"></div>
+                    <div id="yd-sq-imported-list" class="yd-sq-list" style="display:none;"></div>
                 </div>
 
                 <div class="yd-sq-section yd-sq-controls">
@@ -2405,6 +2411,11 @@
                     }
                 }
 
+                // Восстановить checkedRows
+                if (data.checkedRows) {
+                    checkedRows = new Set(data.checkedRows);
+                }
+
                 rebuildCampaignMinusList();
 
                 // Форсируем пересчет кэша импортированных правил
@@ -2431,6 +2442,7 @@
                 phraseCounter: phraseCounter,
                 sentHistory: sentHistory,
                 importedMinuses: importedMinuses,
+                checkedRows: Array.from(checkedRows),
                 panelPosition: panelPosition
             };
 
@@ -3237,6 +3249,7 @@
     }
 
 })();
+
 
 
 
