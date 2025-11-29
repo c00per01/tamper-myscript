@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.96
+// @version 0.121.97
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2201,8 +2201,13 @@
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     async function sendBatch() {
+        console.log('[YD-SQ BATCH sendBatch] Вызвана функция sendBatch()');
+        console.log('  - currentBatchIndex:', currentBatchIndex);
+        console.log('  - batchQueue.length:', batchQueue.length);
+
         if (currentBatchIndex >= batchQueue.length) {
             // Все пакеты отправлены
+            console.log('[YD-SQ BATCH sendBatch] ✅ Все пакеты завершены');
             batchQueue = [];
             currentBatchIndex = 0;
             showYdsqNotification('✅ Все пакеты отправлены!', 'success');
@@ -2214,34 +2219,27 @@
         const values = batch.map(sel => sel.display);
         const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
 
+        console.log('[YD-SQ BATCH sendBatch] Обработка пакета:');
+        console.log('  - batchInfo:', batchInfo);
+        console.log('  - values:', values);
+
         showYdsqNotification(batchInfo, 'info');
         console.log(`[YD-SQ] Отправка ${batchInfo}`);
 
-        // Отмечаем чекбоксы для selections из текущего пакета
-        const rowsInBatch = new Set();
-        for (const sel of batch) {
-            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                rowsInBatch.add(sel.rowId);
-                // Отметить чекбокс для этой строки
-                const row = document.querySelector(`[data-yd-row-id="${sel.rowId}"]`);
-                if (row) {
-                    const cb = row.querySelector('input[type="checkbox"]');
-                    if (cb && !cb.checked) {
-                        clickCheckbox(cb, true);
-                    }
-                }
-            }
-        }
-
-        // Резервируем дополнительные строки если нужно
+        // Резервируем строки для текущего пакета
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-        console.log(`[YD-SQ BATCH] checkedCount: ${checkedCount}, values.length: ${values.length}`);
+        console.log('[YD-SQ BATCH sendBatch] Резервация строк:');
+        console.log('  - checkedCount:', checkedCount);
+        console.log('  - values.length:', values.length);
 
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
             const freeRows = findFreeRows(null);
+
+            console.log('  - toReserve (нужно зарезервировать):', toReserve);
+            console.log('  - freeRows.length:', freeRows.length);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2294,6 +2292,11 @@
             else unassigned.push(sel.raw);
         });
 
+        console.log('[YD-SQ BATCH] Подсчет минусов:');
+        console.log('  - selections.size:', selections.size);
+        console.log('  - values.length (для отправки):', values.length);
+        console.log('  - unassigned.length:', unassigned.length);
+
         if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
         if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
 
@@ -2317,37 +2320,52 @@
             }
         });
 
+        const rows = getAllRowsOnPage();
+        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        const neededTotal = values.length;
+        const freeRowsArray = findFreeRows(null);
+        const availableRows = checkedCount + freeRowsArray.length;
+
+        console.log('[YD-SQ BATCH] Проверка доступных строк:');
+        console.log('  - neededTotal (нужно минусов):', neededTotal);
+        console.log('  - checkedCount (отмечено чекбоксов):', checkedCount);
+        console.log('  - freeRows.length (свободных строк):', freeRowsArray.length);
+        console.log('  - availableRows (всего доступно):', availableRows);
+
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Яндекс ограничивает количество полей в модалке (~20-25), поэтому используем безопасный лимит
-        const SAFE_BATCH_SIZE = 20; // Безопасный размер пакета
-
-        // DEBUG
-        console.log('[YD-SQ BATCH DEBUG]', { neededTotal: values.length, SAFE_BATCH_SIZE, shouldBatch: values.length > SAFE_BATCH_SIZE });
-
-        // Если минусов больше безопасного лимита - разбиваем на пакеты
-        if (values.length > SAFE_BATCH_SIZE) {
+        // Если не хватает строк - разбиваем на пакеты
+        if (neededTotal > availableRows) {
+            console.log('[YD-SQ BATCH] ⚠️ НЕ ХВАТАЕТ СТРОК! Запуск пакетной отправки...');
+            const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
-            for (let i = 0; i < allSelections.length; i += SAFE_BATCH_SIZE) {
-                batches.push(allSelections.slice(i, i + SAFE_BATCH_SIZE));
+            console.log('  - batchSize (размер пакета):', batchSize);
+            console.log('  - allSelections.length:', allSelections.length);
+
+            for (let i = 0; i < allSelections.length; i += batchSize) {
+                batches.push(allSelections.slice(i, i + batchSize));
             }
+
+            console.log('  - batches.length (количество пакетов):', batches.length);
+            batches.forEach((batch, idx) => {
+                console.log(`  - Пакет ${idx + 1}: ${batch.length} элементов`);
+            });
 
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${SAFE_BATCH_SIZE} минусов`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${batchSize} минусов`, 'info');
             await delay(1000);
 
+            console.log('[YD-SQ BATCH] ✅ Запуск sendBatch()...');
             // Отправляем первый пакет
             return sendBatch();
         }
 
-        // **ОБЫЧНАЯ ОТПРАВКА** (если минусов <= 20)
-        const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        const neededTotal = values.length;
+        console.log('[YD-SQ BATCH] ✅ Строк достаточно, обычная отправка');
 
+        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -2355,7 +2373,11 @@
             if (selsOnPage.length > 0) lastUsedRowId = selsOnPage[selsOnPage.length - 1]?.rowId;
 
             const freeRows = findFreeRows(lastUsedRowId);
-            // Батчинг уже проверил, что availableRows >= neededTotal, поэтому здесь достаточно строк
+            if (toReserve > freeRows.length) {
+                showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
+                isSending = false;
+                return;
+            }
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2454,6 +2476,12 @@
     }
 
     function fillFields(inputs, values) {
+        console.log('[YD-SQ BATCH fillFields] ⚠️ ВЫЗОВ fillFields()');
+        console.log('  - inputs.length:', inputs.length);
+        console.log('  - values.length:', values.length);
+        console.log('  - batchQueue.length (текущий):', batchQueue.length);
+        console.log('  - isSending:', isSending);
+
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2471,7 +2499,11 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+        if (values.length > inputs.length) {
+            console.log('[YD-SQ BATCH fillFields] ❌ ОШИБКА: значений больше, чем полей!');
+            console.log('  - Это НЕ должно происходить при пакетной отправке!');
+            showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+        }
 
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
@@ -3462,10 +3494,6 @@
     }
 
 })();
-
-
-
-
 
 
 
