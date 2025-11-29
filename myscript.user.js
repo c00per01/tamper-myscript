@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.101
+// @version 0.121.102
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2268,12 +2268,23 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
+        console.log('[YD-SQ BATCH] ========== ПРОВЕРКА ПАКЕТНОЙ ОТПРАВКИ ==========');
+        console.log('[YD-SQ BATCH] Всего selections:', selections.size);
+        console.log('[YD-SQ BATCH] Всего values (для отправки):', neededTotal);
+        console.log('[YD-SQ BATCH] Отмеченных строк (checkedCount):', checkedCount);
+        console.log('[YD-SQ BATCH] Свободных строк:', findFreeRows(null).length);
+        console.log('[YD-SQ BATCH] Доступно строк всего (availableRows):', availableRows);
+        console.log('[YD-SQ BATCH] Нужна пакетная отправка?', neededTotal > availableRows);
+
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
         // Если не хватает строк - разбиваем на пакеты
         if (neededTotal > availableRows) {
             const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
+
+            console.log('[YD-SQ BATCH] ✅ ЗАПУСК ПАКЕТНОЙ ОТПРАВКИ!');
+            console.log('[YD-SQ BATCH] Размер одного пакета (batchSize):', batchSize);
 
             for (let i = 0; i < allSelections.length; i += batchSize) {
                 batches.push(allSelections.slice(i, i + batchSize));
@@ -2282,12 +2293,17 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
+            console.log('[YD-SQ BATCH] Всего пакетов:', batches.length);
+            console.log('[YD-SQ BATCH] Пакеты:', batches.map((b, i) => `Пакет ${i + 1}: ${b.length} минусов`));
+
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${batchSize} минусов`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
             return sendBatch();
         }
+
+        console.log('[YD-SQ BATCH] ℹ️ Обычная отправка (строк достаточно)');
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -2400,6 +2416,14 @@
     }
 
     function fillFields(inputs, values) {
+        console.log('[YD-SQ FIELDS] ========== ЗАПОЛНЕНИЕ ПОЛЕЙ ==========');
+        console.log('[YD-SQ FIELDS] Количество полей (inputs.length):', inputs.length);
+        console.log('[YD-SQ FIELDS] Количество значений (values.length):', values.length);
+        console.log('[YD-SQ FIELDS] Батчинг активен?', batchQueue.length > 0);
+        if (batchQueue.length > 0) {
+            console.log('[YD-SQ FIELDS] Текущий пакет:', currentBatchIndex + 1, '/', batchQueue.length);
+        }
+
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2407,6 +2431,8 @@
         });
 
         const n = Math.min(inputs.length, values.length);
+        console.log('[YD-SQ FIELDS] Будет заполнено полей:', n);
+
         for (let i = 0; i < n; i++) {
             const el = inputs[i];
             const val = values[i];
@@ -2417,7 +2443,11 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+        if (values.length > inputs.length) {
+            console.warn('[YD-SQ FIELDS] ⚠️ ПРОБЛЕМА: Значений больше чем полей!');
+            console.warn('[YD-SQ FIELDS] Разница:', values.length - inputs.length, 'минусов не влезли');
+            showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+        }
 
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
@@ -3408,6 +3438,7 @@
     }
 
 })();
+
 
 
 
