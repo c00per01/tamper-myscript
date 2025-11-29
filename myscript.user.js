@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.105
+// @version 0.121.106
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2461,29 +2461,59 @@
             console.log('[YD-SQ FIELDS] Текущий пакет:', currentBatchIndex + 1, '/', batchQueue.length);
         }
 
-        inputs.forEach((input) => {
-            if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        });
+        // ИСПРАВЛЕНИЕ: Яндекс.Директ использует ОДНО textarea поле для всех минус-фраз!
+        // Все минусы нужно вставить через перенос строки
+        if (inputs.length === 1 && (inputs[0].tagName === 'TEXTAREA' || inputs[0].isContentEditable)) {
+            console.log('[YD-SQ FIELDS] ✅ Обнаружено ОДНО поле для всех минусов (textarea)');
+            const field = inputs[0];
+            const allMinuses = values.join('\n'); // Объединяем через перенос строки
 
-        const n = Math.min(inputs.length, values.length);
-        console.log('[YD-SQ FIELDS] Будет заполнено полей:', n);
+            console.log('[YD-SQ FIELDS] Вставляем', values.length, 'минусов через \\n');
 
-        for (let i = 0; i < n; i++) {
-            const el = inputs[i];
-            const val = values[i];
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
-            if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
-        }
+            // Очищаем поле
+            if (field.tagName === 'TEXTAREA' || field.tagName === 'INPUT') {
+                field.value = allMinuses;
+            } else {
+                field.textContent = allMinuses;
+            }
 
-        if (values.length > inputs.length) {
-            console.warn('[YD-SQ FIELDS] ⚠️ ПРОБЛЕМА: Значений больше чем полей!');
-            console.warn('[YD-SQ FIELDS] Разница:', values.length - inputs.length, 'минусов не влезли');
-            showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+            // Отправляем события
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            field.dispatchEvent(new Event('blur', { bubbles: true }));
+            if (field.isContentEditable) {
+                field.dispatchEvent(new Event('keyup', { bubbles: true }));
+            }
+
+            console.log('[YD-SQ FIELDS] ✅ Все', values.length, 'минусов вставлены в одно поле');
+        } else {
+            // Старая логика для множественных полей (если вдруг)
+            console.log('[YD-SQ FIELDS] Режим множественных полей');
+
+            inputs.forEach((input) => {
+                if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            const n = Math.min(inputs.length, values.length);
+            console.log('[YD-SQ FIELDS] Будет заполнено полей:', n);
+
+            for (let i = 0; i < n; i++) {
+                const el = inputs[i];
+                const val = values[i];
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new Event('blur', { bubbles: true }));
+                if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
+            }
+
+            if (values.length > inputs.length) {
+                console.warn('[YD-SQ FIELDS] ⚠️ ПРОБЛЕМА: Значений больше чем полей!');
+                console.warn('[YD-SQ FIELDS] Разница:', values.length - inputs.length, 'минусов не влезли');
+                showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+            }
         }
 
         // Сохраняем отправляемые минусы во временный массив
@@ -3475,6 +3505,7 @@
     }
 
 })();
+
 
 
 
