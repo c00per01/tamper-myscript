@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.97
+// @version 0.121.98
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2326,17 +2326,22 @@
         const freeRowsArray = findFreeRows(null);
         const availableRows = checkedCount + freeRowsArray.length;
 
+        // ⚠️ ВАЖНО: Модалка Яндекса имеет ФИКСИРОВАННЫЙ лимит полей (~20-25)
+        // независимо от количества отмеченных строк в таблице!
+        const YANDEX_MODAL_FIELD_LIMIT = 20; // Безопасный лимит
+
         console.log('[YD-SQ BATCH] Проверка доступных строк:');
         console.log('  - neededTotal (нужно минусов):', neededTotal);
         console.log('  - checkedCount (отмечено чекбоксов):', checkedCount);
         console.log('  - freeRows.length (свободных строк):', freeRowsArray.length);
         console.log('  - availableRows (всего доступно):', availableRows);
+        console.log('  - YANDEX_MODAL_FIELD_LIMIT:', YANDEX_MODAL_FIELD_LIMIT);
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
-        if (neededTotal > availableRows) {
-            console.log('[YD-SQ BATCH] ⚠️ НЕ ХВАТАЕТ СТРОК! Запуск пакетной отправки...');
-            const batchSize = availableRows;
+        // Если минусов больше, чем полей в модалке - разбиваем на пакеты
+        if (neededTotal > YANDEX_MODAL_FIELD_LIMIT) {
+            console.log('[YD-SQ BATCH] ⚠️ Минусов больше лимита модалки! Запуск пакетной отправки...');
+            const batchSize = YANDEX_MODAL_FIELD_LIMIT;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2363,9 +2368,9 @@
             return sendBatch();
         }
 
-        console.log('[YD-SQ BATCH] ✅ Строк достаточно, обычная отправка');
+        console.log('[YD-SQ BATCH] ✅ Минусов меньше лимита, обычная отправка');
 
-        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
+        // **ОБЫЧНАЯ ОТПРАВКА** (если минусов меньше лимита модалки)
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -3494,6 +3499,7 @@
     }
 
 })();
+
 
 
 
