@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.95
+// @version 0.121.96
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2217,9 +2217,27 @@
         showYdsqNotification(batchInfo, 'info');
         console.log(`[YD-SQ] Отправка ${batchInfo}`);
 
-        // Резервируем строки для текущего пакета
+        // Отмечаем чекбоксы для selections из текущего пакета
+        const rowsInBatch = new Set();
+        for (const sel of batch) {
+            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                rowsInBatch.add(sel.rowId);
+                // Отметить чекбокс для этой строки
+                const row = document.querySelector(`[data-yd-row-id="${sel.rowId}"]`);
+                if (row) {
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    if (cb && !cb.checked) {
+                        clickCheckbox(cb, true);
+                    }
+                }
+            }
+        }
+
+        // Резервируем дополнительные строки если нужно
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+
+        console.log(`[YD-SQ BATCH] checkedCount: ${checkedCount}, values.length: ${values.length}`);
 
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
@@ -3444,6 +3462,7 @@
     }
 
 })();
+
 
 
 
