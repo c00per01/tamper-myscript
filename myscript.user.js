@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.103
+// @version 0.121.104
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2185,9 +2185,16 @@
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
+        console.log('[YD-SQ BATCH RESERVE] ========== РЕЗЕРВАЦИЯ СТРОК ==========');
+        console.log('[YD-SQ BATCH RESERVE] Нужно отправить минусов:', values.length);
+        console.log('[YD-SQ BATCH RESERVE] Уже отмечено строк (checkedCount):', checkedCount);
+
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
             const freeRows = findFreeRows(null);
+
+            console.log('[YD-SQ BATCH RESERVE] Нужно зарезервировать (toReserve):', toReserve);
+            console.log('[YD-SQ BATCH RESERVE] Свободных строк доступно:', freeRows.length);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2200,7 +2207,16 @@
                     reserved++;
                 }
             }
+
+            console.log('[YD-SQ BATCH RESERVE] Зарезервировано строк:', reserved);
+        } else {
+            console.log('[YD-SQ BATCH RESERVE] Резервация не нужна, строк достаточно');
         }
+
+        // Проверка финального количества
+        const finalChecked = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        console.log('[YD-SQ BATCH RESERVE] ИТОГО отмечено строк:', finalChecked);
+        console.log('[YD-SQ BATCH RESERVE] Ожидаемое количество полей в модалке:', finalChecked);
 
         await delay(250);
 
@@ -3443,6 +3459,7 @@
     }
 
 })();
+
 
 
 
