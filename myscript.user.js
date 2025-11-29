@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.106
+// @version 0.121.107
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2461,10 +2461,13 @@
             console.log('[YD-SQ FIELDS] Текущий пакет:', currentBatchIndex + 1, '/', batchQueue.length);
         }
 
-        // ИСПРАВЛЕНИЕ: Яндекс.Директ использует ОДНО textarea поле для всех минус-фраз!
+
+        // ИСПРАВЛЕНИЕ: Яндекс.Директ использует ОДНО поле для всех минус-фраз!
         // Все минусы нужно вставить через перенос строки
-        if (inputs.length === 1 && (inputs[0].tagName === 'TEXTAREA' || inputs[0].isContentEditable)) {
-            console.log('[YD-SQ FIELDS] ✅ Обнаружено ОДНО поле для всех минусов (textarea)');
+        // Это может быть TEXTAREA или INPUT
+        if (inputs.length === 1) {
+            console.log('[YD-SQ FIELDS] ✅ Обнаружено ОДНО поле для всех минусов');
+            console.log('[YD-SQ FIELDS] Тип поля:', inputs[0].tagName, inputs[0].className);
             const field = inputs[0];
             const allMinuses = values.join('\n'); // Объединяем через перенос строки
 
@@ -2473,7 +2476,7 @@
             // Очищаем поле
             if (field.tagName === 'TEXTAREA' || field.tagName === 'INPUT') {
                 field.value = allMinuses;
-            } else {
+            } else if (field.isContentEditable) {
                 field.textContent = allMinuses;
             }
 
@@ -3505,6 +3508,7 @@
     }
 
 })();
+
 
 
 
