@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.112
+// @version 0.121.113
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2263,10 +2263,51 @@
         });
 
 
-        // Пересчитываем состояние перед обычной отправкой, так как оно могло измениться
+
+        // Пересчитываем состояние
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
+        const freeRowsCount = findFreeRows(null).length;
+        const availableRows = checkedCount + freeRowsCount;
+
+        // Безопасный лимит для одного пакета
+        const SAFE_BATCH_LIMIT = 30;
+
+        console.log(`[YD-SQ] Диагностика отправки:
+        - Нужно отправить: ${neededTotal}
+        - Отмечено чекбоксов: ${checkedCount}
+        - Свободных строк: ${freeRowsCount}
+        - Всего доступно мест: ${availableRows}
+        - Лимит пакета: ${SAFE_BATCH_LIMIT}
+        - Условие батчинга: needed > available ИЛИ needed > ${SAFE_BATCH_LIMIT}`);
+
+        // **НОВАЯ ЛОГИКА БАТЧИНГА**
+        // Если не хватает строк ИЛИ количество минусов больше безопасного лимита - разбиваем на пакеты
+        if (neededTotal > availableRows || neededTotal > SAFE_BATCH_LIMIT) {
+            console.log('[YD-SQ] Включаем пакетную отправку!');
+
+            // Размер пакета: минимум из доступных строк и безопасного лимита
+            // Но не меньше 1
+            let batchSize = Math.min(availableRows, SAFE_BATCH_LIMIT);
+            if (batchSize < 1) batchSize = 1;
+
+            const batches = [];
+            const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
+
+            for (let i = 0; i < allSelections.length; i += batchSize) {
+                batches.push(allSelections.slice(i, i + batchSize));
+            }
+
+            batchQueue = batches;
+            currentBatchIndex = 0;
+
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (по ~${batchSize} шт.)`, 'info');
+            await delay(1000);
+
+            // Отправляем первый пакет
+            return sendBatch();
+        }
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -3390,6 +3431,7 @@
     }
 
 })();
+
 
 
 
