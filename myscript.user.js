@@ -2182,36 +2182,10 @@
 
         // Резервируем строки для текущего пакета
         const rows = getAllRowsOnPage();
-        const checkedRows = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; });
-        let currentChecked = checkedRows.length;
-        const targetCount = values.length;
+        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-        console.log(`[YD-SQ] Подготовка пакета: отмечено ${currentChecked}, нужно ${targetCount}`);
-
-        // 1. Если отмечено БОЛЬШЕ, чем нужно - снимаем лишние
-        if (currentChecked > targetCount) {
-            const toRemove = currentChecked - targetCount;
-            let removed = 0;
-            // Снимаем с конца, чтобы не задеть первые (возможно, видимые) строки, если это важно
-            // Но лучше снимать те, которые мы сами отметили (ydAuto), если есть
-            // Для простоты снимаем с конца списка отмеченных
-            for (let i = checkedRows.length - 1; i >= 0 && removed < toRemove; i--) {
-                const row = checkedRows[i];
-                const cb = row.querySelector('input[type="checkbox"]');
-                if (cb && cb.checked) {
-                    clickCheckbox(cb, false);
-                    removed++;
-                }
-            }
-        }
-
-        // 2. Если отмечено МЕНЬШЕ, чем нужно - добавляем
-        // Пересчитываем после снятия
-        const updatedCheckedRows = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; });
-        currentChecked = updatedCheckedRows.length;
-
-        if (currentChecked < targetCount) {
-            const toReserve = targetCount - currentChecked;
+        if (checkedCount < values.length) {
+            const toReserve = values.length - checkedCount;
             const freeRows = findFreeRows(null);
 
             let reserved = 0;
@@ -2288,36 +2262,15 @@
             }
         });
 
-
-
-        // Пересчитываем состояние
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
-        const freeRowsCount = findFreeRows(null).length;
-        const availableRows = checkedCount + freeRowsCount;
-
-        // Безопасный лимит для одного пакета
-        const SAFE_BATCH_LIMIT = 30;
-
-        console.log(`[YD-SQ] Диагностика отправки:
-        - Нужно отправить: ${neededTotal}
-        - Отмечено чекбоксов: ${checkedCount}
-        - Свободных строк: ${freeRowsCount}
-        - Всего доступно мест: ${availableRows}
-        - Лимит пакета: ${SAFE_BATCH_LIMIT}
-        - Условие батчинга: needed > available ИЛИ needed > ${SAFE_BATCH_LIMIT}`);
+        const availableRows = checkedCount + findFreeRows(null).length;
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк ИЛИ количество минусов больше безопасного лимита - разбиваем на пакеты
-        if (neededTotal > availableRows || neededTotal > SAFE_BATCH_LIMIT) {
-            console.log('[YD-SQ] Включаем пакетную отправку!');
-
-            // Размер пакета: минимум из доступных строк и безопасного лимита
-            // Но не меньше 1
-            let batchSize = Math.min(availableRows, SAFE_BATCH_LIMIT);
-            if (batchSize < 1) batchSize = 1;
-
+        // Если не хватает строк - разбиваем на пакеты
+        if (neededTotal > availableRows) {
+            const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2328,7 +2281,7 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (по ~${batchSize} шт.)`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
@@ -2482,9 +2435,6 @@
     function findResultPopup() {
         const c = document.querySelectorAll('[role="dialog"], div, section');
         for (const el of c) {
-            // Проверяем видимость элемента
-            if (el.offsetParent === null) continue;
-
             const t = el.textContent || '';
             if (!t) continue;
             if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
@@ -2495,10 +2445,6 @@
     let lastResultPopupSuccessTime = 0;
 
     function tryCloseResultPopup() {
-        // Если мы ничего не отправляли (нет ожидающих минусов и очереди), игнорируем попапы
-        // Это предотвращает ложные срабатывания при ручных действиях
-        if (pendingSentMinuses.length === 0 && batchQueue.length === 0) return false;
-
         const pop = findResultPopup();
         if (!pop) return false;
         const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
@@ -3457,11 +3403,6 @@
     }
 
 })();
-
-
-
-
-
 
 
 
