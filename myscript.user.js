@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.90
+// @version 0.121.91
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2210,8 +2210,8 @@
             return;
         }
 
-        let batch = batchQueue[currentBatchIndex];
-        let values = batch.map(sel => sel.display);
+        const batch = batchQueue[currentBatchIndex];
+        const values = batch.map(sel => sel.display);
         const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
 
         showYdsqNotification(batchInfo, 'info');
@@ -2238,41 +2238,7 @@
             }
         }
 
-        // Даем интерфейсу время на обработку кликов (увеличено с 250 до 1000мс)
-        await delay(1000);
-
-        // ПРОВЕРКА: Сколько реально отметилось?
-        const finalRows = getAllRowsOnPage();
-        const finalChecked = finalRows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-
-        if (finalChecked < values.length) {
-            console.warn(`[YD-SQ] Планировали ${values.length}, но отмечено только ${finalChecked}. Урезаем пакет.`);
-            showYdsqNotification(`Урезаем пакет до ${finalChecked} (не хватило строк)`, 'warn');
-
-            if (finalChecked === 0) {
-                showYdsqNotification('Не удалось отметить строки. Пропуск пакета.', 'error');
-                currentBatchIndex++;
-                setTimeout(sendBatch, 1000);
-                return;
-            }
-
-            // Отрезаем лишнее от текущего пакета
-            const itemsToSend = batch.slice(0, finalChecked);
-            const itemsLeft = batch.slice(finalChecked);
-
-            // Обновляем текущий пакет и values
-            batch = itemsToSend;
-            values = batch.map(sel => sel.display);
-
-            // Возвращаем невлезшие элементы обратно в начало очереди (в следующий пакет или новый)
-            // Самый простой способ: вставить новый пакет сразу после текущего
-            if (itemsLeft.length > 0) {
-                batchQueue.splice(currentBatchIndex + 1, 0, itemsLeft);
-                // Обновляем текущий элемент в очереди, чтобы tryCloseResultPopup удалил правильные ID
-                batchQueue[currentBatchIndex] = batch;
-                showYdsqNotification(`Остаток (${itemsLeft.length}) перенесен в следующий пакет`, 'info');
-            }
-        }
+        await delay(250);
 
         // Открываем модалку
         const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
@@ -2339,16 +2305,9 @@
         const availableRows = checkedCount + findFreeRows(null).length;
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Лимит размера пакета для безопасности (чтобы не перегружать модалку и избегать ошибок "мало полей")
-        const BATCH_SIZE_LIMIT = 40;
-
-        // Если не хватает строк ИЛИ количество превышает лимит - разбиваем на пакеты
-        if (neededTotal > availableRows || neededTotal > BATCH_SIZE_LIMIT) {
-            // Размер пакета - минимум из доступных строк и лимита
-            // Но не меньше 1 (на всякий случай)
-            let batchSize = Math.min(availableRows, BATCH_SIZE_LIMIT);
-            if (batchSize < 1) batchSize = 1; // Fallback
-
+        // Если не хватает строк - разбиваем на пакеты
+        if (neededTotal > availableRows) {
+            const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2359,7 +2318,7 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (по ~${batchSize} шт)`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
@@ -3485,8 +3444,6 @@
     }
 
 })();
-
-
 
 
 
