@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.88
+// @version 0.121.89
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2300,6 +2300,37 @@
         });
 
         const rows = getAllRowsOnPage();
+        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        const neededTotal = values.length;
+        const availableRows = checkedCount + findFreeRows(null).length;
+
+        // **НОВАЯ ЛОГИКА БАТЧИНГА**
+        // Лимит размера пакета для безопасности (чтобы не перегружать модалку и избегать ошибок "мало полей")
+        const BATCH_SIZE_LIMIT = 40;
+
+        // Если не хватает строк ИЛИ количество превышает лимит - разбиваем на пакеты
+        if (neededTotal > availableRows || neededTotal > BATCH_SIZE_LIMIT) {
+            // Размер пакета - минимум из доступных строк и лимита
+            // Но не меньше 1 (на всякий случай)
+            let batchSize = Math.min(availableRows, BATCH_SIZE_LIMIT);
+            if (batchSize < 1) batchSize = 1; // Fallback
+
+            const batches = [];
+            const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
+
+            for (let i = 0; i < allSelections.length; i += batchSize) {
+                batches.push(allSelections.slice(i, i + batchSize));
+            }
+
+            batchQueue = batches;
+            currentBatchIndex = 0;
+
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (по ~${batchSize} шт)`, 'info');
+            await delay(1000);
+
+            // Отправляем первый пакет
+            return sendBatch();
+        }
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -3420,6 +3451,7 @@
     }
 
 })();
+
 
 
 
