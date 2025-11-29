@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.108
+// @version 0.121.109
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2435,6 +2435,9 @@
     function findResultPopup() {
         const c = document.querySelectorAll('[role="dialog"], div, section');
         for (const el of c) {
+            // Проверяем видимость элемента
+            if (el.offsetParent === null) continue;
+
             const t = el.textContent || '';
             if (!t) continue;
             if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
@@ -2445,6 +2448,10 @@
     let lastResultPopupSuccessTime = 0;
 
     function tryCloseResultPopup() {
+        // Если мы ничего не отправляли (нет ожидающих минусов и очереди), игнорируем попапы
+        // Это предотвращает ложные срабатывания при ручных действиях
+        if (pendingSentMinuses.length === 0 && batchQueue.length === 0) return false;
+
         const pop = findResultPopup();
         if (!pop) return false;
         const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
@@ -2508,15 +2515,11 @@
                         }, 1500);
                     } else {
                         // Все пакеты отправлены
-                        const totalBatches = batchQueue.length;
                         batchQueue = [];
                         currentBatchIndex = 0;
-                        showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
+                        isSending = false;
+                        showYdsqNotification(`✅ Все ${currentBatchIndex} пакетов отправлены!`, 'success');
                         resetClearAllButton();
-                        // ВАЖНО: Сбрасываем isSending только ПОСЛЕ очистки batchQueue
-                        setTimeout(() => {
-                            isSending = false;
-                        }, 500);
                     }
                 } else {
                     // Обычная отправка - очищаем все selections
@@ -3407,7 +3410,6 @@
     }
 
 })();
-
 
 
 
