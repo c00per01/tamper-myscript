@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.110
+// @version 0.121.111
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2262,40 +2262,6 @@
             }
         });
 
-        const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        const neededTotal = values.length;
-        const freeRowsCount = findFreeRows(null).length;
-        const availableRows = checkedCount + freeRowsCount;
-
-        console.log(`[YD-SQ] Диагностика отправки:
-        - Нужно отправить: ${neededTotal}
-        - Отмечено чекбоксов: ${checkedCount}
-        - Свободных строк: ${freeRowsCount}
-        - Всего доступно мест: ${availableRows}
-        - Условие батчинга (needed > available): ${neededTotal > availableRows}`);
-
-        // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
-        if (neededTotal > availableRows) {
-            console.log('[YD-SQ] Включаем пакетную отправку!');
-            const batchSize = availableRows;
-            const batches = [];
-            const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
-
-            for (let i = 0; i < allSelections.length; i += batchSize) {
-                batches.push(allSelections.slice(i, i + batchSize));
-            }
-
-            batchQueue = batches;
-            currentBatchIndex = 0;
-
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
-            await delay(1000);
-
-            // Отправляем первый пакет
-            return sendBatch();
-        }
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -3419,6 +3385,7 @@
     }
 
 })();
+
 
 
 
