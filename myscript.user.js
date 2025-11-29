@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.107
+// @version 0.121.108
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -43,6 +43,14 @@
     let lastManualScrollTime = 0;
     const autoScrollDebounceMap = new Map();
 
+    // Стоп-слова для строгого режима фраз
+    // Стоп-слова для строгого режима фраз и автоматического переключения в strict
+    const STOPWORDS = new Set([
+        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
+        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
+        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'что', 'чем', 'тем', 'все', 'всё',
+        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та'
+    ]);
 
     // Regex patterns for Porter Stemmer
     const RE_PERFECTIVEGERUND = /((ив|ивши|ившись|ыв|ывши|ывшись)|((?<=[ая])(в|вши|вшись)))$/;
@@ -1090,192 +1098,19 @@
 
     // ==================== HIGHLIGHTS ====================
 
-    // Список стоп-слов Яндекс.Директ
-    const STOPWORDS = new Set([
-        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
-        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
-        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'чем', 'тем', 'все', 'всё',
-        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та',
-        'не', 'ну', 'уже', 'ещё', 'только', 'более', 'самый', 'очень', 'также', 'ведь'
-    ]);
-
-    function isStopWord(word) {
-        return STOPWORDS.has(word.toLowerCase());
-    }
-
-    // Парсинг минус-правила согласно официальным правилам Яндекс.Директ
-    function parseMinusRule(raw) {
-        let original = raw;
-        raw = raw.trim();
-
-        // Удалить ведущий дефис
-        if (raw.startsWith('-')) {
-            raw = raw.substring(1).trim();
-        }
-
-        let type = 'broad'; // по умолчанию
-        let content = raw;
-
-        // Определить тип по обертке
-        if (raw.startsWith('"') && raw.endsWith('"')) {
-            type = 'quote';
-            content = raw.slice(1, -1);
-        } else if (raw.startsWith('[') && raw.endsWith(']')) {
-            type = 'bracket';
-            content = raw.slice(1, -1);
-        }
-
-        // Разбить на слова
-        const words = content.split(/\s+/).filter(w => w);
-
-        // Обработать каждое слово
-        const parsedWords = words.map(word => {
-            let text = word.toLowerCase();
-            let isStrict = false;
-            let isStopWordPlus = false;
-
-            // Проверить на восклицательный знак
-            if (text.startsWith('!')) {
-                isStrict = true;
-                text = text.substring(1);
-            }
-
-            // Проверить на плюс (для стоп-слов)
-            if (text.startsWith('+')) {
-                text = text.substring(1);
-                isStopWordPlus = isStopWord(text);
-            }
-
-            return { text, isStrict, isStopWordPlus };
-        });
-
-        return { type, words: parsedWords, raw: original };
-    }
-
-    // Сопоставление для broad типа (обычная минус-фраза)
-    function matchBroad(rule, rowWordsData) {
-        const rowIndicesUsed = new Set();
-
-        for (const rWord of rule.words) {
-            const foundIdx = rowWordsData.findIndex((d, idx) => {
-                if (rowIndicesUsed.has(idx)) return false;
-
-                if (rWord.isStrict) {
-                    // Точное совпадение
-                    return d.lower === rWord.text;
-                } else if (rWord.isStopWordPlus) {
-                    // Стоп-слово — точное совпадение
-                    return d.lower === rWord.text;
-                } else {
-                    // Морфологическое совпадение
-                    return d.stem === stemWord(rWord.text);
-                }
-            });
-
-            if (foundIdx === -1) {
-                // Слово не найдено — не блокируем
-                return { match: false };
-            }
-
-            rowIndicesUsed.add(foundIdx);
-        }
-
-        // Все слова найдены — блокируем
-        return { match: true, indices: Array.from(rowIndicesUsed) };
-    }
-
-    // Сопоставление для quote типа (кавычки "" — фиксируют количество слов)
-    function matchQuote(rule, rowWordsData) {
-        const phraseLen = rule.words.length;
-        const rowLen = rowWordsData.length;
-
-        // Проверить количество слов
-        if (rowLen !== phraseLen) {
-            return { match: false };
-        }
-
-        // Проверить, что все слова минус-фразы присутствуют
-        const rowIndicesUsed = new Set();
-
-        for (const rWord of rule.words) {
-            const foundIdx = rowWordsData.findIndex((d, idx) => {
-                if (rowIndicesUsed.has(idx)) return false;
-
-                if (rWord.isStrict) {
-                    return d.lower === rWord.text;
-                } else {
-                    return d.stem === stemWord(rWord.text);
-                }
-            });
-
-            if (foundIdx === -1) {
-                return { match: false };
-            }
-
-            rowIndicesUsed.add(foundIdx);
-        }
-
-        // Все слова найдены и количество совпадает — блокируем ВСЮ строку
-        return { match: true, indices: Array.from({ length: rowLen }, (_, i) => i) };
-    }
-
-    // Сопоставление для bracket типа (скобки [] — фиксируют порядок слов)
-    function matchBracket(rule, rowWordsData) {
-        const phraseLen = rule.words.length;
-        const rowLen = rowWordsData.length;
-
-        if (rowLen < phraseLen) {
-            return { match: false };
-        }
-
-        // Найти последовательность слов
-        for (let i = 0; i <= rowLen - phraseLen; i++) {
-            let sequenceMatch = true;
-            let currentRowIdx = i;
-            const matchedIndices = [];
-
-            for (let j = 0; j < phraseLen; j++) {
-                const rWord = rule.words[j];
-
-                // Пропустить стоп-слова между словами минус-фразы
-                while (currentRowIdx < rowLen && isStopWord(rowWordsData[currentRowIdx].lower)) {
-                    currentRowIdx++;
-                }
-
-                if (currentRowIdx >= rowLen) {
-                    sequenceMatch = false;
-                    break;
-                }
-
-                const d = rowWordsData[currentRowIdx];
-                const match = rWord.isStrict
-                    ? (d.lower === rWord.text)
-                    : (d.stem === stemWord(rWord.text));
-
-                if (!match) {
-                    sequenceMatch = false;
-                    break;
-                }
-
-                matchedIndices.push(currentRowIdx);
-                currentRowIdx++;
-            }
-
-            if (sequenceMatch) {
-                return { match: true, indices: matchedIndices };
-            }
-        }
-
-        return { match: false };
-    }
-
     // Cache for parsed rules to avoid re-parsing on every update
     let cachedImportedRules = null;
     let lastImportedMinusesRef = null;
 
     function updateHighlights() {
         // 1. Clear classes
+        // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
+            sp.className = 'yd-word'; // Reset to base class
+            // Restore original classes if any? 
+            // Actually wordSpans only have 'yd-word' initially.
+            // But wait, if we have other classes?
+            // Safer to remove specific classes.
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
@@ -1287,6 +1122,7 @@
         }
 
         // 2. Prepare Rules
+        // Пересчитываем кэш, если изменился массив или количество активных элементов
         const activeImported = importedMinuses.filter(imp => !imp.deleted);
         const shouldRebuild = lastImportedMinusesRef !== importedMinuses ||
             !cachedImportedRules ||
@@ -1296,7 +1132,6 @@
             cachedImportedRules = activeImported.map(imp => {
                 const r = parseMinusRule(imp.raw);
                 r.source = 'imported';
-                r.importedAt = imp.importedAt;
                 return r;
             });
             lastImportedMinusesRef = importedMinuses;
@@ -1309,14 +1144,14 @@
             if (sel.display) {
                 const r = parseMinusRule(sel.display);
                 r.source = 'selection';
-                r.kind = sel.kind;
                 rules.push(r);
             }
         }
 
-        if (rules.length === 0) return;
+        if (rules.length === 0 && sentHistory.length === 0) return;
 
         // 3. Group spans by row (Optimization)
+        // This avoids O(N*M) filtering inside the loop.
         const spansByRow = new Map();
         for (const sp of wordSpans) {
             const rid = sp.dataset.rowId;
@@ -1338,42 +1173,206 @@
                 stem: s.dataset.stem,
                 span: s
             }));
+            const rowLen = rowWordsData.length;
 
             for (const rule of rules) {
-                let matchResult = { match: false };
+                let isMatch = false;
+                let matchedIndices = new Set();
+                let strictIndices = new Set();
 
-                // Применить соответствующий алгоритм согласно ТЗ
+                let baseClass = 'yd-imported-minus';
+                if (rule.source === 'selection') {
+                    baseClass = 'yd-selected-soft';
+                }
+
                 if (rule.type === 'quote') {
-                    matchResult = matchQuote(rule, rowWordsData);
-                } else if (rule.type === 'bracket') {
-                    matchResult = matchBracket(rule, rowWordsData);
-                } else {
-                    matchResult = matchBroad(rule, rowWordsData);
-                }
+                    // Quote: Exact Set of words (no extra words in row)
+                    if (rowLen === rule.words.length) {
+                        const rowIndicesUsed = new Set();
+                        let allRuleWordsFound = true;
 
-                if (matchResult.match) {
-                    // Определить класс для подсветки
-                    let baseClass = 'yd-imported-minus';
+                        for (const rWord of rule.words) {
+                            // Find matching word in row
+                            const foundIdx = rowWordsData.findIndex((d, idx) => {
+                                if (rowIndicesUsed.has(idx)) return false;
+                                if (rWord.isStrict) {
+                                    return d.lower === rWord.text;
+                                } else {
+                                    return d.stem === stemWord(rWord.text);
+                                }
+                            });
 
-                    if (rule.source === 'selection') {
-                        if (rule.type === 'quote' || rule.kind === 'phrase') {
+                            if (foundIdx !== -1) {
+                                rowIndicesUsed.add(foundIdx);
+                            } else {
+                                allRuleWordsFound = false;
+                                break;
+                            }
+                        }
+
+                        if (allRuleWordsFound) {
+                            isMatch = true;
+                            for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
                             baseClass = 'yd-selected-phrase';
-                        } else if (rule.type === 'bracket') {
-                            baseClass = 'yd-selected-strict';
-                        } else {
-                            baseClass = 'yd-selected-soft';
                         }
                     }
 
+                } else if (rule.type === 'bracket') {
+                    // Bracket: Fixed sequence
+                    const pLen = rule.words.length;
+                    if (rowLen >= pLen) {
+                        for (let i = 0; i <= rowLen - pLen; i++) {
+                            let subMatch = true;
+                            for (let j = 0; j < pLen; j++) {
+                                const rWord = rule.words[j];
+                                const d = rowWordsData[i + j];
+                                const match = rWord.isStrict
+                                    ? (d.lower === rWord.text)
+                                    : (d.stem === stemWord(rWord.text));
 
-                    // Подсветить совпавшие слова
-                    for (const idx of matchResult.indices) {
-                        rowWordsData[idx].span.classList.add(baseClass);
-                        if (rule.source === 'imported' && rule.importedAt) {
-                            rowWordsData[idx].span.dataset.importedAt = rule.importedAt;
+                                if (!match) {
+                                    subMatch = false;
+                                    break;
+                                }
+                            }
+
+                            if (subMatch) {
+                                isMatch = true;
+                                for (let k = 0; k < pLen; k++) matchedIndices.add(i + k);
+                            }
+                        }
+                    }
+                    if (isMatch) baseClass = 'yd-selected-strict';
+
+                } else if (rule.type === 'broad') {
+                    // Broad: All words present anywhere
+                    const indicesFound = [];
+                    let allFound = true;
+
+                    for (const rWord of rule.words) {
+                        const foundForThisWord = [];
+                        rowWordsData.forEach((d, idx) => {
+                            const match = rWord.isStrict
+                                ? (d.lower === rWord.text)
+                                : (d.stem === stemWord(rWord.text));
+                            if (match) {
+                                foundForThisWord.push(idx);
+                                if (rWord.isStrict) strictIndices.add(idx);
+                            }
+                        });
+
+                        if (foundForThisWord.length > 0) {
+                            indicesFound.push(...foundForThisWord);
+                        } else {
+                            allFound = false;
+                            break;
+                        }
+                    }
+
+                    if (allFound) {
+                        isMatch = true;
+                        indicesFound.forEach(idx => matchedIndices.add(idx));
+                    }
+                }
+
+                if (isMatch) {
+                    for (const idx of matchedIndices) {
+                        const span = rowWordsData[idx].span;
+                        if (rule.type === 'broad' && strictIndices.has(idx)) {
+                            span.classList.add('yd-selected-strict');
+                        } else {
+                            span.classList.add(baseClass);
                         }
                     }
                 }
+            }
+        }
+
+        // --- HISTORY ---
+        // Optimized history check
+        if (sentHistory.length > 0) {
+            const sentStems = new Set();
+            const sentLowers = new Set();
+            for (const sent of sentHistory) {
+                sentStems.add(stemWord(sent.raw));
+                sentLowers.add(sent.raw.toLowerCase());
+            }
+
+            for (const span of wordSpans) {
+                if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
+                    span.classList.add('yd-sent-history');
+                }
+            }
+        }
+
+        // --- SELECTION SOURCE HIGHLIGHT ---
+        // Explicitly highlight words in the source row for phrase selections
+        for (const sel of selections.values()) {
+            if (sel.kind === 'phrase' && !sel._building && sel.pageKey === currentPageKey && sel.rowId && sel.words) {
+                // Find spans in this row
+                const rowSpans = spansByRow.get(sel.rowId);
+                if (rowSpans) {
+                    for (const span of rowSpans) {
+                        if (sel.words.includes(span.dataset.word)) {
+                            span.classList.add('yd-selected-phrase');
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- PHRASE BUILDING ---
+        // Restore highlighting for the phrase being built
+        if (phraseInProgress) {
+            const phraseId = phraseInProgress.id.split(':')[1];
+            for (const word of phraseInProgress.words) {
+                for (const span of wordSpans) {
+                    if (String(phraseInProgress.rowId) === span.dataset.rowId && span.dataset.word === word) {
+                        span.classList.add('yd-phrase-building');
+                        span.dataset.phraseId = phraseId;
+                    }
+                }
+            }
+        }
+    }
+
+    // Парсер минус-правил
+    function parseMinusRule(raw) {
+        raw = raw.trim();
+        let type = 'broad';
+        let content = raw;
+
+        if (raw.startsWith('"') && raw.endsWith('"')) {
+            type = 'quote';
+            content = raw.slice(1, -1);
+        } else if (raw.startsWith('[') && raw.endsWith(']')) {
+            type = 'bracket';
+            content = raw.slice(1, -1);
+        }
+
+        // Разбиваем на слова
+        const rawWords = content.split(/[\s+]+/).filter(w => w);
+        const words = rawWords.map(w => {
+            let text = w.toLowerCase();
+            let isStrict = false;
+            if (text.startsWith('!')) {
+                isStrict = true;
+                text = text.substring(1);
+            }
+            return { text, isStrict };
+        });
+
+        return { type, words, raw };
+    }
+
+
+    function restoreVisualMarkers() {
+        updateHighlights();
+
+        // Восстановить чекбоксы для сохраненных выделений
+        for (const sel of selections.values()) {
+            if (sel.pageKey === currentPageKey && sel.rowId) {
+                ensureRowChecked(sel.rowId);
             }
         }
     }
@@ -2185,16 +2184,9 @@
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-        console.log('[YD-SQ BATCH RESERVE] ========== РЕЗЕРВАЦИЯ СТРОК ==========');
-        console.log('[YD-SQ BATCH RESERVE] Нужно отправить минусов:', values.length);
-        console.log('[YD-SQ BATCH RESERVE] Уже отмечено строк (checkedCount):', checkedCount);
-
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
             const freeRows = findFreeRows(null);
-
-            console.log('[YD-SQ BATCH RESERVE] Нужно зарезервировать (toReserve):', toReserve);
-            console.log('[YD-SQ BATCH RESERVE] Свободных строк доступно:', freeRows.length);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2207,16 +2199,7 @@
                     reserved++;
                 }
             }
-
-            console.log('[YD-SQ BATCH RESERVE] Зарезервировано строк:', reserved);
-        } else {
-            console.log('[YD-SQ BATCH RESERVE] Резервация не нужна, строк достаточно');
         }
-
-        // Проверка финального количества
-        const finalChecked = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        console.log('[YD-SQ BATCH RESERVE] ИТОГО отмечено строк:', finalChecked);
-        console.log('[YD-SQ BATCH RESERVE] Ожидаемое количество полей в модалке:', finalChecked);
 
         await delay(250);
 
@@ -2284,28 +2267,12 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
-        // ВАЖНО: Яндекс.Директ ограничивает количество полей в модалке добавления минус-фраз!
-        // Даже если строк достаточно, в модалке будет только ~20-30 полей ввода
-        const MAX_MODAL_FIELDS = 20; // Максимум полей в модалке (с запасом)
-
-        console.log('[YD-SQ BATCH] ========== ПРОВЕРКА ПАКЕТНОЙ ОТПРАВКИ ==========');
-        console.log('[YD-SQ BATCH] Всего selections:', selections.size);
-        console.log('[YD-SQ BATCH] Всего values (для отправки):', neededTotal);
-        console.log('[YD-SQ BATCH] Отмеченных строк (checkedCount):', checkedCount);
-        console.log('[YD-SQ BATCH] Свободных строк:', findFreeRows(null).length);
-        console.log('[YD-SQ BATCH] Доступно строк всего (availableRows):', availableRows);
-        console.log('[YD-SQ BATCH] ЛИМИТ ПОЛЕЙ В МОДАЛКЕ (MAX_MODAL_FIELDS):', MAX_MODAL_FIELDS);
-        console.log('[YD-SQ BATCH] Нужна пакетная отправка?', neededTotal > MAX_MODAL_FIELDS);
-
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если минусов больше чем может вместить модалка - разбиваем на пакеты
-        if (neededTotal > MAX_MODAL_FIELDS) {
-            const batchSize = Math.min(MAX_MODAL_FIELDS, availableRows); // Размер пакета = минимум из лимита модалки и доступных строк
+        // Если не хватает строк - разбиваем на пакеты
+        if (neededTotal > availableRows) {
+            const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
-
-            console.log('[YD-SQ BATCH] ✅ ЗАПУСК ПАКЕТНОЙ ОТПРАВКИ!');
-            console.log('[YD-SQ BATCH] Размер одного пакета (batchSize):', batchSize);
 
             for (let i = 0; i < allSelections.length; i += batchSize) {
                 batches.push(allSelections.slice(i, i + batchSize));
@@ -2314,17 +2281,12 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            console.log('[YD-SQ BATCH] Всего пакетов:', batches.length);
-            console.log('[YD-SQ BATCH] Пакеты:', batches.map((b, i) => `Пакет ${i + 1}: ${b.length} минусов`));
-
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${batchSize} минусов`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
             return sendBatch();
         }
-
-        console.log('[YD-SQ BATCH] ℹ️ Обычная отправка (минусов меньше лимита модалки)');
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -2420,104 +2382,41 @@
             const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
             const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
 
-            console.log('[YD-SQ MODAL] ========== ПОИСК ПОЛЕЙ В МОДАЛКЕ ==========');
-            console.log('[YD-SQ MODAL] Попытка:', attempt + 1, '/ 12');
-            console.log('[YD-SQ MODAL] Найдено textareas:', textareas.length);
-            console.log('[YD-SQ MODAL] Найдено textInputs:', textInputs.length);
-            console.log('[YD-SQ MODAL] Найдено otherInputs:', otherInputs.length);
-            console.log('[YD-SQ MODAL] Найдено contentEditables:', contentEditables.length);
-
             const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
             const uniq = [...new Set(all)];
-
-            console.log('[YD-SQ MODAL] Всего уникальных полей (uniq):', uniq.length);
-
             const visible = uniq.filter(el => {
                 const r = el.getBoundingClientRect();
                 return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
             });
 
-            console.log('[YD-SQ MODAL] Видимых полей (visible):', visible.length);
-            if (visible.length > 0) {
-                console.log('[YD-SQ MODAL] Типы найденных полей:', visible.map(el => el.tagName + (el.className ? '.' + el.className.split(' ')[0] : '')));
-            }
-
             if (visible.length > 0) {
                 fillFields(visible, values);
                 setTimeout(() => tryCloseResultPopup(), 1200);
             } else {
-                console.log('[YD-SQ MODAL] Поля не найдены, повторная попытка через 300мс...');
                 waitForInputFields(modal, values, attempt + 1);
             }
         }, 300);
     }
 
     function fillFields(inputs, values) {
-        console.log('[YD-SQ FIELDS] ========== ЗАПОЛНЕНИЕ ПОЛЕЙ ==========');
-        console.log('[YD-SQ FIELDS] Количество полей (inputs.length):', inputs.length);
-        console.log('[YD-SQ FIELDS] Количество значений (values.length):', values.length);
-        console.log('[YD-SQ FIELDS] Батчинг активен?', batchQueue.length > 0);
-        if (batchQueue.length > 0) {
-            console.log('[YD-SQ FIELDS] Текущий пакет:', currentBatchIndex + 1, '/', batchQueue.length);
+        inputs.forEach((input) => {
+            if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        const n = Math.min(inputs.length, values.length);
+        for (let i = 0; i < n; i++) {
+            const el = inputs[i];
+            const val = values[i];
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-
-        // ИСПРАВЛЕНИЕ: Яндекс.Директ использует ОДНО поле для всех минус-фраз!
-        // Все минусы нужно вставить через перенос строки
-        // Это может быть TEXTAREA или INPUT
-        if (inputs.length === 1) {
-            console.log('[YD-SQ FIELDS] ✅ Обнаружено ОДНО поле для всех минусов');
-            console.log('[YD-SQ FIELDS] Тип поля:', inputs[0].tagName, inputs[0].className);
-            const field = inputs[0];
-            const allMinuses = values.join('\n'); // Объединяем через перенос строки
-
-            console.log('[YD-SQ FIELDS] Вставляем', values.length, 'минусов через \\n');
-
-            // Очищаем поле
-            if (field.tagName === 'TEXTAREA' || field.tagName === 'INPUT') {
-                field.value = allMinuses;
-            } else if (field.isContentEditable) {
-                field.textContent = allMinuses;
-            }
-
-            // Отправляем события
-            field.dispatchEvent(new Event('input', { bubbles: true }));
-            field.dispatchEvent(new Event('change', { bubbles: true }));
-            field.dispatchEvent(new Event('blur', { bubbles: true }));
-            if (field.isContentEditable) {
-                field.dispatchEvent(new Event('keyup', { bubbles: true }));
-            }
-
-            console.log('[YD-SQ FIELDS] ✅ Все', values.length, 'минусов вставлены в одно поле');
-        } else {
-            // Старая логика для множественных полей (если вдруг)
-            console.log('[YD-SQ FIELDS] Режим множественных полей');
-
-            inputs.forEach((input) => {
-                if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-
-            const n = Math.min(inputs.length, values.length);
-            console.log('[YD-SQ FIELDS] Будет заполнено полей:', n);
-
-            for (let i = 0; i < n; i++) {
-                const el = inputs[i];
-                const val = values[i];
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                el.dispatchEvent(new Event('blur', { bubbles: true }));
-                if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
-            }
-
-            if (values.length > inputs.length) {
-                console.warn('[YD-SQ FIELDS] ⚠️ ПРОБЛЕМА: Значений больше чем полей!');
-                console.warn('[YD-SQ FIELDS] Разница:', values.length - inputs.length, 'минусов не влезли');
-                showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
-            }
-        }
+        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
@@ -3508,12 +3407,6 @@
     }
 
 })();
-
-
-
-
-
-
 
 
 
