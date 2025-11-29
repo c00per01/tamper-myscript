@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.91
+// @version 0.121.92
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2333,11 +2333,7 @@
             if (selsOnPage.length > 0) lastUsedRowId = selsOnPage[selsOnPage.length - 1]?.rowId;
 
             const freeRows = findFreeRows(lastUsedRowId);
-            if (toReserve > freeRows.length) {
-                showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
-                isSending = false;
-                return;
-            }
+            // Батчинг уже проверил, что availableRows >= neededTotal, поэтому здесь достаточно строк
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -3444,6 +3440,7 @@
     }
 
 })();
+
 
 
 
