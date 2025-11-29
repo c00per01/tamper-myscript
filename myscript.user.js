@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.86
+// @version 0.121.87
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2304,10 +2304,18 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
-        // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
-        if (neededTotal > availableRows) {
-            const batchSize = availableRows;
+        // Максимальное количество полей в модалке Яндекс.Директа
+        const MAX_MODAL_FIELDS = 60; // Обычно ~63, берем с запасом
+
+        // **ЛОГИКА БАТЧИНГА**
+        // Разбиваем на пакеты если:
+        // 1. Не хватает строк в таблице ИЛИ
+        // 2. Минусов больше чем может вместить модалка
+        const needsBatching = neededTotal > availableRows || neededTotal > MAX_MODAL_FIELDS;
+
+        if (needsBatching) {
+            // Размер пакета = минимум из (доступные строки, лимит модалки)
+            const batchSize = Math.min(availableRows, MAX_MODAL_FIELDS);
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2318,14 +2326,17 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
+            const reason = neededTotal > MAX_MODAL_FIELDS
+                ? `(лимит модалки: ${MAX_MODAL_FIELDS})`
+                : `(доступно строк: ${availableRows})`;
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${batchSize} минусов ${reason}`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
             return sendBatch();
         }
 
-        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
+        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно И помещается в модалку)
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -3444,6 +3455,7 @@
     }
 
 })();
+
 
 
 
