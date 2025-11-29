@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.99
+// @version 0.121.100
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2234,11 +2234,49 @@
         console.log('  - checkedCount:', checkedCount);
         console.log('  - values.length:', values.length);
 
-        if (checkedCount < values.length) {
-            const toReserve = values.length - checkedCount;
+        // КРИТИЧЕСКИ ВАЖНО для модалки:
+        // Количество отмеченных чекбоксов ДОЛЖНО ТОЧНО СОВПАДАТЬ с количеством минусов!
+
+        // 1. Сбрасываем ВСЕ автоматически отмеченные чекбоксы
+        console.log('[YD-SQ BATCH sendBatch] Сброс всех авто-чекбоксов...');
+        const allRows = getAllRowsOnPage();
+        allRows.forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb && cb.dataset.ydAuto === 'true') {
+                clickCheckbox(cb, false);
+                delete cb.dataset.ydAuto;
+                delete row.dataset.ydAutoRow;
+            }
+        });
+
+        // 2. Отмечаем ТОЛЬКО строки из текущего пакета
+        console.log('[YD-SQ BATCH sendBatch] Отметка строк текущего пакета...');
+        let markedCount = 0;
+        for (const sel of batch) {
+            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
+                const row = allRows.find(r => r.dataset.ydRowId === sel.rowId);
+                if (row) {
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    if (cb && !cb.checked) {
+                        clickCheckbox(cb, true);
+                        cb.dataset.ydAuto = 'true';
+                        row.dataset.ydAutoRow = 'true';
+                    }
+                    markedCount++;
+                }
+            }
+        }
+        console.log('  - markedCount (отмечено из пакета):', markedCount);
+
+        // 3. Если не хватает - резервируем свободные строки
+        const currentChecked = allRows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        console.log('  - currentChecked (после отметки пакета):', currentChecked);
+
+        if (currentChecked < values.length) {
+            const toReserve = values.length - currentChecked;
             const freeRows = findFreeRows(null);
 
-            console.log('  - toReserve (нужно зарезервировать):', toReserve);
+            console.log('  - toReserve (нужно еще зарезервировать):', toReserve);
             console.log('  - freeRows.length:', freeRows.length);
 
             let reserved = 0;
@@ -3532,6 +3570,7 @@
     }
 
 })();
+
 
 
 
