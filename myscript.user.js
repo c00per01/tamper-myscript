@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.113
+// @version 0.121.114
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2182,10 +2182,36 @@
 
         // Резервируем строки для текущего пакета
         const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        const checkedRows = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; });
+        let currentChecked = checkedRows.length;
+        const targetCount = values.length;
 
-        if (checkedCount < values.length) {
-            const toReserve = values.length - checkedCount;
+        console.log(`[YD-SQ] Подготовка пакета: отмечено ${currentChecked}, нужно ${targetCount}`);
+
+        // 1. Если отмечено БОЛЬШЕ, чем нужно - снимаем лишние
+        if (currentChecked > targetCount) {
+            const toRemove = currentChecked - targetCount;
+            let removed = 0;
+            // Снимаем с конца, чтобы не задеть первые (возможно, видимые) строки, если это важно
+            // Но лучше снимать те, которые мы сами отметили (ydAuto), если есть
+            // Для простоты снимаем с конца списка отмеченных
+            for (let i = checkedRows.length - 1; i >= 0 && removed < toRemove; i--) {
+                const row = checkedRows[i];
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    clickCheckbox(cb, false);
+                    removed++;
+                }
+            }
+        }
+
+        // 2. Если отмечено МЕНЬШЕ, чем нужно - добавляем
+        // Пересчитываем после снятия
+        const updatedCheckedRows = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; });
+        currentChecked = updatedCheckedRows.length;
+
+        if (currentChecked < targetCount) {
+            const toReserve = targetCount - currentChecked;
             const freeRows = findFreeRows(null);
 
             let reserved = 0;
@@ -3431,6 +3457,7 @@
     }
 
 })();
+
 
 
 
