@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.100
+// @version 0.121.101
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -43,14 +43,6 @@
     let lastManualScrollTime = 0;
     const autoScrollDebounceMap = new Map();
 
-    // Стоп-слова для строгого режима фраз
-    // Стоп-слова для строгого режима фраз и автоматического переключения в strict
-    const STOPWORDS = new Set([
-        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
-        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
-        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'что', 'чем', 'тем', 'все', 'всё',
-        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та'
-    ]);
 
     // Regex patterns for Porter Stemmer
     const RE_PERFECTIVEGERUND = /((ив|ивши|ившись|ыв|ывши|ывшись)|((?<=[ая])(в|вши|вшись)))$/;
@@ -1098,16 +1090,25 @@
 
     // ==================== HIGHLIGHTS ====================
 
-    // Cache for parsed rules to avoid re-parsing on every update
-    let cachedImportedRules = null;
-    let lastImportedMinusesRef = null;
+    // Список стоп-слов Яндекс.Директ
+    const STOPWORDS = new Set([
+        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
+        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
+        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'чем', 'тем', 'все', 'всё',
+        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та',
+        'не', 'ну', 'уже', 'ещё', 'только', 'более', 'самый', 'очень', 'также', 'ведь'
+    ]);
 
+    function isStopWord(word) {
+        return STOPWORDS.has(word.toLowerCase());
+    }
 
-    // Парсер минус-правил (согласно ТЗ Яндекс.Директ)
+    // Парсинг минус-правила согласно официальным правилам Яндекс.Директ
     function parseMinusRule(raw) {
+        let original = raw;
         raw = raw.trim();
 
-        // Удалить ведущий дефис, если есть
+        // Удалить ведущий дефис
         if (raw.startsWith('-')) {
             raw = raw.substring(1).trim();
         }
@@ -1131,7 +1132,7 @@
         const parsedWords = words.map(word => {
             let text = word.toLowerCase();
             let isStrict = false;
-            let isStopWord = false;
+            let isStopWordPlus = false;
 
             // Проверить на восклицательный знак
             if (text.startsWith('!')) {
@@ -1142,15 +1143,135 @@
             // Проверить на плюс (для стоп-слов)
             if (text.startsWith('+')) {
                 text = text.substring(1);
-                // Оператор + имеет смысл только для стоп-слов
-                isStopWord = STOPWORDS.has(text);
+                isStopWordPlus = isStopWord(text);
             }
 
-            return { text, isStrict, isStopWord };
+            return { text, isStrict, isStopWordPlus };
         });
 
-        return { type, words: parsedWords, raw };
+        return { type, words: parsedWords, raw: original };
     }
+
+    // Сопоставление для broad типа (обычная минус-фраза)
+    function matchBroad(rule, rowWordsData) {
+        const rowIndicesUsed = new Set();
+
+        for (const rWord of rule.words) {
+            const foundIdx = rowWordsData.findIndex((d, idx) => {
+                if (rowIndicesUsed.has(idx)) return false;
+
+                if (rWord.isStrict) {
+                    // Точное совпадение
+                    return d.lower === rWord.text;
+                } else if (rWord.isStopWordPlus) {
+                    // Стоп-слово — точное совпадение
+                    return d.lower === rWord.text;
+                } else {
+                    // Морфологическое совпадение
+                    return d.stem === stemWord(rWord.text);
+                }
+            });
+
+            if (foundIdx === -1) {
+                // Слово не найдено — не блокируем
+                return { match: false };
+            }
+
+            rowIndicesUsed.add(foundIdx);
+        }
+
+        // Все слова найдены — блокируем
+        return { match: true, indices: Array.from(rowIndicesUsed) };
+    }
+
+    // Сопоставление для quote типа (кавычки "" — фиксируют количество слов)
+    function matchQuote(rule, rowWordsData) {
+        const phraseLen = rule.words.length;
+        const rowLen = rowWordsData.length;
+
+        // Проверить количество слов
+        if (rowLen !== phraseLen) {
+            return { match: false };
+        }
+
+        // Проверить, что все слова минус-фразы присутствуют
+        const rowIndicesUsed = new Set();
+
+        for (const rWord of rule.words) {
+            const foundIdx = rowWordsData.findIndex((d, idx) => {
+                if (rowIndicesUsed.has(idx)) return false;
+
+                if (rWord.isStrict) {
+                    return d.lower === rWord.text;
+                } else {
+                    return d.stem === stemWord(rWord.text);
+                }
+            });
+
+            if (foundIdx === -1) {
+                return { match: false };
+            }
+
+            rowIndicesUsed.add(foundIdx);
+        }
+
+        // Все слова найдены и количество совпадает — блокируем ВСЮ строку
+        return { match: true, indices: Array.from({ length: rowLen }, (_, i) => i) };
+    }
+
+    // Сопоставление для bracket типа (скобки [] — фиксируют порядок слов)
+    function matchBracket(rule, rowWordsData) {
+        const phraseLen = rule.words.length;
+        const rowLen = rowWordsData.length;
+
+        if (rowLen < phraseLen) {
+            return { match: false };
+        }
+
+        // Найти последовательность слов
+        for (let i = 0; i <= rowLen - phraseLen; i++) {
+            let sequenceMatch = true;
+            let currentRowIdx = i;
+            const matchedIndices = [];
+
+            for (let j = 0; j < phraseLen; j++) {
+                const rWord = rule.words[j];
+
+                // Пропустить стоп-слова между словами минус-фразы
+                while (currentRowIdx < rowLen && isStopWord(rowWordsData[currentRowIdx].lower)) {
+                    currentRowIdx++;
+                }
+
+                if (currentRowIdx >= rowLen) {
+                    sequenceMatch = false;
+                    break;
+                }
+
+                const d = rowWordsData[currentRowIdx];
+                const match = rWord.isStrict
+                    ? (d.lower === rWord.text)
+                    : (d.stem === stemWord(rWord.text));
+
+                if (!match) {
+                    sequenceMatch = false;
+                    break;
+                }
+
+                matchedIndices.push(currentRowIdx);
+                currentRowIdx++;
+            }
+
+            if (sequenceMatch) {
+                return { match: true, indices: matchedIndices };
+            }
+        }
+
+        return { match: false };
+    }
+
+    // Cache for parsed rules to avoid re-parsing on every update
+    let cachedImportedRules = null;
+    let lastImportedMinusesRef = null;
 
     function updateHighlights() {
         // 1. Clear classes
@@ -1175,6 +1296,7 @@
             cachedImportedRules = activeImported.map(imp => {
                 const r = parseMinusRule(imp.raw);
                 r.source = 'imported';
+                r.importedAt = imp.importedAt;
                 return r;
             });
             lastImportedMinusesRef = importedMinuses;
@@ -1187,13 +1309,14 @@
             if (sel.display) {
                 const r = parseMinusRule(sel.display);
                 r.source = 'selection';
+                r.kind = sel.kind;
                 rules.push(r);
             }
         }
 
-        if (rules.length === 0 && sentHistory.length === 0) return;
+        if (rules.length === 0) return;
 
-        // 3. Group spans by row
+        // 3. Group spans by row (Optimization)
         const spansByRow = new Map();
         for (const sp of wordSpans) {
             const rid = sp.dataset.rowId;
@@ -1217,199 +1340,40 @@
             }));
 
             for (const rule of rules) {
-                let matchResult = null;
+                let matchResult = { match: false };
 
+                // Применить соответствующий алгоритм согласно ТЗ
                 if (rule.type === 'quote') {
                     matchResult = matchQuote(rule, rowWordsData);
                 } else if (rule.type === 'bracket') {
                     matchResult = matchBracket(rule, rowWordsData);
-                } else if (rule.type === 'broad') {
+                } else {
                     matchResult = matchBroad(rule, rowWordsData);
                 }
 
-                if (matchResult && matchResult.match) {
-                    let baseClass = rule.source === 'imported' ? 'yd-imported-minus' :
-                        rule.type === 'quote' ? 'yd-selected-phrase' :
-                            rule.type === 'bracket' ? 'yd-selected-strict' :
-                                'yd-selected-soft';
+                if (matchResult.match) {
+                    // Определить класс для подсветки
+                    let baseClass = 'yd-imported-minus';
 
-                    for (const idx of matchResult.indices) {
-                        const span = rowWordsData[idx].span;
-                        span.classList.add(baseClass);
+                    if (rule.source === 'selection') {
+                        if (rule.type === 'quote' || rule.kind === 'phrase') {
+                            baseClass = 'yd-selected-phrase';
+                        } else if (rule.type === 'bracket') {
+                            baseClass = 'yd-selected-strict';
+                        } else {
+                            baseClass = 'yd-selected-soft';
+                        }
                     }
-                }
-            }
-        }
 
-        // --- HISTORY ---
-        if (sentHistory.length > 0) {
-            const sentStems = new Set();
-            const sentLowers = new Set();
-            for (const sent of sentHistory) {
-                sentStems.add(stemWord(sent.raw));
-                sentLowers.add(sent.raw.toLowerCase());
-            }
 
-            for (const span of wordSpans) {
-                if (sentStems.has(span.dataset.stem) || sentLowers.has(span.dataset.wordLower)) {
-                    span.classList.add('yd-sent-history');
-                }
-            }
-        }
-
-        // --- SELECTION SOURCE HIGHLIGHT ---
-        for (const sel of selections.values()) {
-            if (sel.kind === 'phrase' && !sel._building && sel.pageKey === currentPageKey && sel.rowId && sel.words) {
-                const rowSpans = spansByRow.get(sel.rowId);
-                if (rowSpans) {
-                    for (const span of rowSpans) {
-                        if (sel.words.includes(span.dataset.word)) {
-                            span.classList.add('yd-selected-phrase');
+                    // Подсветить совпавшие слова
+                    for (const idx of matchResult.indices) {
+                        rowWordsData[idx].span.classList.add(baseClass);
+                        if (rule.source === 'imported' && rule.importedAt) {
+                            rowWordsData[idx].span.dataset.importedAt = rule.importedAt;
                         }
                     }
                 }
-            }
-        }
-
-        // --- PHRASE BUILDING ---
-        if (phraseInProgress) {
-            const phraseId = phraseInProgress.id.split(':')[1];
-            for (const word of phraseInProgress.words) {
-                for (const span of wordSpans) {
-                    if (String(phraseInProgress.rowId) === span.dataset.rowId && span.dataset.word === word) {
-                        span.classList.add('yd-phrase-building');
-                        span.dataset.phraseId = phraseId;
-                    }
-                }
-            }
-        }
-    }
-
-    // Проверка совпадения для типа broad (обычная минус-фраза)
-    function matchBroad(rule, rowWords) {
-        const rowIndicesUsed = new Set();
-
-        for (const rWord of rule.words) {
-            const foundIdx = rowWords.findIndex((d, idx) => {
-                if (rowIndicesUsed.has(idx)) return false;
-
-                if (rWord.isStrict) {
-                    // Точное совпадение
-                    return d.lower === rWord.text;
-                } else if (rWord.isStopWord) {
-                    // Стоп-слово с + — точное совпадение
-                    return d.lower === rWord.text;
-                } else {
-                    // Морфологическое совпадение
-                    return d.stem === stemWord(rWord.text);
-                }
-            });
-
-            if (foundIdx === -1) {
-                // Слово не найдено — не блокируем
-                return { match: false };
-            }
-
-            rowIndicesUsed.add(foundIdx);
-        }
-
-        // Все слова найдены — блокируем
-        return { match: true, indices: Array.from(rowIndicesUsed) };
-    }
-
-    // Проверка совпадения для типа quote (кавычки)
-    function matchQuote(rule, rowWords) {
-        const phraseLen = rule.words.length;
-        const rowLen = rowWords.length;
-
-        // Проверить количество слов
-        if (rowLen !== phraseLen) {
-            return { match: false };
-        }
-
-        // Проверить, что все слова минус-фразы присутствуют
-        const rowIndicesUsed = new Set();
-
-        for (const rWord of rule.words) {
-            const foundIdx = rowWords.findIndex((d, idx) => {
-                if (rowIndicesUsed.has(idx)) return false;
-
-                if (rWord.isStrict) {
-                    return d.lower === rWord.text;
-                } else {
-                    return d.stem === stemWord(rWord.text);
-                }
-            });
-
-            if (foundIdx === -1) {
-                return { match: false };
-            }
-
-            rowIndicesUsed.add(foundIdx);
-        }
-
-        // Все слова найдены и количество совпадает — блокируем ВСЮ строку
-        return { match: true, indices: Array.from({ length: rowLen }, (_, i) => i) };
-    }
-
-    // Проверка совпадения для типа bracket (квадратные скобки)
-    function matchBracket(rule, rowWords) {
-        const phraseLen = rule.words.length;
-        const rowLen = rowWords.length;
-
-        if (rowLen < phraseLen) {
-            return { match: false };
-        }
-
-        // Найти последовательность слов
-        for (let i = 0; i <= rowLen - phraseLen; i++) {
-            let sequenceMatch = true;
-            let currentRowIdx = i;
-            const matchedIndices = [];
-
-            for (let j = 0; j < phraseLen; j++) {
-                const rWord = rule.words[j];
-
-                // Пропустить стоп-слова между словами минус-фразы
-                while (currentRowIdx < rowLen && STOPWORDS.has(rowWords[currentRowIdx].lower)) {
-                    currentRowIdx++;
-                }
-
-                if (currentRowIdx >= rowLen) {
-                    sequenceMatch = false;
-                    break;
-                }
-
-                const d = rowWords[currentRowIdx];
-                const match = rWord.isStrict
-                    ? (d.lower === rWord.text)
-                    : (d.stem === stemWord(rWord.text));
-
-                if (!match) {
-                    sequenceMatch = false;
-                    break;
-                }
-
-                matchedIndices.push(currentRowIdx);
-                currentRowIdx++;
-            }
-
-            if (sequenceMatch) {
-                return { match: true, indices: matchedIndices };
-            }
-        }
-
-        return { match: false };
-    }
-
-
-    function restoreVisualMarkers() {
-        updateHighlights();
-
-        // Восстановить чекбоксы для сохраненных выделений
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId) {
-                ensureRowChecked(sel.rowId);
             }
         }
     }
@@ -2201,13 +2165,8 @@
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     async function sendBatch() {
-        console.log('[YD-SQ BATCH sendBatch] Вызвана функция sendBatch()');
-        console.log('  - currentBatchIndex:', currentBatchIndex);
-        console.log('  - batchQueue.length:', batchQueue.length);
-
         if (currentBatchIndex >= batchQueue.length) {
             // Все пакеты отправлены
-            console.log('[YD-SQ BATCH sendBatch] ✅ Все пакеты завершены');
             batchQueue = [];
             currentBatchIndex = 0;
             showYdsqNotification('✅ Все пакеты отправлены!', 'success');
@@ -2219,10 +2178,6 @@
         const values = batch.map(sel => sel.display);
         const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
 
-        console.log('[YD-SQ BATCH sendBatch] Обработка пакета:');
-        console.log('  - batchInfo:', batchInfo);
-        console.log('  - values:', values);
-
         showYdsqNotification(batchInfo, 'info');
         console.log(`[YD-SQ] Отправка ${batchInfo}`);
 
@@ -2230,54 +2185,9 @@
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-        console.log('[YD-SQ BATCH sendBatch] Резервация строк:');
-        console.log('  - checkedCount:', checkedCount);
-        console.log('  - values.length:', values.length);
-
-        // КРИТИЧЕСКИ ВАЖНО для модалки:
-        // Количество отмеченных чекбоксов ДОЛЖНО ТОЧНО СОВПАДАТЬ с количеством минусов!
-
-        // 1. Сбрасываем ВСЕ автоматически отмеченные чекбоксы
-        console.log('[YD-SQ BATCH sendBatch] Сброс всех авто-чекбоксов...');
-        const allRows = getAllRowsOnPage();
-        allRows.forEach(row => {
-            const cb = row.querySelector('input[type="checkbox"]');
-            if (cb && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb, false);
-                delete cb.dataset.ydAuto;
-                delete row.dataset.ydAutoRow;
-            }
-        });
-
-        // 2. Отмечаем ТОЛЬКО строки из текущего пакета
-        console.log('[YD-SQ BATCH sendBatch] Отметка строк текущего пакета...');
-        let markedCount = 0;
-        for (const sel of batch) {
-            if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
-                const row = allRows.find(r => r.dataset.ydRowId === sel.rowId);
-                if (row) {
-                    const cb = row.querySelector('input[type="checkbox"]');
-                    if (cb && !cb.checked) {
-                        clickCheckbox(cb, true);
-                        cb.dataset.ydAuto = 'true';
-                        row.dataset.ydAutoRow = 'true';
-                    }
-                    markedCount++;
-                }
-            }
-        }
-        console.log('  - markedCount (отмечено из пакета):', markedCount);
-
-        // 3. Если не хватает - резервируем свободные строки
-        const currentChecked = allRows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        console.log('  - currentChecked (после отметки пакета):', currentChecked);
-
-        if (currentChecked < values.length) {
-            const toReserve = values.length - currentChecked;
+        if (checkedCount < values.length) {
+            const toReserve = values.length - checkedCount;
             const freeRows = findFreeRows(null);
-
-            console.log('  - toReserve (нужно еще зарезервировать):', toReserve);
-            console.log('  - freeRows.length:', freeRows.length);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2290,40 +2200,25 @@
                     reserved++;
                 }
             }
-            console.log('  - reserved (зарезервировано):', reserved);
         }
-
-        console.log('[YD-SQ BATCH sendBatch] ✅ Резервация завершена');
 
         await delay(250);
 
-        console.log('[YD-SQ BATCH sendBatch] Поиск кнопки "Добавить в минус-фразы"...');
-
         // Открываем модалку
         const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
-
-        console.log('[YD-SQ BATCH sendBatch] Результат поиска кнопки:');
-        console.log('  - addBtn найдена:', !!addBtn);
-        if (addBtn) {
-            console.log('  - addBtn.textContent:', addBtn.textContent);
-        }
-
         if (!addBtn) {
-            console.log('[YD-SQ BATCH sendBatch] ❌ КНОПКА НЕ НАЙДЕНА!');
             showYdsqNotification('Кнопка не найдена', 'error');
             isSending = false;
             batchQueue = [];
             return;
         }
 
-        console.log('[YD-SQ BATCH sendBatch] Клик по кнопке...');
         addBtn.click();
-        console.log('[YD-SQ BATCH sendBatch] ✅ Клик выполнен, ожидание модалки...');
 
         try {
             await waitForMinusModal(values);
         } catch (error) {
-            console.error('[YD-SQ BATCH sendBatch] ❌ ОШИБКА:', error);
+            console.error('[YD-SQ] Ошибка:', error);
             showYdsqNotification('Ошибка при обработке окна', 'error');
             isSending = false;
             batchQueue = [];
@@ -2344,11 +2239,6 @@
             if (!sel.unassignedOnThisPage) values.push(sel.display);
             else unassigned.push(sel.raw);
         });
-
-        console.log('[YD-SQ BATCH] Подсчет минусов:');
-        console.log('  - selections.size:', selections.size);
-        console.log('  - values.length (для отправки):', values.length);
-        console.log('  - unassigned.length:', unassigned.length);
 
         if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
         if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
@@ -2376,54 +2266,30 @@
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
-        const freeRowsArray = findFreeRows(null);
-        const availableRows = checkedCount + freeRowsArray.length;
-
-        // ⚠️ ВАЖНО: Модалка Яндекса имеет ФИКСИРОВАННЫЙ лимит полей (~20-25)
-        // независимо от количества отмеченных строк в таблице!
-        const YANDEX_MODAL_FIELD_LIMIT = 20; // Безопасный лимит
-
-        console.log('[YD-SQ BATCH] Проверка доступных строк:');
-        console.log('  - neededTotal (нужно минусов):', neededTotal);
-        console.log('  - checkedCount (отмечено чекбоксов):', checkedCount);
-        console.log('  - freeRows.length (свободных строк):', freeRowsArray.length);
-        console.log('  - availableRows (всего доступно):', availableRows);
-        console.log('  - YANDEX_MODAL_FIELD_LIMIT:', YANDEX_MODAL_FIELD_LIMIT);
+        const availableRows = checkedCount + findFreeRows(null).length;
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если минусов больше, чем полей в модалке - разбиваем на пакеты
-        if (neededTotal > YANDEX_MODAL_FIELD_LIMIT) {
-            console.log('[YD-SQ BATCH] ⚠️ Минусов больше лимита модалки! Запуск пакетной отправки...');
-            const batchSize = YANDEX_MODAL_FIELD_LIMIT;
+        // Если не хватает строк - разбиваем на пакеты
+        if (neededTotal > availableRows) {
+            const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
-
-            console.log('  - batchSize (размер пакета):', batchSize);
-            console.log('  - allSelections.length:', allSelections.length);
 
             for (let i = 0; i < allSelections.length; i += batchSize) {
                 batches.push(allSelections.slice(i, i + batchSize));
             }
 
-            console.log('  - batches.length (количество пакетов):', batches.length);
-            batches.forEach((batch, idx) => {
-                console.log(`  - Пакет ${idx + 1}: ${batch.length} элементов`);
-            });
-
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${batchSize} минусов`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
             await delay(1000);
 
-            console.log('[YD-SQ BATCH] ✅ Запуск sendBatch()...');
             // Отправляем первый пакет
             return sendBatch();
         }
 
-        console.log('[YD-SQ BATCH] ✅ Минусов меньше лимита, обычная отправка');
-
-        // **ОБЫЧНАЯ ОТПРАВКА** (если минусов меньше лимита модалки)
+        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -2472,37 +2338,19 @@
     }
 
     function waitForMinusModal(values, attempt = 0) {
-        console.log(`[YD-SQ BATCH waitForMinusModal] Попытка ${attempt + 1}/50 найти модалку...`);
         const modal = findMinusModal();
-
-        if (modal) {
-            console.log('[YD-SQ BATCH waitForMinusModal] ✅ МОДАЛКА НАЙДЕНА!');
-            fillMinusModal(modal, values);
-        } else if (attempt < 50) {
-            console.log(`[YD-SQ BATCH waitForMinusModal] ⏳ Модалка не найдена, повтор через 200мс...`);
-            setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        } else {
-            console.log('[YD-SQ BATCH waitForMinusModal] ❌ TIMEOUT: Модалка не найдена после 50 попыток!');
-            showYdsqNotification('Окно не обнаружено', 'error');
-            isSending = false;
-        }
+        if (modal) fillMinusModal(modal, values);
+        else if (attempt < 50) setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
+        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; }
     }
 
     function findMinusModal() {
-        console.log('[YD-SQ BATCH findMinusModal] Поиск модалки...');
         const candidates = document.querySelectorAll('div, section');
-        console.log('  - candidates.length:', candidates.length);
-
         for (const el of candidates) {
             const txt = el.textContent || '';
             if (!txt) continue;
-            if (txt.includes('Добавление минус-фраз')) {
-                console.log('[YD-SQ BATCH findMinusModal] ✅ Найдена модалка с текстом "Добавление минус-фраз"');
-                return el.closest('[role="dialog"]') || el;
-            }
+            if (txt.includes('Добавление минус-фраз')) return el.closest('[role="dialog"]') || el;
         }
-
-        console.log('[YD-SQ BATCH findMinusModal] ❌ Модалка не найдена (нет текста "Добавление минус-фраз")');
         return null;
     }
 
@@ -2552,12 +2400,6 @@
     }
 
     function fillFields(inputs, values) {
-        console.log('[YD-SQ BATCH fillFields] ⚠️ ВЫЗОВ fillFields()');
-        console.log('  - inputs.length:', inputs.length);
-        console.log('  - values.length:', values.length);
-        console.log('  - batchQueue.length (текущий):', batchQueue.length);
-        console.log('  - isSending:', isSending);
-
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2575,11 +2417,7 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        if (values.length > inputs.length) {
-            console.log('[YD-SQ BATCH fillFields] ❌ ОШИБКА: значений больше, чем полей!');
-            console.log('  - Это НЕ должно происходить при пакетной отправке!');
-            showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
-        }
+        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
@@ -3570,11 +3408,6 @@
     }
 
 })();
-
-
-
-
-
 
 
 
