@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.84
+// @version 0.121.85
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2508,11 +2508,15 @@
                         }, 1500);
                     } else {
                         // Все пакеты отправлены
+                        const totalBatches = batchQueue.length;
                         batchQueue = [];
                         currentBatchIndex = 0;
-                        isSending = false;
-                        showYdsqNotification(`✅ Все ${currentBatchIndex} пакетов отправлены!`, 'success');
+                        showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
                         resetClearAllButton();
+                        // ВАЖНО: Сбрасываем isSending только ПОСЛЕ очистки batchQueue
+                        setTimeout(() => {
+                            isSending = false;
+                        }, 500);
                     }
                 } else {
                     // Обычная отправка - очищаем все selections
@@ -3403,6 +3407,7 @@
     }
 
 })();
+
 
 
 
