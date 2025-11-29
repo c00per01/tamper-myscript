@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.89
+// @version 0.121.90
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2210,8 +2210,8 @@
             return;
         }
 
-        const batch = batchQueue[currentBatchIndex];
-        const values = batch.map(sel => sel.display);
+        let batch = batchQueue[currentBatchIndex];
+        let values = batch.map(sel => sel.display);
         const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
 
         showYdsqNotification(batchInfo, 'info');
@@ -2238,7 +2238,41 @@
             }
         }
 
-        await delay(250);
+        // Даем интерфейсу время на обработку кликов (увеличено с 250 до 1000мс)
+        await delay(1000);
+
+        // ПРОВЕРКА: Сколько реально отметилось?
+        const finalRows = getAllRowsOnPage();
+        const finalChecked = finalRows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+
+        if (finalChecked < values.length) {
+            console.warn(`[YD-SQ] Планировали ${values.length}, но отмечено только ${finalChecked}. Урезаем пакет.`);
+            showYdsqNotification(`Урезаем пакет до ${finalChecked} (не хватило строк)`, 'warn');
+
+            if (finalChecked === 0) {
+                showYdsqNotification('Не удалось отметить строки. Пропуск пакета.', 'error');
+                currentBatchIndex++;
+                setTimeout(sendBatch, 1000);
+                return;
+            }
+
+            // Отрезаем лишнее от текущего пакета
+            const itemsToSend = batch.slice(0, finalChecked);
+            const itemsLeft = batch.slice(finalChecked);
+
+            // Обновляем текущий пакет и values
+            batch = itemsToSend;
+            values = batch.map(sel => sel.display);
+
+            // Возвращаем невлезшие элементы обратно в начало очереди (в следующий пакет или новый)
+            // Самый простой способ: вставить новый пакет сразу после текущего
+            if (itemsLeft.length > 0) {
+                batchQueue.splice(currentBatchIndex + 1, 0, itemsLeft);
+                // Обновляем текущий элемент в очереди, чтобы tryCloseResultPopup удалил правильные ID
+                batchQueue[currentBatchIndex] = batch;
+                showYdsqNotification(`Остаток (${itemsLeft.length}) перенесен в следующий пакет`, 'info');
+            }
+        }
 
         // Открываем модалку
         const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
@@ -3451,6 +3485,7 @@
     }
 
 })();
+
 
 
 
