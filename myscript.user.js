@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.93
+// @version 0.121.94
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2299,30 +2299,26 @@
             }
         });
 
-        const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
-        const neededTotal = values.length;
-        const freeRowsCount = findFreeRows(null).length;
-        const availableRows = checkedCount + freeRowsCount;
+        // **НОВАЯ ЛОГИКА БАТЧИНГА**
+        // Яндекс ограничивает количество полей в модалке (~20-25), поэтому используем безопасный лимит
+        const SAFE_BATCH_SIZE = 20; // Безопасный размер пакета
 
         // DEBUG
-        console.log('[YD-SQ BATCH DEBUG]', { neededTotal, checkedCount, freeRowsCount, availableRows, shouldBatch: neededTotal > availableRows });
+        console.log('[YD-SQ BATCH DEBUG]', { neededTotal: values.length, SAFE_BATCH_SIZE, shouldBatch: values.length > SAFE_BATCH_SIZE });
 
-        // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
-        if (neededTotal > availableRows) {
-            const batchSize = availableRows;
+        // Если минусов больше безопасного лимита - разбиваем на пакеты
+        if (values.length > SAFE_BATCH_SIZE) {
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
-            for (let i = 0; i < allSelections.length; i += batchSize) {
-                batches.push(allSelections.slice(i, i + batchSize));
+            for (let i = 0; i < allSelections.length; i += SAFE_BATCH_SIZE) {
+                batches.push(allSelections.slice(i, i + SAFE_BATCH_SIZE));
             }
 
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ~${SAFE_BATCH_SIZE} минусов`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
@@ -3444,6 +3440,7 @@
     }
 
 })();
+
 
 
 
