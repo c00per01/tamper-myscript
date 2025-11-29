@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.109
+// @version 0.121.110
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2265,11 +2265,20 @@
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
-        const availableRows = checkedCount + findFreeRows(null).length;
+        const freeRowsCount = findFreeRows(null).length;
+        const availableRows = checkedCount + freeRowsCount;
+
+        console.log(`[YD-SQ] Диагностика отправки:
+        - Нужно отправить: ${neededTotal}
+        - Отмечено чекбоксов: ${checkedCount}
+        - Свободных строк: ${freeRowsCount}
+        - Всего доступно мест: ${availableRows}
+        - Условие батчинга (needed > available): ${neededTotal > availableRows}`);
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
         // Если не хватает строк - разбиваем на пакеты
         if (neededTotal > availableRows) {
+            console.log('[YD-SQ] Включаем пакетную отправку!');
             const batchSize = availableRows;
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
@@ -3410,6 +3419,7 @@
     }
 
 })();
+
 
 
 
