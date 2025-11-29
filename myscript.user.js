@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.102
+// @version 0.121.103
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2268,18 +2268,23 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
+        // ВАЖНО: Яндекс.Директ ограничивает количество полей в модалке добавления минус-фраз!
+        // Даже если строк достаточно, в модалке будет только ~20-30 полей ввода
+        const MAX_MODAL_FIELDS = 20; // Максимум полей в модалке (с запасом)
+
         console.log('[YD-SQ BATCH] ========== ПРОВЕРКА ПАКЕТНОЙ ОТПРАВКИ ==========');
         console.log('[YD-SQ BATCH] Всего selections:', selections.size);
         console.log('[YD-SQ BATCH] Всего values (для отправки):', neededTotal);
         console.log('[YD-SQ BATCH] Отмеченных строк (checkedCount):', checkedCount);
         console.log('[YD-SQ BATCH] Свободных строк:', findFreeRows(null).length);
         console.log('[YD-SQ BATCH] Доступно строк всего (availableRows):', availableRows);
-        console.log('[YD-SQ BATCH] Нужна пакетная отправка?', neededTotal > availableRows);
+        console.log('[YD-SQ BATCH] ЛИМИТ ПОЛЕЙ В МОДАЛКЕ (MAX_MODAL_FIELDS):', MAX_MODAL_FIELDS);
+        console.log('[YD-SQ BATCH] Нужна пакетная отправка?', neededTotal > MAX_MODAL_FIELDS);
 
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
-        if (neededTotal > availableRows) {
-            const batchSize = availableRows;
+        // Если минусов больше чем может вместить модалка - разбиваем на пакеты
+        if (neededTotal > MAX_MODAL_FIELDS) {
+            const batchSize = Math.min(MAX_MODAL_FIELDS, availableRows); // Размер пакета = минимум из лимита модалки и доступных строк
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2303,7 +2308,7 @@
             return sendBatch();
         }
 
-        console.log('[YD-SQ BATCH] ℹ️ Обычная отправка (строк достаточно)');
+        console.log('[YD-SQ BATCH] ℹ️ Обычная отправка (минусов меньше лимита модалки)');
 
         // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
         if (checkedCount < neededTotal) {
@@ -3438,6 +3443,7 @@
     }
 
 })();
+
 
 
 
