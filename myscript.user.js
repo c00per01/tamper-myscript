@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.98
+// @version 0.121.99
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2252,25 +2252,40 @@
                     reserved++;
                 }
             }
+            console.log('  - reserved (зарезервировано):', reserved);
         }
+
+        console.log('[YD-SQ BATCH sendBatch] ✅ Резервация завершена');
 
         await delay(250);
 
+        console.log('[YD-SQ BATCH sendBatch] Поиск кнопки "Добавить в минус-фразы"...');
+
         // Открываем модалку
         const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
+
+        console.log('[YD-SQ BATCH sendBatch] Результат поиска кнопки:');
+        console.log('  - addBtn найдена:', !!addBtn);
+        if (addBtn) {
+            console.log('  - addBtn.textContent:', addBtn.textContent);
+        }
+
         if (!addBtn) {
+            console.log('[YD-SQ BATCH sendBatch] ❌ КНОПКА НЕ НАЙДЕНА!');
             showYdsqNotification('Кнопка не найдена', 'error');
             isSending = false;
             batchQueue = [];
             return;
         }
 
+        console.log('[YD-SQ BATCH sendBatch] Клик по кнопке...');
         addBtn.click();
+        console.log('[YD-SQ BATCH sendBatch] ✅ Клик выполнен, ожидание модалки...');
 
         try {
             await waitForMinusModal(values);
         } catch (error) {
-            console.error('[YD-SQ] Ошибка:', error);
+            console.error('[YD-SQ BATCH sendBatch] ❌ ОШИБКА:', error);
             showYdsqNotification('Ошибка при обработке окна', 'error');
             isSending = false;
             batchQueue = [];
@@ -2419,19 +2434,37 @@
     }
 
     function waitForMinusModal(values, attempt = 0) {
+        console.log(`[YD-SQ BATCH waitForMinusModal] Попытка ${attempt + 1}/50 найти модалку...`);
         const modal = findMinusModal();
-        if (modal) fillMinusModal(modal, values);
-        else if (attempt < 50) setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; }
+
+        if (modal) {
+            console.log('[YD-SQ BATCH waitForMinusModal] ✅ МОДАЛКА НАЙДЕНА!');
+            fillMinusModal(modal, values);
+        } else if (attempt < 50) {
+            console.log(`[YD-SQ BATCH waitForMinusModal] ⏳ Модалка не найдена, повтор через 200мс...`);
+            setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
+        } else {
+            console.log('[YD-SQ BATCH waitForMinusModal] ❌ TIMEOUT: Модалка не найдена после 50 попыток!');
+            showYdsqNotification('Окно не обнаружено', 'error');
+            isSending = false;
+        }
     }
 
     function findMinusModal() {
+        console.log('[YD-SQ BATCH findMinusModal] Поиск модалки...');
         const candidates = document.querySelectorAll('div, section');
+        console.log('  - candidates.length:', candidates.length);
+
         for (const el of candidates) {
             const txt = el.textContent || '';
             if (!txt) continue;
-            if (txt.includes('Добавление минус-фраз')) return el.closest('[role="dialog"]') || el;
+            if (txt.includes('Добавление минус-фраз')) {
+                console.log('[YD-SQ BATCH findMinusModal] ✅ Найдена модалка с текстом "Добавление минус-фраз"');
+                return el.closest('[role="dialog"]') || el;
+            }
         }
+
+        console.log('[YD-SQ BATCH findMinusModal] ❌ Модалка не найдена (нет текста "Добавление минус-фраз")');
         return null;
     }
 
@@ -3499,6 +3532,7 @@
     }
 
 })();
+
 
 
 
