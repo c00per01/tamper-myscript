@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.94
+// @version 0.121.95
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2325,7 +2325,11 @@
             return sendBatch();
         }
 
-        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
+        // **ОБЫЧНАЯ ОТПРАВКА** (если минусов <= 20)
+        const rows = getAllRowsOnPage();
+        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        const neededTotal = values.length;
+
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -3440,6 +3444,7 @@
     }
 
 })();
+
 
 
 
