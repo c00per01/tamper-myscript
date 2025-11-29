@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.85
+// @version 0.121.86
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1102,15 +1102,59 @@
     let cachedImportedRules = null;
     let lastImportedMinusesRef = null;
 
+
+    // Парсер минус-правил (согласно ТЗ Яндекс.Директ)
+    function parseMinusRule(raw) {
+        raw = raw.trim();
+
+        // Удалить ведущий дефис, если есть
+        if (raw.startsWith('-')) {
+            raw = raw.substring(1).trim();
+        }
+
+        let type = 'broad'; // по умолчанию
+        let content = raw;
+
+        // Определить тип по обертке
+        if (raw.startsWith('"') && raw.endsWith('"')) {
+            type = 'quote';
+            content = raw.slice(1, -1);
+        } else if (raw.startsWith('[') && raw.endsWith(']')) {
+            type = 'bracket';
+            content = raw.slice(1, -1);
+        }
+
+        // Разбить на слова
+        const words = content.split(/\s+/).filter(w => w);
+
+        // Обработать каждое слово
+        const parsedWords = words.map(word => {
+            let text = word.toLowerCase();
+            let isStrict = false;
+            let isStopWord = false;
+
+            // Проверить на восклицательный знак
+            if (text.startsWith('!')) {
+                isStrict = true;
+                text = text.substring(1);
+            }
+
+            // Проверить на плюс (для стоп-слов)
+            if (text.startsWith('+')) {
+                text = text.substring(1);
+                // Оператор + имеет смысл только для стоп-слов
+                isStopWord = STOPWORDS.has(text);
+            }
+
+            return { text, isStrict, isStopWord };
+        });
+
+        return { type, words: parsedWords, raw };
+    }
+
     function updateHighlights() {
         // 1. Clear classes
-        // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
-            sp.className = 'yd-word'; // Reset to base class
-            // Restore original classes if any? 
-            // Actually wordSpans only have 'yd-word' initially.
-            // But wait, if we have other classes?
-            // Safer to remove specific classes.
             sp.classList.remove(
                 'yd-selected-soft', 'yd-selected-strict', 'yd-selected-phrase',
                 'yd-phrase-building', 'yd-primary-soft', 'yd-primary-strict',
@@ -1122,7 +1166,6 @@
         }
 
         // 2. Prepare Rules
-        // Пересчитываем кэш, если изменился массив или количество активных элементов
         const activeImported = importedMinuses.filter(imp => !imp.deleted);
         const shouldRebuild = lastImportedMinusesRef !== importedMinuses ||
             !cachedImportedRules ||
@@ -1150,8 +1193,7 @@
 
         if (rules.length === 0 && sentHistory.length === 0) return;
 
-        // 3. Group spans by row (Optimization)
-        // This avoids O(N*M) filtering inside the loop.
+        // 3. Group spans by row
         const spansByRow = new Map();
         for (const sp of wordSpans) {
             const rid = sp.dataset.rowId;
@@ -1173,123 +1215,33 @@
                 stem: s.dataset.stem,
                 span: s
             }));
-            const rowLen = rowWordsData.length;
 
             for (const rule of rules) {
-                let isMatch = false;
-                let matchedIndices = new Set();
-                let strictIndices = new Set();
-
-                let baseClass = 'yd-imported-minus';
-                if (rule.source === 'selection') {
-                    baseClass = 'yd-selected-soft';
-                }
+                let matchResult = null;
 
                 if (rule.type === 'quote') {
-                    // Quote: Exact Set of words (no extra words in row)
-                    if (rowLen === rule.words.length) {
-                        const rowIndicesUsed = new Set();
-                        let allRuleWordsFound = true;
-
-                        for (const rWord of rule.words) {
-                            // Find matching word in row
-                            const foundIdx = rowWordsData.findIndex((d, idx) => {
-                                if (rowIndicesUsed.has(idx)) return false;
-                                if (rWord.isStrict) {
-                                    return d.lower === rWord.text;
-                                } else {
-                                    return d.stem === stemWord(rWord.text);
-                                }
-                            });
-
-                            if (foundIdx !== -1) {
-                                rowIndicesUsed.add(foundIdx);
-                            } else {
-                                allRuleWordsFound = false;
-                                break;
-                            }
-                        }
-
-                        if (allRuleWordsFound) {
-                            isMatch = true;
-                            for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
-                            baseClass = 'yd-selected-phrase';
-                        }
-                    }
-
+                    matchResult = matchQuote(rule, rowWordsData);
                 } else if (rule.type === 'bracket') {
-                    // Bracket: Fixed sequence
-                    const pLen = rule.words.length;
-                    if (rowLen >= pLen) {
-                        for (let i = 0; i <= rowLen - pLen; i++) {
-                            let subMatch = true;
-                            for (let j = 0; j < pLen; j++) {
-                                const rWord = rule.words[j];
-                                const d = rowWordsData[i + j];
-                                const match = rWord.isStrict
-                                    ? (d.lower === rWord.text)
-                                    : (d.stem === stemWord(rWord.text));
-
-                                if (!match) {
-                                    subMatch = false;
-                                    break;
-                                }
-                            }
-
-                            if (subMatch) {
-                                isMatch = true;
-                                for (let k = 0; k < pLen; k++) matchedIndices.add(i + k);
-                            }
-                        }
-                    }
-                    if (isMatch) baseClass = 'yd-selected-strict';
-
+                    matchResult = matchBracket(rule, rowWordsData);
                 } else if (rule.type === 'broad') {
-                    // Broad: All words present anywhere
-                    const indicesFound = [];
-                    let allFound = true;
-
-                    for (const rWord of rule.words) {
-                        const foundForThisWord = [];
-                        rowWordsData.forEach((d, idx) => {
-                            const match = rWord.isStrict
-                                ? (d.lower === rWord.text)
-                                : (d.stem === stemWord(rWord.text));
-                            if (match) {
-                                foundForThisWord.push(idx);
-                                if (rWord.isStrict) strictIndices.add(idx);
-                            }
-                        });
-
-                        if (foundForThisWord.length > 0) {
-                            indicesFound.push(...foundForThisWord);
-                        } else {
-                            allFound = false;
-                            break;
-                        }
-                    }
-
-                    if (allFound) {
-                        isMatch = true;
-                        indicesFound.forEach(idx => matchedIndices.add(idx));
-                    }
+                    matchResult = matchBroad(rule, rowWordsData);
                 }
 
-                if (isMatch) {
-                    for (const idx of matchedIndices) {
+                if (matchResult && matchResult.match) {
+                    let baseClass = rule.source === 'imported' ? 'yd-imported-minus' :
+                        rule.type === 'quote' ? 'yd-selected-phrase' :
+                            rule.type === 'bracket' ? 'yd-selected-strict' :
+                                'yd-selected-soft';
+
+                    for (const idx of matchResult.indices) {
                         const span = rowWordsData[idx].span;
-                        if (rule.type === 'broad' && strictIndices.has(idx)) {
-                            span.classList.add('yd-selected-strict');
-                        } else {
-                            span.classList.add(baseClass);
-                        }
+                        span.classList.add(baseClass);
                     }
                 }
             }
         }
 
         // --- HISTORY ---
-        // Optimized history check
         if (sentHistory.length > 0) {
             const sentStems = new Set();
             const sentLowers = new Set();
@@ -1306,10 +1258,8 @@
         }
 
         // --- SELECTION SOURCE HIGHLIGHT ---
-        // Explicitly highlight words in the source row for phrase selections
         for (const sel of selections.values()) {
             if (sel.kind === 'phrase' && !sel._building && sel.pageKey === currentPageKey && sel.rowId && sel.words) {
-                // Find spans in this row
                 const rowSpans = spansByRow.get(sel.rowId);
                 if (rowSpans) {
                     for (const span of rowSpans) {
@@ -1322,7 +1272,6 @@
         }
 
         // --- PHRASE BUILDING ---
-        // Restore highlighting for the phrase being built
         if (phraseInProgress) {
             const phraseId = phraseInProgress.id.split(':')[1];
             for (const word of phraseInProgress.words) {
@@ -1336,33 +1285,121 @@
         }
     }
 
-    // Парсер минус-правил
-    function parseMinusRule(raw) {
-        raw = raw.trim();
-        let type = 'broad';
-        let content = raw;
+    // Проверка совпадения для типа broad (обычная минус-фраза)
+    function matchBroad(rule, rowWords) {
+        const rowIndicesUsed = new Set();
 
-        if (raw.startsWith('"') && raw.endsWith('"')) {
-            type = 'quote';
-            content = raw.slice(1, -1);
-        } else if (raw.startsWith('[') && raw.endsWith(']')) {
-            type = 'bracket';
-            content = raw.slice(1, -1);
+        for (const rWord of rule.words) {
+            const foundIdx = rowWords.findIndex((d, idx) => {
+                if (rowIndicesUsed.has(idx)) return false;
+
+                if (rWord.isStrict) {
+                    // Точное совпадение
+                    return d.lower === rWord.text;
+                } else if (rWord.isStopWord) {
+                    // Стоп-слово с + — точное совпадение
+                    return d.lower === rWord.text;
+                } else {
+                    // Морфологическое совпадение
+                    return d.stem === stemWord(rWord.text);
+                }
+            });
+
+            if (foundIdx === -1) {
+                // Слово не найдено — не блокируем
+                return { match: false };
+            }
+
+            rowIndicesUsed.add(foundIdx);
         }
 
-        // Разбиваем на слова
-        const rawWords = content.split(/[\s+]+/).filter(w => w);
-        const words = rawWords.map(w => {
-            let text = w.toLowerCase();
-            let isStrict = false;
-            if (text.startsWith('!')) {
-                isStrict = true;
-                text = text.substring(1);
-            }
-            return { text, isStrict };
-        });
+        // Все слова найдены — блокируем
+        return { match: true, indices: Array.from(rowIndicesUsed) };
+    }
 
-        return { type, words, raw };
+    // Проверка совпадения для типа quote (кавычки)
+    function matchQuote(rule, rowWords) {
+        const phraseLen = rule.words.length;
+        const rowLen = rowWords.length;
+
+        // Проверить количество слов
+        if (rowLen !== phraseLen) {
+            return { match: false };
+        }
+
+        // Проверить, что все слова минус-фразы присутствуют
+        const rowIndicesUsed = new Set();
+
+        for (const rWord of rule.words) {
+            const foundIdx = rowWords.findIndex((d, idx) => {
+                if (rowIndicesUsed.has(idx)) return false;
+
+                if (rWord.isStrict) {
+                    return d.lower === rWord.text;
+                } else {
+                    return d.stem === stemWord(rWord.text);
+                }
+            });
+
+            if (foundIdx === -1) {
+                return { match: false };
+            }
+
+            rowIndicesUsed.add(foundIdx);
+        }
+
+        // Все слова найдены и количество совпадает — блокируем ВСЮ строку
+        return { match: true, indices: Array.from({ length: rowLen }, (_, i) => i) };
+    }
+
+    // Проверка совпадения для типа bracket (квадратные скобки)
+    function matchBracket(rule, rowWords) {
+        const phraseLen = rule.words.length;
+        const rowLen = rowWords.length;
+
+        if (rowLen < phraseLen) {
+            return { match: false };
+        }
+
+        // Найти последовательность слов
+        for (let i = 0; i <= rowLen - phraseLen; i++) {
+            let sequenceMatch = true;
+            let currentRowIdx = i;
+            const matchedIndices = [];
+
+            for (let j = 0; j < phraseLen; j++) {
+                const rWord = rule.words[j];
+
+                // Пропустить стоп-слова между словами минус-фразы
+                while (currentRowIdx < rowLen && STOPWORDS.has(rowWords[currentRowIdx].lower)) {
+                    currentRowIdx++;
+                }
+
+                if (currentRowIdx >= rowLen) {
+                    sequenceMatch = false;
+                    break;
+                }
+
+                const d = rowWords[currentRowIdx];
+                const match = rWord.isStrict
+                    ? (d.lower === rWord.text)
+                    : (d.stem === stemWord(rWord.text));
+
+                if (!match) {
+                    sequenceMatch = false;
+                    break;
+                }
+
+                matchedIndices.push(currentRowIdx);
+                currentRowIdx++;
+            }
+
+            if (sequenceMatch) {
+                return { match: true, indices: matchedIndices };
+            }
+        }
+
+        return { match: false };
     }
 
 
@@ -3407,6 +3444,7 @@
     }
 
 })();
+
 
 
 
