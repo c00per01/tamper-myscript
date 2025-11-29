@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.104
+// @version 0.121.105
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2420,17 +2420,33 @@
             const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
             const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
 
+            console.log('[YD-SQ MODAL] ========== ПОИСК ПОЛЕЙ В МОДАЛКЕ ==========');
+            console.log('[YD-SQ MODAL] Попытка:', attempt + 1, '/ 12');
+            console.log('[YD-SQ MODAL] Найдено textareas:', textareas.length);
+            console.log('[YD-SQ MODAL] Найдено textInputs:', textInputs.length);
+            console.log('[YD-SQ MODAL] Найдено otherInputs:', otherInputs.length);
+            console.log('[YD-SQ MODAL] Найдено contentEditables:', contentEditables.length);
+
             const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
             const uniq = [...new Set(all)];
+
+            console.log('[YD-SQ MODAL] Всего уникальных полей (uniq):', uniq.length);
+
             const visible = uniq.filter(el => {
                 const r = el.getBoundingClientRect();
                 return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
             });
 
+            console.log('[YD-SQ MODAL] Видимых полей (visible):', visible.length);
+            if (visible.length > 0) {
+                console.log('[YD-SQ MODAL] Типы найденных полей:', visible.map(el => el.tagName + (el.className ? '.' + el.className.split(' ')[0] : '')));
+            }
+
             if (visible.length > 0) {
                 fillFields(visible, values);
                 setTimeout(() => tryCloseResultPopup(), 1200);
             } else {
+                console.log('[YD-SQ MODAL] Поля не найдены, повторная попытка через 300мс...');
                 waitForInputFields(modal, values, attempt + 1);
             }
         }, 300);
@@ -3459,6 +3475,7 @@
     }
 
 })();
+
 
 
 
