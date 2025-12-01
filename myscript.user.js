@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.119
+// @version 0.121.120
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1700,17 +1700,29 @@
         return cleaned;
     }
 
+    let isImporting = false; // Флаг для защиты от двойных кликов
+
     async function importMinusesFromClipboard() {
         const btn = document.getElementById('yd-sq-load-clipboard');
-        console.log('[YD-SQ] importMinusesFromClipboard вызвана, кнопка:', btn, 'confirming:', btn?.dataset.confirming);
+        console.log('[YD-SQ] importMinusesFromClipboard вызвана, кнопка:', btn, 'confirming:', btn?.dataset.confirming, 'isImporting:', isImporting);
+
+        // Защита от двойного вызова
+        if (isImporting) {
+            console.log('[YD-SQ] ⏳ Импорт уже выполняется, игнорируем клик');
+            return;
+        }
 
         // Если кнопка уже в режиме подтверждения
         if (btn && btn.dataset.confirming === 'true') {
             console.log('[YD-SQ] Второе нажатие - выполняем импорт');
+            isImporting = true; // Блокируем повторные вызовы
+
             // Второе нажатие - выполняем импорт
             try {
+                console.log('[YD-SQ] 🔄 Начинаем чтение буфера обмена...');
                 const text = await navigator.clipboard.readText();
-                console.log('[YD-SQ] 📋 Текст из буфера:', text);
+                console.log('[YD-SQ] 📋 Текст из буфера, символов:', text?.length || 0);
+
                 const newPhrases = normalizeMinusInput(text);
                 console.log('[YD-SQ] ✅ normalizeMinusInput вернула:', newPhrases.size, 'фраз');
 
@@ -1722,6 +1734,7 @@
                     delete btn.dataset.confirming;
                     btn.style.background = '';
                     btn.style.color = '';
+                    isImporting = false;
                     return;
                 }
 
@@ -1766,6 +1779,9 @@
                     btn.style.background = '';
                     btn.style.color = '';
                 }
+            } finally {
+                isImporting = false; // Разблокируем
+                console.log('[YD-SQ] ✅ Импорт завершен, isImporting = false');
             }
         } else {
             console.log('[YD-SQ] Первое нажатие - подсчитываем количество');
@@ -3469,6 +3485,7 @@
     }
 
 })();
+
 
 
 
