@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.115
+// @version 0.121.116
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1533,12 +1533,7 @@
     // ==================== SMART DATA PIPELINE ====================
 
     function normalizeMinusInput(rawInput) {
-        let rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
-
-        // Поддержка формата " -слово -фраза" (пробел перед дефисом)
-        // Заменяем " -" на "\n-" чтобы корректно разделить по строкам
-        rawString = rawString.replace(/\s+-/g, '\n-');
-
+        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
         // Разделители: новая строка, табуляция, запятая, точка с запятой
         const parts = rawString.split(/[\n\t,;]+/);
         const normalized = new Set();
@@ -1648,7 +1643,58 @@
         return true;
     }
 
+    function normalizeMinusInput(text) {
+        const result = new Set();
+        if (!text || !text.trim()) return result;
 
+        // Убираем лишние пробелы и переводы строк в начале/конце
+        text = text.trim();
+
+        // **ФОРМАТ 1: Каждый минус на новой строке**
+        // -автомобилях
+        // -!ведущая ось
+        // -весы
+
+        // **ФОРМАТ 2: Минусы через пробел в одной строке**
+        // -автомобилях -!ведущая ось -!весы -!воздуха
+
+        let lines = text.split('\n');
+
+        for (const line of lines) {
+            let trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Проверяем, есть ли в строке несколько минусов через пробел
+            // Ищем паттерн: пробел + минус (но не в начале строки)
+            if (/ -/.test(trimmed)) {
+                // Разбиваем по паттерну "пробел + минус", сохраняя минус
+                const parts = trimmed.split(/ (?=-)/).map(p => p.trim()).filter(p => p);
+
+                for (const part of parts) {
+                    const normalized = normalizeSingleMinus(part);
+                    if (normalized) result.add(normalized);
+                }
+            } else {
+                // Обычная строка с одним минусом
+                const normalized = normalizeSingleMinus(trimmed);
+                if (normalized) result.add(normalized);
+            }
+        }
+
+        return result;
+    }
+
+    function normalizeSingleMinus(str) {
+        if (!str) return null;
+
+        // Убираем минус в начале, если есть
+        let cleaned = str.startsWith('-') ? str.slice(1).trim() : str;
+
+        if (!cleaned) return null;
+
+        // Возвращаем как есть, сохраняя спецсимволы !, "", []
+        return cleaned;
+    }
 
     async function importMinusesFromClipboard() {
         const btn = document.getElementById('yd-sq-load-clipboard');
