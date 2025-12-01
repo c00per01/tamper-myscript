@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.114
+// @version 0.121.115
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1533,7 +1533,12 @@
     // ==================== SMART DATA PIPELINE ====================
 
     function normalizeMinusInput(rawInput) {
-        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+        let rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+
+        // Поддержка формата " -слово -фраза" (пробел перед дефисом)
+        // Заменяем " -" на "\n-" чтобы корректно разделить по строкам
+        rawString = rawString.replace(/\s+-/g, '\n-');
+
         // Разделители: новая строка, табуляция, запятая, точка с запятой
         const parts = rawString.split(/[\n\t,;]+/);
         const normalized = new Set();
@@ -3403,6 +3408,7 @@
     }
 
 })();
+
 
 
 
