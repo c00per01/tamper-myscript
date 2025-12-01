@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.118
+// @version 0.121.119
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1702,21 +1702,23 @@
 
     async function importMinusesFromClipboard() {
         const btn = document.getElementById('yd-sq-load-clipboard');
+        console.log('[YD-SQ] importMinusesFromClipboard вызвана, кнопка:', btn, 'confirming:', btn?.dataset.confirming);
 
         // Если кнопка уже в режиме подтверждения
         if (btn && btn.dataset.confirming === 'true') {
+            console.log('[YD-SQ] Второе нажатие - выполняем импорт');
             // Второе нажатие - выполняем импорт
             try {
                 const text = await navigator.clipboard.readText();
-                console.log('[YD-SQ] Текст из буфера:', text);
+                console.log('[YD-SQ] 📋 Текст из буфера:', text);
                 const newPhrases = normalizeMinusInput(text);
-                console.log('[YD-SQ] normalizeMinusInput вернула:', newPhrases.size, 'фраз');
+                console.log('[YD-SQ] ✅ normalizeMinusInput вернула:', newPhrases.size, 'фраз');
 
                 if (newPhrases.size === 0) {
-                    console.log('[YD-SQ] Фразы пустые, показываем предупреждение');
+                    console.log('[YD-SQ] ❌ Фразы пустые, показываем предупреждение');
                     showYdsqNotification('В буфере не найдено минусов', 'warn');
                     // Сброс кнопки
-                    btn.textContent = '📋 Загрузить из буфера';
+                    btn.textContent = '📋 Импорт';
                     delete btn.dataset.confirming;
                     btn.style.background = '';
                     btn.style.color = '';
@@ -1726,7 +1728,6 @@
                 const newItems = [];
                 for (const phrase of newPhrases) {
                     const isDuplicate = importedMinuses.some(imp => imp.raw === phrase);
-                    console.log('[YD-SQ] Проверка фразы:', phrase, 'дубликат:', isDuplicate);
                     if (!isDuplicate) {
                         newItems.push({
                             id: `imp:${Date.now()}_${Math.random()}`,
@@ -1736,7 +1737,7 @@
                     }
                 }
 
-                console.log('[YD-SQ] Новых элементов для добавления:', newItems.length);
+                console.log('[YD-SQ] 📦 Новых элементов для добавления:', newItems.length);
 
                 if (newItems.length > 0) {
                     importedMinuses = [...importedMinuses, ...newItems];
@@ -1745,29 +1746,30 @@
                     updateHighlights();
                     resetClearAllButton();
                     updateUI();
-                    showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
+                    showYdsqNotification(`✅ Добавлено ${newItems.length} минусов`, 'success');
                 } else {
-                    showYdsqNotification('Все минусы уже есть в списке', 'info');
+                    showYdsqNotification('ℹ️ Все минусы уже есть в списке', 'info');
                 }
 
                 // Сброс кнопки
-                btn.textContent = '📋 Загрузить из буфера';
+                btn.textContent = '📋 Импорт';
                 delete btn.dataset.confirming;
                 btn.style.background = '';
                 btn.style.color = '';
             } catch (err) {
-                console.error('[YD-SQ] Ошибка импорта:', err);
+                console.error('[YD-SQ] ❌ Ошибка импорта:', err);
                 showYdsqNotification('Ошибка чтения буфера обмена', 'error');
                 // Сброс кнопки
                 if (btn) {
-                    btn.textContent = '📋 Загрузить из буфера';
+                    btn.textContent = '📋 Импорт';
                     delete btn.dataset.confirming;
                     btn.style.background = '';
                     btn.style.color = '';
                 }
             }
         } else {
-            // Первое нажатие - запрашиваем подтверждение
+            console.log('[YD-SQ] Первое нажатие - подсчитываем количество');
+            // Первое нажатие - подсчитываем количество
             try {
                 const text = await navigator.clipboard.readText();
                 const newPhrases = normalizeMinusInput(text);
@@ -1777,17 +1779,19 @@
                     return;
                 }
 
-                // Показываем количество и просим подтверждение
+                // Показываем количество на кнопке
                 if (btn) {
                     btn.dataset.confirming = 'true';
-                    btn.textContent = `Импортировать ${newPhrases.size} шт?`;
+                    btn.textContent = `📥 Импортировать ${newPhrases.size}?`;
                     btn.style.background = '#4a90e2';
                     btn.style.color = 'white';
+
+                    console.log('[YD-SQ] ✅ Кнопка обновлена, ждем подтверждения');
 
                     // Сброс через 5 секунд
                     setTimeout(() => {
                         if (btn.dataset.confirming === 'true') {
-                            btn.textContent = '📋 Загрузить из буфера';
+                            btn.textContent = '📋 Импорт';
                             delete btn.dataset.confirming;
                             btn.style.background = '';
                             btn.style.color = '';
@@ -3465,6 +3469,7 @@
     }
 
 })();
+
 
 
 
