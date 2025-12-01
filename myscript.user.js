@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.116
+// @version 0.121.117
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1644,11 +1644,16 @@
     }
 
     function normalizeMinusInput(text) {
+        console.log('[YD-SQ] normalizeMinusInput вызвана с текстом:', text);
         const result = new Set();
-        if (!text || !text.trim()) return result;
+        if (!text || !text.trim()) {
+            console.log('[YD-SQ] Текст пустой, возврат пустого Set');
+            return result;
+        }
 
         // Убираем лишние пробелы и переводы строк в начале/конце
         text = text.trim();
+        console.log('[YD-SQ] После trim:', text);
 
         // **ФОРМАТ 1: Каждый минус на новой строке**
         // -автомобилях
@@ -1659,28 +1664,37 @@
         // -автомобилях -!ведущая ось -!весы -!воздуха
 
         let lines = text.split('\n');
+        console.log('[YD-SQ] Разбито на строки:', lines.length, lines);
 
         for (const line of lines) {
             let trimmed = line.trim();
             if (!trimmed) continue;
 
+            console.log('[YD-SQ] Обработка строки:', trimmed);
+
             // Проверяем, есть ли в строке несколько минусов через пробел
             // Ищем паттерн: пробел + минус (но не в начале строки)
             if (/ -/.test(trimmed)) {
+                console.log('[YD-SQ] Найден паттерн " -", разбиваем на части');
                 // Разбиваем по паттерну "пробел + минус", сохраняя минус
                 const parts = trimmed.split(/ (?=-)/).map(p => p.trim()).filter(p => p);
+                console.log('[YD-SQ] Части после split:', parts);
 
                 for (const part of parts) {
                     const normalized = normalizeSingleMinus(part);
+                    console.log('[YD-SQ] Часть:', part, '→ normalized:', normalized);
                     if (normalized) result.add(normalized);
                 }
             } else {
+                console.log('[YD-SQ] Паттерн " -" не найден, обрабатываем как одну фразу');
                 // Обычная строка с одним минусом
                 const normalized = normalizeSingleMinus(trimmed);
+                console.log('[YD-SQ] normalized:', normalized);
                 if (normalized) result.add(normalized);
             }
         }
 
+        console.log('[YD-SQ] Финальный результат (Set):', Array.from(result));
         return result;
     }
 
@@ -1704,9 +1718,12 @@
             // Второе нажатие - выполняем импорт
             try {
                 const text = await navigator.clipboard.readText();
+                console.log('[YD-SQ] Текст из буфера:', text);
                 const newPhrases = normalizeMinusInput(text);
+                console.log('[YD-SQ] normalizeMinusInput вернула:', newPhrases.size, 'фраз');
 
                 if (newPhrases.size === 0) {
+                    console.log('[YD-SQ] Фразы пустые, показываем предупреждение');
                     showYdsqNotification('В буфере не найдено минусов', 'warn');
                     // Сброс кнопки
                     btn.textContent = '📋 Загрузить из буфера';
@@ -1718,7 +1735,9 @@
 
                 const newItems = [];
                 for (const phrase of newPhrases) {
-                    if (!importedMinuses.some(imp => imp.raw === phrase)) {
+                    const isDuplicate = importedMinuses.some(imp => imp.raw === phrase);
+                    console.log('[YD-SQ] Проверка фразы:', phrase, 'дубликат:', isDuplicate);
+                    if (!isDuplicate) {
                         newItems.push({
                             id: `imp:${Date.now()}_${Math.random()}`,
                             raw: phrase,
@@ -1726,6 +1745,8 @@
                         });
                     }
                 }
+
+                console.log('[YD-SQ] Новых элементов для добавления:', newItems.length);
 
                 if (newItems.length > 0) {
                     importedMinuses = [...importedMinuses, ...newItems];
@@ -3454,6 +3475,7 @@
     }
 
 })();
+
 
 
 
