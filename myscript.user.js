@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.120
+// @version 0.121.121
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1533,7 +1533,12 @@
     // ==================== SMART DATA PIPELINE ====================
 
     function normalizeMinusInput(rawInput) {
-        const rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+        let rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
+
+        // Поддержка формата "-слово1 -слово2" (пробел-дефис как разделитель)
+        // Заменяем " -" на "\n-" (если после дефиса не пробел)
+        rawString = rawString.replace(/\s-(?=[^\s])/g, '\n-');
+
         // Разделители: новая строка, табуляция, запятая, точка с запятой
         const parts = rawString.split(/[\n\t,;]+/);
         const normalized = new Set();
@@ -1643,105 +1648,31 @@
         return true;
     }
 
-    function normalizeMinusInput(text) {
-        console.log('[YD-SQ] 📥 Импорт из буфера, символов:', text?.length || 0);
-        const result = new Set();
-        if (!text || !text.trim()) {
-            console.log('[YD-SQ] ❌ Текст пустой');
-            return result;
-        }
 
-        text = text.trim();
-
-        // **ФОРМАТ 1: Каждый минус на новой строке**
-        // -автомобилях
-        // -!ведущая ось
-        // -весы
-
-        // **ФОРМАТ 2: Минусы через пробел в одной строке**
-        // -автомобилях -!ведущая ось -!весы -!воздуха
-
-        let lines = text.split('\n');
-
-        for (const line of lines) {
-            let trimmed = line.trim();
-            if (!trimmed) continue;
-
-            // Проверяем, есть ли в строке несколько минусов через пробел
-            // Ищем паттерн: пробел + минус (но не в начале строки)
-            if (/ -/.test(trimmed)) {
-                // Разбиваем по паттерну "пробел + минус", сохраняя минус
-                const parts = trimmed.split(/ (?=-)/).map(p => p.trim()).filter(p => p);
-
-                for (const part of parts) {
-                    const normalized = normalizeSingleMinus(part);
-                    if (normalized) result.add(normalized);
-                }
-            } else {
-                // Обычная строка с одним минусом
-                const normalized = normalizeSingleMinus(trimmed);
-                if (normalized) result.add(normalized);
-            }
-        }
-
-        console.log('[YD-SQ] ✅ Найдено минусов:', result.size);
-        return result;
-    }
-
-    function normalizeSingleMinus(str) {
-        if (!str) return null;
-
-        // Убираем минус в начале, если есть
-        let cleaned = str.startsWith('-') ? str.slice(1).trim() : str;
-
-        if (!cleaned) return null;
-
-        // Возвращаем как есть, сохраняя спецсимволы !, "", []
-        return cleaned;
-    }
-
-    let isImporting = false; // Флаг для защиты от двойных кликов
 
     async function importMinusesFromClipboard() {
         const btn = document.getElementById('yd-sq-load-clipboard');
-        console.log('[YD-SQ] importMinusesFromClipboard вызвана, кнопка:', btn, 'confirming:', btn?.dataset.confirming, 'isImporting:', isImporting);
-
-        // Защита от двойного вызова
-        if (isImporting) {
-            console.log('[YD-SQ] ⏳ Импорт уже выполняется, игнорируем клик');
-            return;
-        }
 
         // Если кнопка уже в режиме подтверждения
         if (btn && btn.dataset.confirming === 'true') {
-            console.log('[YD-SQ] Второе нажатие - выполняем импорт');
-            isImporting = true; // Блокируем повторные вызовы
-
             // Второе нажатие - выполняем импорт
             try {
-                console.log('[YD-SQ] 🔄 Начинаем чтение буфера обмена...');
                 const text = await navigator.clipboard.readText();
-                console.log('[YD-SQ] 📋 Текст из буфера, символов:', text?.length || 0);
-
                 const newPhrases = normalizeMinusInput(text);
-                console.log('[YD-SQ] ✅ normalizeMinusInput вернула:', newPhrases.size, 'фраз');
 
                 if (newPhrases.size === 0) {
-                    console.log('[YD-SQ] ❌ Фразы пустые, показываем предупреждение');
                     showYdsqNotification('В буфере не найдено минусов', 'warn');
                     // Сброс кнопки
-                    btn.textContent = '📋 Импорт';
+                    btn.textContent = '📋 Загрузить из буфера';
                     delete btn.dataset.confirming;
                     btn.style.background = '';
                     btn.style.color = '';
-                    isImporting = false;
                     return;
                 }
 
                 const newItems = [];
                 for (const phrase of newPhrases) {
-                    const isDuplicate = importedMinuses.some(imp => imp.raw === phrase);
-                    if (!isDuplicate) {
+                    if (!importedMinuses.some(imp => imp.raw === phrase)) {
                         newItems.push({
                             id: `imp:${Date.now()}_${Math.random()}`,
                             raw: phrase,
@@ -1750,8 +1681,6 @@
                     }
                 }
 
-                console.log('[YD-SQ] 📦 Новых элементов для добавления:', newItems.length);
-
                 if (newItems.length > 0) {
                     importedMinuses = [...importedMinuses, ...newItems];
                     syncLocalToGlobal();
@@ -1759,33 +1688,29 @@
                     updateHighlights();
                     resetClearAllButton();
                     updateUI();
-                    showYdsqNotification(`✅ Добавлено ${newItems.length} минусов`, 'success');
+                    showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
                 } else {
-                    showYdsqNotification('ℹ️ Все минусы уже есть в списке', 'info');
+                    showYdsqNotification('Все минусы уже есть в списке', 'info');
                 }
 
                 // Сброс кнопки
-                btn.textContent = '📋 Импорт';
+                btn.textContent = '📋 Загрузить из буфера';
                 delete btn.dataset.confirming;
                 btn.style.background = '';
                 btn.style.color = '';
             } catch (err) {
-                console.error('[YD-SQ] ❌ Ошибка импорта:', err);
+                console.error('[YD-SQ] Ошибка импорта:', err);
                 showYdsqNotification('Ошибка чтения буфера обмена', 'error');
                 // Сброс кнопки
                 if (btn) {
-                    btn.textContent = '📋 Импорт';
+                    btn.textContent = '📋 Загрузить из буфера';
                     delete btn.dataset.confirming;
                     btn.style.background = '';
                     btn.style.color = '';
                 }
-            } finally {
-                isImporting = false; // Разблокируем
-                console.log('[YD-SQ] ✅ Импорт завершен, isImporting = false');
             }
         } else {
-            console.log('[YD-SQ] Первое нажатие - подсчитываем количество');
-            // Первое нажатие - подсчитываем количество
+            // Первое нажатие - запрашиваем подтверждение
             try {
                 const text = await navigator.clipboard.readText();
                 const newPhrases = normalizeMinusInput(text);
@@ -1795,19 +1720,17 @@
                     return;
                 }
 
-                // Показываем количество на кнопке
+                // Показываем количество и просим подтверждение
                 if (btn) {
                     btn.dataset.confirming = 'true';
-                    btn.textContent = `📥 Импортировать ${newPhrases.size}?`;
+                    btn.textContent = `Импортировать ${newPhrases.size} шт?`;
                     btn.style.background = '#4a90e2';
                     btn.style.color = 'white';
-
-                    console.log('[YD-SQ] ✅ Кнопка обновлена, ждем подтверждения');
 
                     // Сброс через 5 секунд
                     setTimeout(() => {
                         if (btn.dataset.confirming === 'true') {
-                            btn.textContent = '📋 Импорт';
+                            btn.textContent = '📋 Загрузить из буфера';
                             delete btn.dataset.confirming;
                             btn.style.background = '';
                             btn.style.color = '';
@@ -3485,10 +3408,6 @@
     }
 
 })();
-
-
-
-
 
 
 
