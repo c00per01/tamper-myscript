@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.121
+// @version 0.121.122
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -675,6 +675,38 @@
         resetClearAllButton();
         updateUI();
         debounceAutoScroll(rowId, 180);
+    }
+
+    function toggleSoftWord(span, stem, word, rowId) {
+        const key = `soft:${stem}`;
+        selections.set(key, {
+            id: key,
+            kind: 'soft',
+            stem: stem,
+            raw: word,
+            display: word,
+            rowId: rowId,
+            pageKey: currentPageKey,
+            matchType: 'broad'
+        });
+        ensureRowChecked(rowId);
+        syncLocalToGlobal();
+    }
+
+    function toggleStrictWord(span, wordLower, word, rowId) {
+        const key = `strict:${wordLower}`;
+        selections.set(key, {
+            id: key,
+            kind: 'strict',
+            wordLower: wordLower,
+            raw: `!${word}`,
+            display: `!${word}`,
+            rowId: rowId,
+            pageKey: currentPageKey,
+            matchType: 'strict'
+        });
+        ensureRowChecked(rowId);
+        syncLocalToGlobal();
     }
 
     function onWordDoubleClick(e, targetSpan) {
@@ -2513,10 +2545,11 @@
                         }, 1500);
                     } else {
                         // Все пакеты отправлены
+                        const totalBatches = batchQueue.length;
                         batchQueue = [];
                         currentBatchIndex = 0;
                         isSending = false;
-                        showYdsqNotification(`✅ Все ${currentBatchIndex} пакетов отправлены!`, 'success');
+                        showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
                         resetClearAllButton();
                     }
                 } else {
@@ -3408,6 +3441,7 @@
     }
 
 })();
+
 
 
 
