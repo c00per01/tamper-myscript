@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.123
+// @version 0.121.124
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -28,7 +28,6 @@
     // Batch sending
     let batchQueue = []; // Очередь пакетов для отправки
     let currentBatchIndex = 0;
-    let currentBatchActualCount = 0; // Сколько минусов реально поместилось в модалку
 
     // Undo/Redo
     let undoStack = {
@@ -2428,8 +2427,7 @@
             });
 
             if (visible.length > 0) {
-                const actualCount = fillFields(visible, values);
-                currentBatchActualCount = actualCount; // Сохраняем реальное количество
+                fillFields(visible, values);
                 setTimeout(() => tryCloseResultPopup(), 1200);
             } else {
                 waitForInputFields(modal, values, attempt + 1);
@@ -2455,25 +2453,20 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        if (values.length > inputs.length) {
-            showYdsqNotification(`⚠️ Не поместилось ${values.length - inputs.length} из ${values.length} минусов`, 'warn');
-        }
+        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
-        // Сохраняем ТОЛЬКО те минусы, которые реально поместились в поля
+        // Сохраняем отправляемые минусы во временный массив
+        // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
         const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        const actuallyFilledValues = values.slice(0, n); // Только первые n значений
-
-        pendingSentMinuses = actuallyFilledValues.map(val => ({
+        pendingSentMinuses = values.map(val => ({
             raw: val,
             page: currentPage
         }));
 
         // НЕ добавляем в importedMinuses и sentHistory здесь!
-        // Это будет сделано в tryCloseResultPopup после успешного подтверждения
+        // Это будет сделано в tryCloseResultPopup после успешного сохранения
         syncLocalToGlobal();
         rebuildCampaignMinusList();
-
-        return n; // Возвращаем количество реально заполненных полей
     }
 
     function findResultPopup() {
@@ -2535,22 +2528,9 @@
 
                 // **ЛОГИКА ПАКЕТНОЙ ОТПРАВКИ**
                 if (batchQueue.length > 0) {
-                    // Удаляем ТОЛЬКО те selections, которые реально поместились в модалку
+                    // Удаляем только selections из текущего пакета
                     const currentBatch = batchQueue[currentBatchIndex];
-                    const actuallyFilledCount = currentBatchActualCount || currentBatch.length;
-
-                    // Удаляем только первые actuallyFilledCount элементов из текущего пакета
-                    for (let i = 0; i < actuallyFilledCount && i < currentBatch.length; i++) {
-                        selections.delete(currentBatch[i].id);
-                    }
-
-                    // Если не все элементы поместились - создаем новый пакет из остатка
-                    const notSent = currentBatch.slice(actuallyFilledCount);
-                    if (notSent.length > 0) {
-                        showYdsqNotification(`⚠️ ${notSent.length} минусов не поместилось. Создан дополнительный пакет`, 'warn');
-                        // Вставляем новый пакет после текущего
-                        batchQueue.splice(currentBatchIndex + 1, 0, notSent);
-                    }
+                    currentBatch.forEach(sel => selections.delete(sel.id));
 
                     syncLocalToGlobal();
                     updateUI();
@@ -2568,7 +2548,6 @@
                         const totalBatches = batchQueue.length;
                         batchQueue = [];
                         currentBatchIndex = 0;
-                        currentBatchActualCount = 0;
                         isSending = false;
                         showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
                         resetClearAllButton();
