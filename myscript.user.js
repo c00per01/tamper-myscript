@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.124
+// @version 0.121.125
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -570,6 +570,12 @@
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
+
+        // Блокируем клики во время отправки
+        if (isSending) {
+            showYdsqNotification('Идет пакетная отправка, подождите...', 'warn');
+            return;
+        }
 
         const span = targetSpan;
 
@@ -2077,7 +2083,8 @@
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const date = new Date(imp.importedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
             const isDeleted = imp.deleted;
-            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}`;
+            const isStrict = imp.raw.startsWith('!');  // Проверяем строгое соответствие
+            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}${isStrict ? ' yd-sq-item-strict' : ''}`;
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
@@ -2435,7 +2442,7 @@
         }, 300);
     }
 
-    function fillFields(inputs, values) {
+    async function fillFields(inputs, values) {
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2454,6 +2461,40 @@
         }
 
         if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
+
+        // **КРИТИЧЕСКИ ВАЖНО: Переключаем на "В кампанию" и снимаем "Добавлять в группу"**
+        await delay(100);
+
+        // Находим модальное окно
+        const modal = document.querySelector('[role="dialog"]');
+        if (modal) {
+            // 1. Переключаем радио на "В кампанию"
+            const radios = Array.from(modal.querySelectorAll('input[type="radio"]'));
+            const campaignRadio = radios.find(r => {
+                const label = r.closest('label') || r.nextElementSibling;
+                const text = label?.textContent || '';
+                return text.includes('кампанию') || text.includes('campaign');
+            });
+
+            if (campaignRadio && !campaignRadio.checked) {
+                console.log('[YD-SQ] Переключаем на "В кампанию"');
+                campaignRadio.click();
+                await delay(50);
+            }
+
+            // 2. Снимаем галочку "Добавлять в группу"
+            const checkboxes = Array.from(modal.querySelectorAll('input[type="checkbox"]'));
+            const groupCheckbox = checkboxes.find(ch => {
+                const label = ch.closest('label') || ch.nextElementSibling;
+                const text = label?.textContent || '';
+                return text.includes('группу') || text.includes('group');
+            });
+
+            if (groupCheckbox && groupCheckbox.checked) {
+                console.log('[YD-SQ] Снимаем галочку "Добавлять в группу"');
+                groupCheckbox.click();
+            }
+        }
 
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
@@ -2509,7 +2550,8 @@
                             importedMinuses.push({
                                 id: `imp:${Date.now()}_${Math.random()}`,
                                 raw: item.raw,
-                                importedAt: Date.now()
+                                importedAt: Date.now(),
+                                deleted: false  // КРИТИЧНО: для синхронизации с updateHighlights
                             });
                         }
 
@@ -3054,6 +3096,13 @@
                 color: #999;
             }
 
+            /* Strict-минусы: тонкое подчеркивание (UI гайды Google/Apple) */
+            #yd-sq-panel .yd-sq-item-strict .yd-sq-item-text {
+                text-decoration: underline dotted rgba(0,0,0,0.3);
+                text-decoration-thickness: 1px;
+                text-underline-offset: 2px;
+            }
+
             #yd-sq-panel .yd-sq-page-hint {
                 font-size: 10px;
                 color: #999;
@@ -3441,6 +3490,7 @@
     }
 
 })();
+
 
 
 
