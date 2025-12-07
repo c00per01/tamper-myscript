@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.125
+// @version 0.121.126
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -195,6 +195,16 @@
     }
 
     function cleanupPageState() {
+        // Прерываем пакетную отправку если она идет
+        if (batchQueue.length > 0) {
+            console.log('[YD-SQ] Прерывание пакетной отправки из-за смены страницы');
+            showYdsqNotification('Пакетная отправка прервана при смене страницы', 'warn');
+            batchQueue = [];
+            currentBatchIndex = 0;
+            isSending = false;
+            pendingSentMinuses = []; // Очищаем pending, т.к. отправка не завершена
+        }
+
         // Cancel phrase mode if active
         if (phraseInProgress) {
             phraseInProgress = null;
@@ -2224,13 +2234,41 @@
         showYdsqNotification(batchInfo, 'info');
         console.log(`[YD-SQ] Отправка ${batchInfo}`);
 
-        // Резервируем строки для текущего пакета
+        // **КРИТИЧНО: Очищаем auto-чекбоксы от предыдущего batch**
         const rows = getAllRowsOnPage();
-        let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
+        rows.forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb && cb.dataset.ydAuto === 'true') {
+                clickCheckbox(cb, false);
+                delete cb.dataset.ydAuto;
+                delete row.dataset.ydAutoRow;
+            }
+        });
 
+        await delay(100); // Даем время чекбоксам обновиться
+
+        // **Пересчитываем ресурсы ПОСЛЕ очистки**
+        let checkedCount = rows.filter(r => {
+            const cb = r.querySelector('input[type="checkbox"]');
+            return cb && cb.checked && cb.dataset.ydAuto !== 'true'; // Не учитываем auto
+        }).length;
+
+        const freeRows = findFreeRows(null);
+
+        // Проверяем что хватит строк для текущего пакета
+        if (checkedCount + freeRows.length < values.length) {
+            showYdsqNotification(
+                `Недостаточно строк для пакета ${currentBatchIndex + 1}.\nНужно: ${values.length}, доступно: ${checkedCount + freeRows.length}`,
+                'error'
+            );
+            isSending = false;
+            batchQueue = [];
+            return;
+        }
+
+        // Резервируем строки для текущего пакета
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
-            const freeRows = findFreeRows(null);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2243,6 +2281,8 @@
                     reserved++;
                 }
             }
+
+            console.log(`[YD-SQ] Зарезервировано ${reserved} строк для пакета ${currentBatchIndex + 1}`);
         }
 
         await delay(250);
@@ -2311,10 +2351,21 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
+        // **ГРАНИЧНЫЙ СЛУЧАЙ: Нет доступных строк**
+        if (availableRows === 0) {
+            showYdsqNotification(
+                'На странице нет свободных строк.\n\nПерейдите на другую страницу или снимите чекбоксы.',
+                'error'
+            );
+            isSending = false;
+            return;
+        }
+
         // **НОВАЯ ЛОГИКА БАТЧИНГА**
         // Если не хватает строк - разбиваем на пакеты
         if (neededTotal > availableRows) {
-            const batchSize = availableRows;
+            const MAX_BATCH_SIZE = 100; // Лимит для защиты от перегрузки Яндекса
+            const batchSize = Math.min(availableRows, MAX_BATCH_SIZE);
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
 
@@ -2325,7 +2376,7 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов по ${batchSize} минусов`, 'info');
+            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (макс. ${batchSize} минусов/пакет)`, 'info');
             await delay(1000);
 
             // Отправляем первый пакет
@@ -2499,10 +2550,19 @@
         // Сохраняем отправляемые минусы во временный массив
         // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
         const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-        pendingSentMinuses = values.map(val => ({
+
+        // ВАЖНО: используем push вместо =, чтобы не терять данные предыдущих пакетов
+        const newPending = values.map(val => ({
             raw: val,
             page: currentPage
         }));
+
+        // Если это первый batch, инициализируем массив
+        if (!Array.isArray(pendingSentMinuses)) {
+            pendingSentMinuses = [];
+        }
+
+        pendingSentMinuses.push(...newPending);
 
         // НЕ добавляем в importedMinuses и sentHistory здесь!
         // Это будет сделано в tryCloseResultPopup после успешного сохранения
@@ -3490,6 +3550,7 @@
     }
 
 })();
+
 
 
 
