@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.128
+// @version 0.121.129
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -109,6 +109,9 @@
     let batchQueue = []; // Очередь пакетов для отправки
     let currentBatchIndex = 0;
 
+    // Дата последней отправки минусов в Директ (timestamp)
+    let lastSendDate = null;
+
     // Undo/Redo
     let undoStack = {
         stack: [],
@@ -153,7 +156,11 @@
             return;
         }
 
+        // Проверяем и редиректим на правильный URL если нужно
+        checkAndRedirectUrl();
+
         loadGlobalState();
+        loadLastSendDate(); // Загружаем дату последней отправки
         setupGlobalListeners();
         detectPageChange();
         waitForTableAndInit();
@@ -1975,6 +1982,8 @@
                     <button id="yd-sq-clear-all" class="yd-sq-btn-secondary">✕ Очистить выбранные</button>
                 </div>
 
+                <div id="yd-sq-last-send-info" class="yd-sq-last-send-info" style="display:none;"></div>
+
                 <div class="yd-sq-hint">
                     <strong>Горячие клавиши:</strong><br>
                     Клик — мягкое совпадение<br>
@@ -2028,6 +2037,9 @@
         // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
 
         makePanelDraggable();
+
+        // Отображаем дату последней отправки
+        updateLastSendDateUI();
     }
 
     function makePanelDraggable() {
@@ -2459,7 +2471,7 @@
         }
     }
 
-    // Показывает диалог подтверждения перед отправкой
+    // Проверяет нужна ли пакетная отправка и показывает диалог если да
     function showSendConfirmDialog() {
         if (!selections.size) {
             showYdsqNotification('Список минус-слов пуст', 'warn');
@@ -2470,59 +2482,90 @@
             return;
         }
 
+        // Считаем доступные строки
+        const values = [];
+        selections.forEach(sel => {
+            if (!sel.unassignedOnThisPage) values.push(sel.display);
+        });
+
+        if (values.length === 0) {
+            showYdsqNotification('Нет элементов для отправки', 'warn');
+            return;
+        }
+
+        const allRows = getAllRowsOnPage();
+        const checkedCount = allRows.filter(r => {
+            const cb = r.querySelector('input[type="checkbox"]');
+            return cb && cb.checked;
+        }).length;
+        const freeCount = findFreeRows(null).length;
+        const availableRows = checkedCount + freeCount;
+
+        // Определяем количество пакетов
+        const MAX_BATCH_SIZE = 100;
+        const batchSize = Math.min(availableRows, MAX_BATCH_SIZE);
+        const totalBatches = batchSize > 0 ? Math.ceil(values.length / batchSize) : 0;
+
+        log.batch(`Проверка: ${values.length} минусов, ${availableRows} доступных строк, ~${totalBatches} пакетов`);
+
+        // Если нужен только 1 пакет - отправляем сразу без подтверждения
+        if (totalBatches <= 1) {
+            log.batch('Один пакет - отправляем без подтверждения');
+            startAutomaticSending();
+            return;
+        }
+
+        // Нужна пакетная отправка - показываем диалог
         const count = selections.size;
 
-        // Создаём overlay
         const overlay = document.createElement('div');
         overlay.id = 'yd-sq-confirm-overlay';
         overlay.innerHTML = `
             <div class="yd-sq-confirm-dialog">
-                <div class="yd-sq-confirm-title">Подтверждение отправки</div>
+                <div class="yd-sq-confirm-title">⚠️ Пакетная отправка</div>
                 <div class="yd-sq-confirm-text">
                     Отправить <strong>${count}</strong> минус-фраз в кампанию?
                 </div>
                 <div class="yd-sq-confirm-hint">
-                    Минус-фразы будут добавлены автоматически. Процесс может занять некоторое время.
+                    На странице недостаточно строк.<br>
+                    Отправка будет разбита на <strong>${totalBatches} пакетов</strong>.<br>
+                    Процесс автоматический и займёт некоторое время.
                 </div>
                 <div class="yd-sq-confirm-buttons">
                     <button class="yd-sq-confirm-btn yd-sq-confirm-cancel">Отмена</button>
-                    <button class="yd-sq-confirm-btn yd-sq-confirm-ok">OK</button>
+                    <button class="yd-sq-confirm-btn yd-sq-confirm-ok">Начать отправку</button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(overlay);
 
-        // Анимация появления
         requestAnimationFrame(() => {
             overlay.classList.add('yd-sq-confirm-show');
         });
 
-        // Обработчики
         const closeDialog = () => {
             overlay.classList.remove('yd-sq-confirm-show');
             setTimeout(() => overlay.remove(), 200);
         };
 
         overlay.querySelector('.yd-sq-confirm-cancel').addEventListener('click', () => {
-            log.info('Отправка отменена пользователем');
+            log.info('Пакетная отправка отменена пользователем');
             closeDialog();
         });
 
         overlay.querySelector('.yd-sq-confirm-ok').addEventListener('click', async () => {
-            log.info('Пользователь подтвердил отправку');
+            log.info('Пользователь подтвердил пакетную отправку');
             closeDialog();
             await startAutomaticSending();
         });
 
-        // Закрытие по клику на overlay
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
                 closeDialog();
             }
         });
 
-        // Закрытие по Escape
         const handleEsc = (e) => {
             if (e.key === 'Escape') {
                 closeDialog();
@@ -2969,6 +3012,11 @@
 
                 log.success(`Добавлено ${pendingSentMinuses.length} минусов в importedMinuses`);
 
+                // Сохраняем дату последней отправки
+                lastSendDate = Date.now();
+                saveLastSendDate();
+                updateLastSendDateUI();
+
                 // Обновляем UI и синхронизируем
                 syncLocalToGlobal();
                 rebuildCampaignMinusList();
@@ -3082,6 +3130,148 @@
         }
     }
 
+    // ==================== ДАТА ПОСЛЕДНЕЙ ОТПРАВКИ ====================
+
+    function saveLastSendDate() {
+        try {
+            const campaignId = getCampaignId();
+            const key = `yd-sq-last-send:${campaignId}`;
+            localStorage.setItem(key, lastSendDate.toString());
+            log.sync('Дата отправки сохранена', new Date(lastSendDate).toLocaleString());
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка сохранения даты:', err);
+        }
+    }
+
+    function loadLastSendDate() {
+        try {
+            const campaignId = getCampaignId();
+            const key = `yd-sq-last-send:${campaignId}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                lastSendDate = parseInt(saved);
+                log.sync('Дата отправки загружена', new Date(lastSendDate).toLocaleString());
+            }
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка загрузки даты:', err);
+        }
+    }
+
+    function updateLastSendDateUI() {
+        const container = document.getElementById('yd-sq-last-send-info');
+        if (!container) return;
+
+        if (lastSendDate) {
+            const date = new Date(lastSendDate);
+            const dateStr = date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            const timeStr = date.toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            container.innerHTML = `
+                <span class="yd-sq-last-send-label">📤 Последняя отправка:</span>
+                <span class="yd-sq-last-send-date">${dateStr} в ${timeStr}</span>
+            `;
+            container.style.display = 'flex';
+        } else {
+            container.innerHTML = `
+                <span class="yd-sq-last-send-label">📤 Минусы ещё не отправлялись</span>
+            `;
+            container.style.display = 'flex';
+        }
+    }
+
+    // ==================== АВТОРЕДИРЕКТ НА ПРАВИЛЬНЫЙ URL ====================
+
+    function formatDateForUrl(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function checkAndRedirectUrl() {
+        const currentUrl = window.location.href;
+
+        // Проверяем что мы на странице статистики Директа
+        if (!currentUrl.includes('direct.yandex.ru') ||
+            !currentUrl.includes('stat_type=search_queries')) {
+            return; // Не трогаем другие страницы
+        }
+
+        const url = new URL(currentUrl);
+        const params = url.searchParams;
+
+        // Проверяем есть ли уже полный формат URL
+        if (params.get('group_by')?.includes('match_type')) {
+            log.info('URL уже в правильном формате');
+            return;
+        }
+
+        // Получаем текущие параметры
+        const cid = params.get('cid');
+        const ulogin = params.get('ulogin');
+
+        if (!cid || !ulogin) {
+            log.warn('Не найдены cid или ulogin в URL');
+            return;
+        }
+
+        // Загружаем дату последней отправки для этой кампании
+        loadLastSendDate();
+
+        // Определяем период
+        let dateFrom, dateTo;
+
+        // Вчера
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        dateTo = formatDateForUrl(yesterday);
+
+        if (lastSendDate) {
+            // День после последней отправки
+            const dayAfterSend = new Date(lastSendDate);
+            dayAfterSend.setDate(dayAfterSend.getDate() + 1);
+            dateFrom = formatDateForUrl(dayAfterSend);
+
+            // Проверяем что dateFrom не позже dateTo
+            if (dayAfterSend > yesterday) {
+                log.info('Период после последней отправки ещё не наступил');
+                // Используем сегодняшнюю дату как начало
+                dateFrom = formatDateForUrl(new Date());
+            }
+        } else {
+            // Если не было отправок - берём 14 дней назад
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            dateFrom = formatDateForUrl(twoWeeksAgo);
+        }
+
+        log.info(`Редирект: период ${dateFrom} - ${dateTo}`);
+
+        // Формируем правильный URL
+        const newUrl = `https://direct.yandex.ru/registered/main.pl?` +
+            `show_stat=1&cmd=showStat&stat_periods=&ulogin=${ulogin}` +
+            `&stat_type=search_queries&cid=${cid}&single_camp=1` +
+            `&group_by_date=none&page_size=100` +
+            `&date_from=${dateFrom}&date_to=${dateTo}` +
+            `&attribution_model=automatic&with_nds=0` +
+            `&columns=shows%2Cclicks%2Cctr%2Csum%2Cav_sum%2Caconv%2Cagoalcost%2Cagoalnum` +
+            `&group_by=search_query%2Cadgroup%2Ccontextcond_orig%2Cmatch_type%2Cmatched_phrase%2Ctargeting_category` +
+            `&columns_positions=shows%2Ceshows%2Cclicks%2Cctr%2Cectr%2Csum%2Cav_sum%2Cfp_shows_avg_pos%2Cavg_x%2Cfp_clicks_avg_pos%2Cbounce_ratio%2Cadepth%2Caconv%2Cagoalcost%2Cagoalnum%2Cagoalroi%2Cagoalcrr%2Cagoalincome` +
+            `&group_by_positions=search_query%2Cadgroup%2Cbanner%2Ccontextcond_orig%2Ccriterion_type%2Cmatch_type%2Cmatched_phrase%2Ctext_source%2Cpage_group%2Cposition%2Ctargeting_category%2Cautotargeting_brand_option%2Cprisma_income_grade%2Cltv_level%2Coffer_attributes_name%2Coffer_attributes_vendor%2Coffer_attributes_category%2Cbanner_title%2Cbanner_body%2Cbanner_href`;
+
+        // Проверяем что URL отличается
+        if (currentUrl !== newUrl) {
+            log.success('Редирект на оптимизированный URL');
+            showYdsqNotification(`Период: ${dateFrom} — ${dateTo}`, 'info');
+            window.location.replace(newUrl);
+        }
+    }
 
 
     // ==================== УВЕДОМЛЕНИЯ ====================
@@ -3667,6 +3857,30 @@
                 font-weight: 600;
             }
 
+            /* ДАТА ПОСЛЕДНЕЙ ОТПРАВКИ */
+            .yd-sq-last-send-info {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                font-size: 11px;
+                color: #666;
+                padding: 8px 10px;
+                margin-top: 8px;
+                background: linear-gradient(135deg, #f8fff8, #f0f8f0);
+                border-radius: 6px;
+                border-left: 3px solid #28a745;
+            }
+
+            .yd-sq-last-send-label {
+                color: #555;
+            }
+
+            .yd-sq-last-send-date {
+                font-weight: 600;
+                color: #28a745;
+                font-size: 12px;
+            }
+
             /* СЛОВА В ТАБЛИЦЕ */
             .yd-word {
                 cursor: pointer;
@@ -3976,6 +4190,7 @@
     }
 
 })();
+
 
 
 
