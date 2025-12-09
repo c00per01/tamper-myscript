@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.127
+// @version 0.121.128
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2023,7 +2023,7 @@
 
         document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
 
-        document.getElementById('yd-sq-send').addEventListener('click', sendToMinusPhrases);
+        document.getElementById('yd-sq-send').addEventListener('click', showSendConfirmDialog);
 
         // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
 
@@ -2415,22 +2415,134 @@
         }
 
         addBtn.click();
+        log.batch('Кнопка нажата, ожидаем модалку');
 
         try {
             await waitForMinusModal(values);
+            log.success(`Пакет ${currentBatchIndex + 1} успешно завершён`);
+
+            // Удаляем selections из текущего пакета
+            const currentBatch = batchQueue[currentBatchIndex];
+            currentBatch.forEach(sel => selections.delete(sel.id));
+            log.selection(`Удалено ${currentBatch.length} selections после пакета ${currentBatchIndex + 1}`);
+
+            syncLocalToGlobal();
+            updateUI();
+
+            // Переходим к следующему пакету
+            currentBatchIndex++;
+
+            if (currentBatchIndex < batchQueue.length) {
+                log.batch(`Переход к пакету ${currentBatchIndex + 1}/${batchQueue.length}`);
+                showYdsqNotification(`Пакет ${currentBatchIndex} отправлен. Следующий пакет через 2 сек...`, 'success');
+                await delay(2000); // Пауза между пакетами
+                await sendBatch(); // Рекурсивный вызов СЛЕДУЮЩЕГО пакета
+            } else {
+                // Все пакеты отправлены
+                const totalBatches = batchQueue.length;
+                batchQueue = [];
+                currentBatchIndex = 0;
+                isSending = false;
+                pendingSentMinuses = []; // Очищаем pending
+                log.success(`✅ Все ${totalBatches} пакетов успешно отправлены!`);
+                showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
+                resetClearAllButton();
+            }
+
         } catch (error) {
+            log.error('Ошибка в пакетной отправке', error);
             console.error('[YD-SQ] Ошибка:', error);
             showYdsqNotification('Ошибка при обработке окна', 'error');
             isSending = false;
             batchQueue = [];
+            pendingSentMinuses = [];
         }
-        // Продолжение в tryCloseResultPopup
+    }
+
+    // Показывает диалог подтверждения перед отправкой
+    function showSendConfirmDialog() {
+        if (!selections.size) {
+            showYdsqNotification('Список минус-слов пуст', 'warn');
+            return;
+        }
+        if (isSending) {
+            showYdsqNotification('Отправка уже идёт...', 'warn');
+            return;
+        }
+
+        const count = selections.size;
+
+        // Создаём overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'yd-sq-confirm-overlay';
+        overlay.innerHTML = `
+            <div class="yd-sq-confirm-dialog">
+                <div class="yd-sq-confirm-title">Подтверждение отправки</div>
+                <div class="yd-sq-confirm-text">
+                    Отправить <strong>${count}</strong> минус-фраз в кампанию?
+                </div>
+                <div class="yd-sq-confirm-hint">
+                    Минус-фразы будут добавлены автоматически. Процесс может занять некоторое время.
+                </div>
+                <div class="yd-sq-confirm-buttons">
+                    <button class="yd-sq-confirm-btn yd-sq-confirm-cancel">Отмена</button>
+                    <button class="yd-sq-confirm-btn yd-sq-confirm-ok">OK</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Анимация появления
+        requestAnimationFrame(() => {
+            overlay.classList.add('yd-sq-confirm-show');
+        });
+
+        // Обработчики
+        const closeDialog = () => {
+            overlay.classList.remove('yd-sq-confirm-show');
+            setTimeout(() => overlay.remove(), 200);
+        };
+
+        overlay.querySelector('.yd-sq-confirm-cancel').addEventListener('click', () => {
+            log.info('Отправка отменена пользователем');
+            closeDialog();
+        });
+
+        overlay.querySelector('.yd-sq-confirm-ok').addEventListener('click', async () => {
+            log.info('Пользователь подтвердил отправку');
+            closeDialog();
+            await startAutomaticSending();
+        });
+
+        // Закрытие по клику на overlay
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeDialog();
+            }
+        });
+
+        // Закрытие по Escape
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                closeDialog();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+    }
+
+    // Запуск автоматической отправки
+    async function startAutomaticSending() {
+        log.batch('=== ЗАПУСК АВТОМАТИЧЕСКОЙ ОТПРАВКИ ===');
+        await sendToMinusPhrases();
     }
 
     async function sendToMinusPhrases() {
         if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
         if (isSending) return;
         isSending = true;
+        log.batch('=== ОТПРАВКА НАЧАТА ===');
         console.log('[YD SQ] === ОТПРАВКА ===');
         await delay(150);
 
@@ -2549,11 +2661,66 @@
         }
     }
 
+    // КРИТИЧНО: Возвращает Promise и ждет ПОЛНОГО завершения (включая закрытие результата)
     function waitForMinusModal(values, attempt = 0) {
-        const modal = findMinusModal();
-        if (modal) fillMinusModal(modal, values);
-        else if (attempt < 50) setTimeout(() => waitForMinusModal(values, attempt + 1), 200);
-        else { showYdsqNotification('Окно не обнаружено', 'error'); isSending = false; }
+        return new Promise((resolve, reject) => {
+            log.modal(`waitForMinusModal: попытка ${attempt}`);
+
+            const checkModal = (att) => {
+                const modal = findMinusModal();
+                if (modal) {
+                    log.modal('Модальное окно найдено, заполняем поля');
+                    fillMinusModalAsync(modal, values).then(() => {
+                        log.modal('Поля заполнены, ждём закрытия результата');
+                        // Ждём появления результата и его закрытия
+                        waitForResultPopupClosed().then(resolve).catch(reject);
+                    }).catch(reject);
+                } else if (att < 50) {
+                    setTimeout(() => checkModal(att + 1), 200);
+                } else {
+                    log.error('Модальное окно не найдено после 50 попыток');
+                    showYdsqNotification('Окно не обнаружено', 'error');
+                    isSending = false;
+                    reject(new Error('Modal not found'));
+                }
+            };
+
+            checkModal(attempt);
+        });
+    }
+
+    // Ждёт появления и закрытия попапа с результатом
+    function waitForResultPopupClosed() {
+        return new Promise((resolve) => {
+            log.modal('waitForResultPopupClosed: начинаем ожидание');
+            let checkCount = 0;
+            const maxChecks = 120; // 60 секунд макс
+
+            const checkClosed = () => {
+                checkCount++;
+                const popup = findResultPopup();
+
+                if (popup) {
+                    // Попап найден - пытаемся закрыть
+                    log.modal('Результат найден, tryCloseResultPopup');
+                    const closed = tryCloseResultPopup();
+                    if (closed) {
+                        log.success('Попап результата закрыт, пакет завершён');
+                        setTimeout(resolve, 500); // Даём время на обработку
+                        return;
+                    }
+                }
+
+                if (checkCount < maxChecks) {
+                    setTimeout(checkClosed, 500);
+                } else {
+                    log.warn('Таймаут ожидания результата, продолжаем');
+                    resolve(); // Продолжаем даже если таймаут
+                }
+            };
+
+            setTimeout(checkClosed, 1000); // Начинаем проверку через 1 сек
+        });
     }
 
     function findMinusModal() {
@@ -2580,6 +2747,64 @@
             }
         });
         waitForInputFields(modal, values, 0);
+    }
+
+    // Async версия для пакетной отправки
+    function fillMinusModalAsync(modal, values) {
+        return new Promise((resolve, reject) => {
+            log.modal('fillMinusModalAsync: начало');
+
+            const selects = Array.from(modal.querySelectorAll('select'));
+            selects.forEach((select) => {
+                const opts = Array.from(select.options);
+                const opt = opts.find(o => o.textContent.trim() === 'на кампанию' || o.textContent.trim() === 'На кампанию');
+                if (opt) {
+                    log.modal('Выбираем "на кампанию" в select');
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    const btn = select.closest('.select')?.querySelector('button.select__button');
+                    if (btn) { const t = btn.querySelector('.button__text'); if (t) t.textContent = 'на кампанию'; }
+                }
+            });
+
+            waitForInputFieldsAsync(modal, values, 0, resolve, reject);
+        });
+    }
+
+    // Async версия waitForInputFields
+    function waitForInputFieldsAsync(modal, values, attempt, resolve, reject) {
+        if (attempt > 12) {
+            log.error('Поля ввода не найдены после 12 попыток');
+            showYdsqNotification('Поля ввода не найдены', 'error');
+            isSending = false;
+            reject(new Error('Input fields not found'));
+            return;
+        }
+
+        setTimeout(async () => {
+            const textareas = modal.querySelectorAll('textarea.textarea__control, textarea');
+            const textInputs = modal.querySelectorAll('input.text-input__control, input[type="text"]');
+            const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
+            const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
+
+            const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
+            const uniq = [...new Set(all)];
+            const visible = uniq.filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+            });
+
+            if (visible.length > 0) {
+                log.modal(`Найдено ${visible.length} видимых полей, заполняем`);
+                await fillFields(visible, values);
+                setTimeout(() => tryCloseResultPopup(), 1200);
+                resolve();
+            } else {
+                log.modal(`Попытка ${attempt}: полей не найдено, повтор`);
+                waitForInputFieldsAsync(modal, values, attempt + 1, resolve, reject);
+            }
+        }, 300);
     }
 
     function waitForInputFields(modal, values, attempt) {
@@ -2703,91 +2928,77 @@
     function tryCloseResultPopup() {
         const pop = findResultPopup();
         if (!pop) return false;
+
+        log.modal('tryCloseResultPopup: найден попап результата');
+
         const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
             const s = (el.textContent || '').trim();
             return ['OK', 'ОК', 'Ok', 'ok'].includes(s);
         });
+
         if (ok) {
+            log.modal('Нажимаем кнопку OK');
             ok.click();
 
             // Prevent double success logic (debounce 2 seconds)
-            if (Date.now() - lastResultPopupSuccessTime < 2000) return true;
+            if (Date.now() - lastResultPopupSuccessTime < 2000) {
+                log.modal('Debounce: пропускаем (менее 2 сек)');
+                return true;
+            }
             lastResultPopupSuccessTime = Date.now();
 
             // После успешного сохранения:
-            // 1. Переносим pendingSentMinuses в importedMinuses и sentHistory
-            // 2. Очищаем selections
-            setTimeout(() => {
+            // Переносим pendingSentMinuses в importedMinuses и sentHistory
+            log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
+
+            if (pendingSentMinuses.length > 0) {
+                for (const item of pendingSentMinuses) {
+                    // Добавляем в importedMinuses
+                    if (!importedMinuses.some(imp => imp.raw === item.raw)) {
+                        importedMinuses.push({
+                            id: `imp:${Date.now()}_${Math.random()}`,
+                            raw: item.raw,
+                            importedAt: Date.now(),
+                            deleted: false
+                        });
+                    }
+
+                    // Добавляем в историю
+                    addToSentHistory(item.raw, null, [item.page]);
+                }
+
+                log.success(`Добавлено ${pendingSentMinuses.length} минусов в importedMinuses`);
+
+                // Обновляем UI и синхронизируем
+                syncLocalToGlobal();
+                rebuildCampaignMinusList();
+                updateHighlights();
+            }
+
+            // Если это НЕ пакетная отправка - очищаем selections
+            if (batchQueue.length === 0) {
                 const count = selections.size;
-
-                // Переносим отправленные минусы в "Уже в кампании"
-                if (pendingSentMinuses.length > 0) {
-                    for (const item of pendingSentMinuses) {
-                        // Добавляем в importedMinuses
-                        if (!importedMinuses.some(imp => imp.raw === item.raw)) {
-                            importedMinuses.push({
-                                id: `imp:${Date.now()}_${Math.random()}`,
-                                raw: item.raw,
-                                importedAt: Date.now(),
-                                deleted: false  // КРИТИЧНО: для синхронизации с updateHighlights
-                            });
-                        }
-
-                        // Добавляем в историю
-                        addToSentHistory(item.raw, null, [item.page]);
-                    }
-
-                    // Очищаем временный массив
+                if (count > 0) {
+                    log.selection(`Обычная отправка: очищаем ${count} selections`);
+                    selections.clear();
                     pendingSentMinuses = [];
-
-                    // Обновляем UI и синхронизируем
                     syncLocalToGlobal();
-                    rebuildCampaignMinusList();
-                    updateHighlights();
-                }
-
-                // **ЛОГИКА ПАКЕТНОЙ ОТПРАВКИ**
-                if (batchQueue.length > 0) {
-                    // Удаляем только selections из текущего пакета
-                    const currentBatch = batchQueue[currentBatchIndex];
-                    currentBatch.forEach(sel => selections.delete(sel.id));
-
-                    syncLocalToGlobal();
+                    resetClearAllButton();
                     updateUI();
-
-                    // Переходим к следующему пакету
-                    currentBatchIndex++;
-
-                    if (currentBatchIndex < batchQueue.length) {
-                        showYdsqNotification(`Пакет ${currentBatchIndex} из ${batchQueue.length} отправлен. Отправка следующего...`, 'success');
-                        setTimeout(() => {
-                            sendBatch();
-                        }, 1500);
-                    } else {
-                        // Все пакеты отправлены
-                        const totalBatches = batchQueue.length;
-                        batchQueue = [];
-                        currentBatchIndex = 0;
-                        isSending = false;
-                        showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
-                        resetClearAllButton();
-                    }
-                } else {
-                    // Обычная отправка - очищаем все selections
-                    if (count > 0) {
-                        selections.clear();
-                        syncLocalToGlobal();
-                        resetClearAllButton();
-                        updateUI();
-                        showYdsqNotification(`Отправлено ${count} минусов`, 'success');
-                    }
+                    showYdsqNotification(`Отправлено ${count} минусов`, 'success');
                 }
-            }, 100);
+            }
+            // При пакетной отправке selections очищаются в sendBatch
 
             return true;
         }
+
         const close = pop.querySelector('button[aria-label="Закрыть"], [role="button"] svg, button');
-        if (close) { close.click(); return true; }
+        if (close) {
+            log.modal('Нажимаем кнопку Закрыть');
+            close.click();
+            return true;
+        }
         return false;
     }
 
@@ -3654,6 +3865,103 @@
                 background: #dc3545;
                 color: #fff;
             }
+
+            /* ДИАЛОГ ПОДТВЕРЖДЕНИЯ */
+            #yd-sq-confirm-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2147483647;
+                opacity: 0;
+                transition: opacity 0.2s ease;
+            }
+
+            #yd-sq-confirm-overlay.yd-sq-confirm-show {
+                opacity: 1;
+            }
+
+            .yd-sq-confirm-dialog {
+                background: #fff;
+                border-radius: 12px;
+                padding: 24px;
+                min-width: 340px;
+                max-width: 400px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                transform: scale(0.9);
+                transition: transform 0.2s ease;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            }
+
+            #yd-sq-confirm-overlay.yd-sq-confirm-show .yd-sq-confirm-dialog {
+                transform: scale(1);
+            }
+
+            .yd-sq-confirm-title {
+                font-size: 18px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 12px;
+            }
+
+            .yd-sq-confirm-text {
+                font-size: 14px;
+                color: #555;
+                margin-bottom: 8px;
+            }
+
+            .yd-sq-confirm-text strong {
+                color: #4a90e2;
+                font-weight: 700;
+            }
+
+            .yd-sq-confirm-hint {
+                font-size: 12px;
+                color: #888;
+                margin-bottom: 20px;
+                line-height: 1.5;
+            }
+
+            .yd-sq-confirm-buttons {
+                display: flex;
+                gap: 12px;
+                justify-content: flex-end;
+            }
+
+            .yd-sq-confirm-btn {
+                padding: 10px 24px;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .yd-sq-confirm-cancel {
+                background: #f0f0f0;
+                color: #666;
+            }
+
+            .yd-sq-confirm-cancel:hover {
+                background: #e0e0e0;
+            }
+
+            .yd-sq-confirm-ok {
+                background: linear-gradient(135deg, #4a90e2, #357abd);
+                color: #fff;
+            }
+
+            .yd-sq-confirm-ok:hover {
+                background: linear-gradient(135deg, #357abd, #2a5f8f);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+            }
         `;
 
         document.head.appendChild(style);
@@ -3668,6 +3976,7 @@
     }
 
 })();
+
 
 
 
