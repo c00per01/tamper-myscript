@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.126
+// @version 0.121.127
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -11,6 +11,86 @@
 
 (function () {
     'use strict';
+
+    // ==================== ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ====================
+    const DEBUG_MODE = true; // ВРЕМЕННО: для отладки, потом установим false
+
+    const log = {
+        // Основные события
+        info: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] ℹ️ ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Критические ошибки
+        error: (msg, error) => {
+            console.error(`[YD-SQ] ❌ ${msg}`, error || '');
+        },
+
+        // Предупреждения
+        warn: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.warn(`[YD-SQ] ⚠️ ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Успешные операции
+        success: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] ✅ ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Пакетная отправка
+        batch: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 📦 BATCH: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Резервация строк
+        reserve: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🔒 RESERVE: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Клики и взаимодействия
+        click: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 👆 CLICK: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Состояние selections
+        selection: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 📝 SELECTION: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Модальные окна
+        modal: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🪟 MODAL: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Синхронизация данных
+        sync: (msg, data) => {
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🔄 SYNC: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Детальный дамп состояния
+        state: (label) => {
+            if (!DEBUG_MODE) return;
+            console.group(`[YD-SQ] 📊 STATE: ${label}`);
+            console.log('selections.size:', selections.size);
+            console.log('selections:', Array.from(selections.entries()));
+            console.log('batchQueue.length:', batchQueue.length);
+            console.log('currentBatchIndex:', currentBatchIndex);
+            console.log('isSending:', isSending);
+            console.log('pendingSentMinuses.length:', pendingSentMinuses.length);
+            console.log('importedMinuses.length:', importedMinuses.length);
+            console.log('currentPageKey:', currentPageKey);
+            console.groupEnd();
+        }
+    };
+
     let inited = false;
     let currentPageKey = 'page:1:default';
     let selections = new Map();
@@ -581,8 +661,16 @@
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
 
+        log.click('onWordClick вызван', {
+            word: targetSpan.dataset.word,
+            rowId: targetSpan.dataset.rowId,
+            altKey: e.altKey,
+            shiftKey: e.shiftKey
+        });
+
         // Блокируем клики во время отправки
         if (isSending) {
+            log.warn('Клик заблокирован: идет отправка');
             showYdsqNotification('Идет пакетная отправка, подождите...', 'warn');
             return;
         }
@@ -591,6 +679,7 @@
 
         // 🛑 ISOLATION LOCKDOWN: Блокируем клики по импортированным словам
         if (span.classList.contains('yd-imported-minus')) {
+            log.click('Клик по импортированному минусу - игнорируем');
             e.stopPropagation();
             return; // Немедленный выход, никакой логики не выполняется
         }
@@ -695,6 +784,8 @@
 
     function toggleSoftWord(span, stem, word, rowId) {
         const key = `soft:${stem}`;
+        log.selection(`toggleSoftWord: ${word}`, { key, stem, rowId });
+
         selections.set(key, {
             id: key,
             kind: 'soft',
@@ -705,12 +796,16 @@
             pageKey: currentPageKey,
             matchType: 'broad'
         });
+
+        log.selection(`Selection добавлен`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
     }
 
     function toggleStrictWord(span, wordLower, word, rowId) {
         const key = `strict:${wordLower}`;
+        log.selection(`toggleStrictWord: ${word}`, { key, wordLower, rowId });
+
         selections.set(key, {
             id: key,
             kind: 'strict',
@@ -721,6 +816,8 @@
             pageKey: currentPageKey,
             matchType: 'strict'
         });
+
+        log.selection(`Selection добавлен (strict)`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
     }
@@ -2231,19 +2328,26 @@
         const values = batch.map(sel => sel.display);
         const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
 
+        log.batch(`Начало отправки ${batchInfo}`);
+        log.state(`Перед отправкой пакета ${currentBatchIndex + 1}`);
+
         showYdsqNotification(batchInfo, 'info');
         console.log(`[YD-SQ] Отправка ${batchInfo}`);
 
         // **КРИТИЧНО: Очищаем auto-чекбоксы от предыдущего batch**
         const rows = getAllRowsOnPage();
+        let autoCleared = 0;
         rows.forEach(row => {
             const cb = row.querySelector('input[type="checkbox"]');
             if (cb && cb.dataset.ydAuto === 'true') {
                 clickCheckbox(cb, false);
                 delete cb.dataset.ydAuto;
                 delete row.dataset.ydAutoRow;
+                autoCleared++;
             }
         });
+
+        log.reserve(`Очищено ${autoCleared} auto-чекбоксов от предыдущего batch`);
 
         await delay(100); // Даем время чекбоксам обновиться
 
@@ -2255,8 +2359,19 @@
 
         const freeRows = findFreeRows(null);
 
+        log.reserve(`Ресурсы после очистки`, {
+            checkedCount,
+            freeRowsCount: freeRows.length,
+            neededForBatch: values.length,
+            totalAvailable: checkedCount + freeRows.length
+        });
+
         // Проверяем что хватит строк для текущего пакета
         if (checkedCount + freeRows.length < values.length) {
+            log.error(`Недостаточно строк для пакета ${currentBatchIndex + 1}`, {
+                needed: values.length,
+                available: checkedCount + freeRows.length
+            });
             showYdsqNotification(
                 `Недостаточно строк для пакета ${currentBatchIndex + 1}.\nНужно: ${values.length}, доступно: ${checkedCount + freeRows.length}`,
                 'error'
@@ -2269,6 +2384,7 @@
         // Резервируем строки для текущего пакета
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
+            log.reserve(`Нужно зарезервировать ${toReserve} строк`);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -2279,9 +2395,11 @@
                     cb.dataset.ydAuto = 'true';
                     row.dataset.ydAutoRow = 'true';
                     reserved++;
+                    log.reserve(`Зарезервирована строка ${i + 1}/${toReserve}`, { rowId: row.dataset.ydRowId });
                 }
             }
 
+            log.success(`Зарезервировано ${reserved} строк для пакета ${currentBatchIndex + 1}`);
             console.log(`[YD-SQ] Зарезервировано ${reserved} строк для пакета ${currentBatchIndex + 1}`);
         }
 
@@ -3550,6 +3668,7 @@
     }
 
 })();
+
 
 
 
