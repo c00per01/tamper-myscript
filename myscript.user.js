@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.129
+// @version 0.121.130
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3227,28 +3227,50 @@
         // Определяем период
         let dateFrom, dateTo;
 
-        // Вчера
+        // Получаем сегодня и вчера в начале дня (00:00:00)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        dateTo = formatDateForUrl(yesterday);
+        yesterday.setHours(0, 0, 0, 0);
 
         if (lastSendDate) {
-            // День после последней отправки
-            const dayAfterSend = new Date(lastSendDate);
-            dayAfterSend.setDate(dayAfterSend.getDate() + 1);
-            dateFrom = formatDateForUrl(dayAfterSend);
+            const sendDate = new Date(lastSendDate);
+            sendDate.setHours(0, 0, 0, 0);
 
-            // Проверяем что dateFrom не позже dateTo
-            if (dayAfterSend > yesterday) {
-                log.info('Период после последней отправки ещё не наступил');
-                // Используем сегодняшнюю дату как начало
-                dateFrom = formatDateForUrl(new Date());
+            // День после последней отправки
+            const dayAfterSend = new Date(sendDate);
+            dayAfterSend.setDate(dayAfterSend.getDate() + 1);
+
+            // ЛОГИКА:
+            // 1. Если отправка была сегодня → нет новых данных, показываем вчерашний день
+            // 2. Если отправка была вчера → новые данные только сегодня (но их ещё нет), показываем вчера
+            // 3. Если отправка была 2+ дня назад → показываем период от (день после отправки) до вчера
+
+            if (sendDate >= yesterday) {
+                // Отправка была сегодня или вчера → показываем только вчерашний день
+                log.info('Отправка была недавно (сегодня/вчера), показываем вчерашний день');
+                dateFrom = formatDateForUrl(yesterday);
+                dateTo = formatDateForUrl(yesterday);
+            } else {
+                // Отправка была раньше → показываем период
+                dateFrom = formatDateForUrl(dayAfterSend);
+                dateTo = formatDateForUrl(yesterday);
+
+                // Дополнительная проверка на всякий случай
+                if (dayAfterSend > yesterday) {
+                    log.warn('dateFrom > dateTo, используем вчерашний день');
+                    dateFrom = formatDateForUrl(yesterday);
+                    dateTo = formatDateForUrl(yesterday);
+                }
             }
         } else {
-            // Если не было отправок - берём 14 дней назад
+            // Если не было отправок - берём 14 дней назад до вчера
             const twoWeeksAgo = new Date();
             twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
             dateFrom = formatDateForUrl(twoWeeksAgo);
+            dateTo = formatDateForUrl(yesterday);
         }
 
         log.info(`Редирект: период ${dateFrom} - ${dateTo}`);
@@ -4190,6 +4212,7 @@
     }
 
 })();
+
 
 
 
