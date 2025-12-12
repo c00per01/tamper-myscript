@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.130
+// @version 0.121.131
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3206,12 +3206,6 @@
         const url = new URL(currentUrl);
         const params = url.searchParams;
 
-        // Проверяем есть ли уже полный формат URL
-        if (params.get('group_by')?.includes('match_type')) {
-            log.info('URL уже в правильном формате');
-            return;
-        }
-
         // Получаем текущие параметры
         const cid = params.get('cid');
         const ulogin = params.get('ulogin');
@@ -3220,6 +3214,21 @@
             log.warn('Не найдены cid или ulogin в URL');
             return;
         }
+
+        // Проверяем есть ли уже ВСЕ необходимые параметры для правильного формата
+        const hasAllRequiredParams =
+            params.get('show_stat') === '1' &&
+            params.get('group_by_date') === 'none' &&
+            params.get('page_size') === '100' &&
+            params.get('group_by')?.includes('match_type') &&
+            params.get('group_by')?.includes('matched_phrase');
+
+        if (hasAllRequiredParams) {
+            log.info('URL уже в правильном формате со всеми параметрами');
+            return;
+        }
+
+        log.info('URL неполный, выполняем редирект с правильными параметрами');
 
         // Загружаем дату последней отправки для этой кампании
         loadLastSendDate();
@@ -4212,6 +4221,7 @@
     }
 
 })();
+
 
 
 
