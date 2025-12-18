@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.136
+// @version 0.121.137
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1346,10 +1346,12 @@
                     // DEBUG: Логируем для понимания
                     if (rule.source === 'selection' && rule.words.length === 1) {
                         log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, ruleRaw="${rule.raw}"`);
-                        // DEBUG: Показать ВСЕ слова для проблемной строки
-                        if (rowId.includes('h6lvie')) {
+                        // DEBUG: Показать ВСЕ слова для проблемных строк
+                        if (rowId.includes('h6lvie') || rowId.includes('5f9evw')) {
                             const allWords = rowWordsData.map(d => d.text).join(', ');
-                            console.log(`[YD-SQ] 🔴 ROW h6lvie ALL WORDS: [${allWords}]`);
+                            const allStems = rowWordsData.map(d => `${d.text}(${d.stem})`).join(', ');
+                            console.log(`[YD-SQ] 🔴 ROW ${rowId.split(':').pop()} WORDS: [${allWords}]`);
+                            console.log(`[YD-SQ] 🔴 ROW ${rowId.split(':').pop()} STEMS: [${allStems}]`);
                         }
                     }
 
@@ -4291,6 +4293,7 @@
     }
 
 })();
+
 
 
 
