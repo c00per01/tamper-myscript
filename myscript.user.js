@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.135
+// @version 0.121.136
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1325,7 +1325,11 @@
                 stem: s.dataset.stem,
                 span: s
             }));
-            const rowLen = rowWordsData.length;
+
+            // Для quote matching используем уникальные слова (по stem)
+            // Это исправляет баг когда "склад склад" считается как 2 слова
+            const uniqueStems = new Set(rowWordsData.map(d => d.stem));
+            const rowLen = uniqueStems.size;
 
             for (const rule of rules) {
                 let isMatch = false;
@@ -4287,6 +4291,7 @@
     }
 
 })();
+
 
 
 
