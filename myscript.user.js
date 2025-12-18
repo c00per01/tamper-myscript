@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.132
+// @version 0.121.133
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1345,6 +1345,13 @@
                     }
 
                     if (rowLen === rule.words.length) {
+                        // DEBUG: Детальный лог для rowLen=1
+                        if (rowLen === 1 && rule.source === 'selection') {
+                            const rWord = rule.words[0];
+                            const d = rowWordsData[0];
+                            log.info(`QUOTE rowLen=1 DETAIL: rWord.text="${rWord.text}", rWord.isStrict=${rWord.isStrict}, rowWord="${d?.text}", rowStem="${d?.stem}", ruleStem="${stemWord(rWord.text)}"`);
+                        }
+
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
 
@@ -4275,6 +4282,7 @@
     }
 
 })();
+
 
 
 
