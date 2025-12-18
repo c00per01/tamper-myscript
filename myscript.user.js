@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.133
+// @version 0.121.134
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1342,6 +1342,11 @@
                     // DEBUG: Логируем для понимания
                     if (rule.source === 'selection' && rule.words.length === 1) {
                         log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, ruleRaw="${rule.raw}"`);
+                        // DEBUG: Показать ВСЕ слова для проблемной строки
+                        if (rowId.includes('h6lvie')) {
+                            const allWords = rowWordsData.map(d => d.text).join(', ');
+                            log.warn(`ROW h6lvie ALL WORDS: [${allWords}]`);
+                        }
                     }
 
                     if (rowLen === rule.words.length) {
@@ -4282,6 +4287,7 @@
     }
 
 })();
+
 
 
 
