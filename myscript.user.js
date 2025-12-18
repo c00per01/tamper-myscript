@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.137
+// @version 0.121.138
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1296,6 +1296,15 @@
             if (sel.display) {
                 const r = parseMinusRule(sel.display);
                 r.source = 'selection';
+
+                // ВАЖНО: Для одиночных слов (soft-word, strict-word) 
+                // используем broad логику для подсветки, независимо от кавычек.
+                // Кавычки влияют только на формат отправки, не на визуализацию выбора.
+                if ((sel.kind === 'soft-word' || sel.kind === 'strict-word') && r.words.length === 1) {
+                    r.type = 'broad'; // Подсвечиваем слово там, где оно есть
+                    r.originalType = parseMinusRule(sel.display).type; // Сохраняем для отладки
+                }
+
                 rules.push(r);
             }
         }
@@ -1325,11 +1334,7 @@
                 stem: s.dataset.stem,
                 span: s
             }));
-
-            // Для quote matching используем уникальные слова (по stem)
-            // Это исправляет баг когда "склад склад" считается как 2 слова
-            const uniqueStems = new Set(rowWordsData.map(d => d.stem));
-            const rowLen = uniqueStems.size;
+            const rowLen = rowWordsData.length;
 
             for (const rule of rules) {
                 let isMatch = false;
@@ -1343,26 +1348,7 @@
 
                 if (rule.type === 'quote') {
                     // Quote: Exact Set of words (no extra words in row)
-                    // DEBUG: Логируем для понимания
-                    if (rule.source === 'selection' && rule.words.length === 1) {
-                        log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, ruleRaw="${rule.raw}"`);
-                        // DEBUG: Показать ВСЕ слова для проблемных строк
-                        if (rowId.includes('h6lvie') || rowId.includes('5f9evw')) {
-                            const allWords = rowWordsData.map(d => d.text).join(', ');
-                            const allStems = rowWordsData.map(d => `${d.text}(${d.stem})`).join(', ');
-                            console.log(`[YD-SQ] 🔴 ROW ${rowId.split(':').pop()} WORDS: [${allWords}]`);
-                            console.log(`[YD-SQ] 🔴 ROW ${rowId.split(':').pop()} STEMS: [${allStems}]`);
-                        }
-                    }
-
                     if (rowLen === rule.words.length) {
-                        // DEBUG: Детальный лог для rowLen=1
-                        if (rowLen === 1 && rule.source === 'selection') {
-                            const rWord = rule.words[0];
-                            const d = rowWordsData[0];
-                            log.info(`QUOTE rowLen=1 DETAIL: rWord.text="${rWord.text}", rWord.isStrict=${rWord.isStrict}, rowWord="${d?.text}", rowStem="${d?.stem}", ruleStem="${stemWord(rWord.text)}"`);
-                        }
-
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
 
@@ -1381,10 +1367,6 @@
                                 rowIndicesUsed.add(foundIdx);
                             } else {
                                 allRuleWordsFound = false;
-                                // DEBUG
-                                if (rule.source === 'selection') {
-                                    log.warn(`QUOTE NO MATCH: rWord.text="${rWord.text}", stem="${stemWord(rWord.text)}", rowWord="${rowWordsData[0]?.text}", rowStem="${rowWordsData[0]?.stem}"`);
-                                }
                                 break;
                             }
                         }
@@ -1393,10 +1375,6 @@
                             isMatch = true;
                             for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
                             baseClass = 'yd-selected-phrase';
-                            // DEBUG
-                            if (rule.source === 'selection') {
-                                log.success(`QUOTE MATCH! rowId=${rowId}, word="${rowWordsData[0]?.text}"`);
-                            }
                         }
                     }
 
@@ -2269,12 +2247,7 @@
 
     function toggleMatchType(id, type) {
         const sel = selections.get(id);
-        if (!sel) {
-            log.warn(`toggleMatchType: selection не найден для id=${id}`);
-            return;
-        }
-
-        log.info(`toggleMatchType: id=${id}, type=${type}, kind=${sel.kind}, currentMatchType=${sel.matchType}`);
+        if (!sel) return;
 
         if (type === 'quote') {
             sel.matchType = (sel.matchType === 'quote') ? null : 'quote';
@@ -2284,18 +2257,7 @@
             sel.matchType = (sel.matchType === 'strict') ? null : 'strict';
         }
 
-        log.info(`toggleMatchType: newMatchType=${sel.matchType}, display будет: "${sel.matchType ? (sel.matchType === 'quote' ? '"' + sel.raw + '"' : sel.raw) : sel.raw}"`);
-
         applyMatchTypeToSelection(sel, sel.matchType);
-
-        // Пояснение для пользователя про режим кавычек
-        if (sel.matchType === 'quote' && sel.kind !== 'phrase') {
-            showYdsqNotification(
-                `Режим "кавычки": подсветка только в строках где это единственное слово`,
-                'info'
-            );
-        }
-
         syncLocalToGlobal();
         updateUI();
     }
@@ -2425,44 +2387,39 @@
             totalAvailable: checkedCount + freeRows.length
         });
 
-        const totalAvailable = checkedCount + freeRows.length;
+        // **АДАПТИВНАЯ ЛОГИКА**: Если строк меньше чем нужно - отправляем сколько есть
+        const actualAvailable = checkedCount + freeRows.length;
 
-        // **НОВАЯ ЛОГИКА: Если строк не хватает - отправляем сколько можем**
-        if (totalAvailable < values.length) {
-            if (totalAvailable === 0) {
-                // Совсем нет строк - ждём пока появятся
-                log.warn(`Нет доступных строк для пакета ${currentBatchIndex + 1}, ожидаем...`);
-                showYdsqNotification(
-                    `Ожидание свободных строк...\\nПерейдите на страницу или освободите строки.`,
-                    'warn'
-                );
-                // Не прерываем - ждём действий пользователя
-                isSending = false;
-                return;
-            }
+        if (actualAvailable === 0) {
+            log.error('Нет доступных строк на странице');
+            showYdsqNotification('Нет доступных строк. Перейдите на другую страницу.', 'error');
+            isSending = false;
+            batchQueue = [];
+            return;
+        }
 
-            log.warn(`Не хватает строк (нужно ${values.length}, есть ${totalAvailable}). Отправляем ${totalAvailable} минусов.`);
+        // Если доступных строк меньше чем в пакете - пересоздаём очередь
+        if (actualAvailable < values.length) {
+            log.warn(`Недостаточно строк для полного пакета. Адаптируем: отправим ${actualAvailable} из ${values.length}`);
 
-            // Разбиваем текущий пакет: отправляем сколько можем, остальное в новый пакет
-            const currentBatch = batch.slice(0, totalAvailable);
-            const remainingItems = batch.slice(totalAvailable);
+            // Разбиваем текущий пакет: отправляем что можем, остальное в новый пакет
+            const canSendNow = batch.slice(0, actualAvailable);
+            const leftOver = batch.slice(actualAvailable);
 
             // Обновляем текущий пакет
-            batchQueue[currentBatchIndex] = currentBatch;
+            batchQueue[currentBatchIndex] = canSendNow;
 
-            // Добавляем остаток как новый пакет после текущего
-            if (remainingItems.length > 0) {
-                batchQueue.splice(currentBatchIndex + 1, 0, remainingItems);
-                log.batch(`Пакет разбит: ${currentBatch.length} сейчас, ${remainingItems.length} в следующий пакет`);
-                showYdsqNotification(
-                    `Отправляем ${currentBatch.length} из ${values.length}. Остальные в след. пакете.`,
-                    'info'
-                );
+            // Добавляем остаток как новый пакет
+            if (leftOver.length > 0) {
+                batchQueue.splice(currentBatchIndex + 1, 0, leftOver);
+                log.batch(`Создан дополнительный пакет: ${leftOver.length} минусов`);
             }
 
             // Обновляем values для текущей отправки
             values.length = 0;
-            currentBatch.forEach(sel => values.push(sel.display));
+            canSendNow.forEach(sel => values.push(sel.display));
+
+            showYdsqNotification(`Адаптировано: отправляем ${actualAvailable} минусов (всего пакетов: ${batchQueue.length})`, 'info');
         }
 
         // Резервируем строки для текущего пакета
@@ -4293,11 +4250,6 @@
     }
 
 })();
-
-
-
-
-
 
 
 
