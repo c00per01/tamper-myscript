@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.140
+// @version 0.121.141
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1359,12 +1359,34 @@
                         log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, words=[${rowWordsData.map(d => d.text).join(', ')}]`);
                     }
 
-                    if (rowLen === rule.words.length) {
+                    // СПЕЦИАЛЬНАЯ ЛОГИКА для одного слова в кавычках:
+                    // Проверяем что ВСЕ слова в строке являются формами искомого слова
+                    // (Яндекс может показывать [склад, склад] как 2 слова)
+                    if (rule.words.length === 1) {
+                        const rWord = rule.words[0];
+                        const rWordStem = stemWord(rWord.text);
+
+                        // Проверяем что ВСЕ слова в строке совпадают с искомым
+                        const allWordsMatch = rowWordsData.every(d => {
+                            if (rWord.isStrict) {
+                                return d.lower === rWord.text;
+                            } else {
+                                return d.stem === rWordStem;
+                            }
+                        });
+
+                        if (allWordsMatch) {
+                            isMatch = true;
+                            for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
+                            baseClass = 'yd-selected-phrase';
+                            log.info(`QUOTE MATCH: rowId=${rowId} - все слова совпадают с "${rWord.text}"`);
+                        }
+                    } else if (rowLen === rule.words.length) {
+                        // Стандартная логика для фраз из нескольких слов
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
 
                         for (const rWord of rule.words) {
-                            // Find matching word in row
                             const foundIdx = rowWordsData.findIndex((d, idx) => {
                                 if (rowIndicesUsed.has(idx)) return false;
                                 if (rWord.isStrict) {
@@ -4261,6 +4283,7 @@
     }
 
 })();
+
 
 
 
