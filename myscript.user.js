@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.139
+// @version 0.121.140
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1354,6 +1354,11 @@
 
                 if (rule.type === 'quote') {
                     // Quote: Exact Set of words (no extra words in row)
+                    // DEBUG: Логируем для понимания что происходит
+                    if (rule.source === 'selection') {
+                        log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, words=[${rowWordsData.map(d => d.text).join(', ')}]`);
+                    }
+
                     if (rowLen === rule.words.length) {
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
@@ -4256,6 +4261,7 @@
     }
 
 })();
+
 
 
 
