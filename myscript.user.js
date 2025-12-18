@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.138
+// @version 0.121.139
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1297,12 +1297,18 @@
                 const r = parseMinusRule(sel.display);
                 r.source = 'selection';
 
-                // ВАЖНО: Для одиночных слов (soft-word, strict-word) 
-                // используем broad логику для подсветки, независимо от кавычек.
-                // Кавычки влияют только на формат отправки, не на визуализацию выбора.
+                // Логика подсветки для одиночных слов:
+                // - БЕЗ кавычек (matchType === null): broad - подсвечиваем везде где есть это слово
+                // - С кавычками (matchType === 'quote'): quote - только там где слово ОДНО в строке
+                // Это соответствует логике Яндекс.Директа для минус-фраз
                 if ((sel.kind === 'soft-word' || sel.kind === 'strict-word') && r.words.length === 1) {
-                    r.type = 'broad'; // Подсвечиваем слово там, где оно есть
-                    r.originalType = parseMinusRule(sel.display).type; // Сохраняем для отладки
+                    if (sel.matchType === 'quote') {
+                        // Кавычки = точное соответствие = только строки с одним словом
+                        r.type = 'quote';
+                    } else {
+                        // Без кавычек = широкое соответствие = везде где есть слово
+                        r.type = 'broad';
+                    }
                 }
 
                 rules.push(r);
@@ -4250,6 +4256,7 @@
     }
 
 })();
+
 
 
 
