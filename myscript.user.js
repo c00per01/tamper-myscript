@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.142
+// @version 0.121.143
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3079,6 +3079,10 @@
 
                 log.success(`Добавлено ${pendingSentMinuses.length} минусов в importedMinuses`);
 
+                // КРИТИЧНО: Очищаем pendingSentMinuses сразу после обработки
+                // чтобы не накапливались между пакетами
+                pendingSentMinuses = [];
+
                 // Сохраняем дату последней отправки
                 lastSendDate = Date.now();
                 saveLastSendDate();
@@ -4288,6 +4292,7 @@
     }
 
 })();
+
 
 
 
