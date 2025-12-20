@@ -1,0 +1,25 @@
+{
+  "name": "tamper-myscript",
+  "version": "1.0.0",
+  "description": "",
+  "main": "myscript.user.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/c00per01/tamper-myscript.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/c00per01/tamper-myscript/issues"
+  },
+  "homepage": "https://github.com/c00per01/tamper-myscript#readme",
+  "devDependencies": {
+    "playwright": "^1.56.1",
+    "sharp": "^0.34.5"
+  }
+}

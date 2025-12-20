@@ -1,0 +1,10 @@
+{
+    "extName": {
+        "message": "Yandex Direct Helper",
+        "description": "Extension name"
+    },
+    "extDescription": {
+        "message": "A tool for convenient work with negative keywords in Yandex.Direct. Allows you to quickly select and send negative words directly from the search queries report.",
+        "description": "Extension description"
+    }
+}
