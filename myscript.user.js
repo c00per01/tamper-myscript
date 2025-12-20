@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.143
+// @version 0.121.145
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3265,6 +3265,49 @@
         return `${y}-${m}-${d}`;
     }
 
+    // Вычисляет правильный период на основе lastSendDate
+    function calculateCorrectPeriod() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+
+        let dateFrom, dateTo;
+
+        if (lastSendDate) {
+            const sendDate = new Date(lastSendDate);
+            sendDate.setHours(0, 0, 0, 0);
+
+            const dayAfterSend = new Date(sendDate);
+            dayAfterSend.setDate(dayAfterSend.getDate() + 1);
+
+            if (sendDate >= yesterday) {
+                // Отправка была сегодня или вчера → показываем только вчерашний день
+                dateFrom = formatDateForUrl(yesterday);
+                dateTo = formatDateForUrl(yesterday);
+            } else {
+                // Отправка была раньше → показываем период
+                dateFrom = formatDateForUrl(dayAfterSend);
+                dateTo = formatDateForUrl(yesterday);
+
+                if (dayAfterSend > yesterday) {
+                    dateFrom = formatDateForUrl(yesterday);
+                    dateTo = formatDateForUrl(yesterday);
+                }
+            }
+        } else {
+            // Если не было отправок - берём 14 дней назад до вчера
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            dateFrom = formatDateForUrl(twoWeeksAgo);
+            dateTo = formatDateForUrl(yesterday);
+        }
+
+        return { dateFrom, dateTo };
+    }
+
     function checkAndRedirectUrl() {
         const currentUrl = window.location.href;
 
@@ -3294,64 +3337,32 @@
             params.get('group_by')?.includes('match_type') &&
             params.get('group_by')?.includes('matched_phrase');
 
-        if (hasAllRequiredParams) {
-            log.info('URL уже в правильном формате со всеми параметрами');
+        // Загружаем дату последней отправки для ТЕКУЩЕЙ кампании
+        loadLastSendDate();
+
+        // Вычисляем правильный период для текущей кампании
+        const expectedPeriod = calculateCorrectPeriod();
+        const currentDateFrom = params.get('date_from');
+        const currentDateTo = params.get('date_to');
+
+        // Проверяем соответствует ли текущий период правильному
+        const isPeriodCorrect =
+            currentDateFrom === expectedPeriod.dateFrom &&
+            currentDateTo === expectedPeriod.dateTo;
+
+        if (hasAllRequiredParams && isPeriodCorrect) {
+            log.info('URL уже в правильном формате со всеми параметрами и правильным периодом');
             return;
         }
 
-        log.info('URL неполный, выполняем редирект с правильными параметрами');
-
-        // Загружаем дату последней отправки для этой кампании
-        loadLastSendDate();
-
-        // Определяем период
-        let dateFrom, dateTo;
-
-        // Получаем сегодня и вчера в начале дня (00:00:00)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0);
-
-        if (lastSendDate) {
-            const sendDate = new Date(lastSendDate);
-            sendDate.setHours(0, 0, 0, 0);
-
-            // День после последней отправки
-            const dayAfterSend = new Date(sendDate);
-            dayAfterSend.setDate(dayAfterSend.getDate() + 1);
-
-            // ЛОГИКА:
-            // 1. Если отправка была сегодня → нет новых данных, показываем вчерашний день
-            // 2. Если отправка была вчера → новые данные только сегодня (но их ещё нет), показываем вчера
-            // 3. Если отправка была 2+ дня назад → показываем период от (день после отправки) до вчера
-
-            if (sendDate >= yesterday) {
-                // Отправка была сегодня или вчера → показываем только вчерашний день
-                log.info('Отправка была недавно (сегодня/вчера), показываем вчерашний день');
-                dateFrom = formatDateForUrl(yesterday);
-                dateTo = formatDateForUrl(yesterday);
-            } else {
-                // Отправка была раньше → показываем период
-                dateFrom = formatDateForUrl(dayAfterSend);
-                dateTo = formatDateForUrl(yesterday);
-
-                // Дополнительная проверка на всякий случай
-                if (dayAfterSend > yesterday) {
-                    log.warn('dateFrom > dateTo, используем вчерашний день');
-                    dateFrom = formatDateForUrl(yesterday);
-                    dateTo = formatDateForUrl(yesterday);
-                }
-            }
-        } else {
-            // Если не было отправок - берём 14 дней назад до вчера
-            const twoWeeksAgo = new Date();
-            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-            dateFrom = formatDateForUrl(twoWeeksAgo);
-            dateTo = formatDateForUrl(yesterday);
+        if (hasAllRequiredParams && !isPeriodCorrect) {
+            log.info(`Период неверный: текущий ${currentDateFrom}→${currentDateTo}, нужен ${expectedPeriod.dateFrom}→${expectedPeriod.dateTo}`);
         }
+
+        log.info('URL неполный или период неверный, выполняем редирект');
+
+        // Используем уже вычисленный период (loadLastSendDate уже вызван выше)
+        const { dateFrom, dateTo } = expectedPeriod;
 
         log.info(`Редирект: период ${dateFrom} - ${dateTo}`);
 
@@ -4292,6 +4303,7 @@
     }
 
 })();
+
 
 
 
