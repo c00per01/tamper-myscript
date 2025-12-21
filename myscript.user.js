@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.145
+// @version 0.121.146
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -105,6 +105,10 @@
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
 
+    // Флаг для отслеживания первого захода (чтобы не мешать ручному изменению периода)
+    let initialRedirectDone = false;
+    let lastCheckedCampaignId = null;
+
     // Batch sending
     let batchQueue = []; // Очередь пакетов для отправки
     let currentBatchIndex = 0;
@@ -154,6 +158,13 @@
     function init() {
         if (!window.location.href.includes('stat_type=search_queries')) {
             return;
+        }
+
+        // Восстанавливаем флаг редиректа из sessionStorage
+        if (sessionStorage.getItem('yd-sq-redirect-done') === 'true') {
+            initialRedirectDone = true;
+            lastCheckedCampaignId = sessionStorage.getItem('yd-sq-last-cid');
+            log.info('Восстановлен флаг редиректа из sessionStorage');
         }
 
         // Проверяем и редиректим на правильный URL если нужно
@@ -3329,6 +3340,20 @@
             return;
         }
 
+        // КРИТИЧНО: Проверяем, это первый заход или смена кампании
+        const isFirstLoad = !initialRedirectDone;
+        const isCampaignChanged = lastCheckedCampaignId !== null && lastCheckedCampaignId !== cid;
+
+        // Если это НЕ первый заход И НЕ смена кампании - не трогаем URL
+        // (пользователь вручную меняет период)
+        if (!isFirstLoad && !isCampaignChanged) {
+            log.info('Пропускаем проверку URL: пользователь уже на странице (ручное изменение периода)');
+            return;
+        }
+
+        // Обновляем флаги
+        lastCheckedCampaignId = cid;
+
         // Проверяем есть ли уже ВСЕ необходимые параметры для правильного формата
         const hasAllRequiredParams =
             params.get('show_stat') === '1' &&
@@ -3352,6 +3377,7 @@
 
         if (hasAllRequiredParams && isPeriodCorrect) {
             log.info('URL уже в правильном формате со всеми параметрами и правильным периодом');
+            initialRedirectDone = true; // Помечаем что проверка выполнена
             return;
         }
 
@@ -3382,7 +3408,15 @@
         if (currentUrl !== newUrl) {
             log.success('Редирект на оптимизированный URL');
             showYdsqNotification(`Период: ${dateFrom} — ${dateTo}`, 'info');
+
+            // Сохраняем флаг в sessionStorage чтобы после редиректа не проверять снова
+            sessionStorage.setItem('yd-sq-redirect-done', 'true');
+            sessionStorage.setItem('yd-sq-last-cid', cid);
+
             window.location.replace(newUrl);
+        } else {
+            // URL не изменился, но проверка выполнена
+            initialRedirectDone = true;
         }
     }
 
@@ -4303,6 +4337,7 @@
     }
 
 })();
+
 
 
 
