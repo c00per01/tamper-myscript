@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.147
+// @version 0.121.149
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -113,7 +113,8 @@
     let lastSendDate = null;
 
     // Флаг: был ли уже выполнен редирект для текущей кампании
-    let lastCheckedCampaignId = null;
+    // Храним в sessionStorage чтобы сохранялся при перезагрузках страницы
+    let lastCheckedCampaignId = sessionStorage.getItem('yd-sq-last-checked-cid') || null;
 
     // Undo/Redo
     let undoStack = {
@@ -3366,6 +3367,7 @@
         if (hasAllRequiredParams && isPeriodCorrect) {
             log.info('URL уже в правильном формате со всеми параметрами и правильным периодом');
             lastCheckedCampaignId = cid;
+            sessionStorage.setItem('yd-sq-last-checked-cid', cid);
             return;
         }
 
@@ -3404,11 +3406,13 @@
             log.success('Редирект на оптимизированный URL');
             // Запоминаем cid чтобы после редиректа не делать его повторно
             lastCheckedCampaignId = cid;
-            showYdsqNotification(`Период: ${dateFrom} — ${dateTo}`, 'info');
+            sessionStorage.setItem('yd-sq-last-checked-cid', cid);
+            // Уведомление убрано по просьбе пользователя
             window.location.replace(newUrl);
         } else {
             // URL не изменился, просто запоминаем кампанию
             lastCheckedCampaignId = cid;
+            sessionStorage.setItem('yd-sq-last-checked-cid', cid);
         }
     }
 
@@ -4329,6 +4333,7 @@
     }
 
 })();
+
 
 
 
