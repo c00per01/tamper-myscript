@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.146
+// @version 0.121.147
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -105,16 +105,15 @@
     let wordSpans = [];
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
 
-    // Флаг для отслеживания первого захода (чтобы не мешать ручному изменению периода)
-    let initialRedirectDone = false;
-    let lastCheckedCampaignId = null;
-
     // Batch sending
     let batchQueue = []; // Очередь пакетов для отправки
     let currentBatchIndex = 0;
 
     // Дата последней отправки минусов в Директ (timestamp)
     let lastSendDate = null;
+
+    // Флаг: был ли уже выполнен редирект для текущей кампании
+    let lastCheckedCampaignId = null;
 
     // Undo/Redo
     let undoStack = {
@@ -158,13 +157,6 @@
     function init() {
         if (!window.location.href.includes('stat_type=search_queries')) {
             return;
-        }
-
-        // Восстанавливаем флаг редиректа из sessionStorage
-        if (sessionStorage.getItem('yd-sq-redirect-done') === 'true') {
-            initialRedirectDone = true;
-            lastCheckedCampaignId = sessionStorage.getItem('yd-sq-last-cid');
-            log.info('Восстановлен флаг редиректа из sessionStorage');
         }
 
         // Проверяем и редиректим на правильный URL если нужно
@@ -3340,20 +3332,6 @@
             return;
         }
 
-        // КРИТИЧНО: Проверяем, это первый заход или смена кампании
-        const isFirstLoad = !initialRedirectDone;
-        const isCampaignChanged = lastCheckedCampaignId !== null && lastCheckedCampaignId !== cid;
-
-        // Если это НЕ первый заход И НЕ смена кампании - не трогаем URL
-        // (пользователь вручную меняет период)
-        if (!isFirstLoad && !isCampaignChanged) {
-            log.info('Пропускаем проверку URL: пользователь уже на странице (ручное изменение периода)');
-            return;
-        }
-
-        // Обновляем флаги
-        lastCheckedCampaignId = cid;
-
         // Проверяем есть ли уже ВСЕ необходимые параметры для правильного формата
         const hasAllRequiredParams =
             params.get('show_stat') === '1' &&
@@ -3361,6 +3339,15 @@
             params.get('page_size') === '100' &&
             params.get('group_by')?.includes('match_type') &&
             params.get('group_by')?.includes('matched_phrase');
+
+        // ВАЖНО: Проверяем, была ли эта кампания уже проверена
+        // Если да и базовые параметры есть — не трогаем период (пользователь мог изменить вручную)
+        const isSameCampaign = lastCheckedCampaignId === cid;
+
+        if (isSameCampaign && hasAllRequiredParams) {
+            log.info('Кампания уже проверена, базовые параметры есть → не трогаем период');
+            return;
+        }
 
         // Загружаем дату последней отправки для ТЕКУЩЕЙ кампании
         loadLastSendDate();
@@ -3375,17 +3362,25 @@
             currentDateFrom === expectedPeriod.dateFrom &&
             currentDateTo === expectedPeriod.dateTo;
 
+        // Если все параметры верны И период правильный — просто запоминаем кампанию
         if (hasAllRequiredParams && isPeriodCorrect) {
             log.info('URL уже в правильном формате со всеми параметрами и правильным периодом');
-            initialRedirectDone = true; // Помечаем что проверка выполнена
+            lastCheckedCampaignId = cid;
             return;
         }
 
-        if (hasAllRequiredParams && !isPeriodCorrect) {
+        // Если это НОВАЯ кампания или нет базовых параметров — делаем редирект        
+        if (!isSameCampaign) {
+            log.info(`Новая кампания: ${cid} (была: ${lastCheckedCampaignId})`);
+        }
+        if (!hasAllRequiredParams) {
+            log.info('Нет базовых параметров, нужен редирект');
+        }
+        if (hasAllRequiredParams && !isPeriodCorrect && !isSameCampaign) {
             log.info(`Период неверный: текущий ${currentDateFrom}→${currentDateTo}, нужен ${expectedPeriod.dateFrom}→${expectedPeriod.dateTo}`);
         }
 
-        log.info('URL неполный или период неверный, выполняем редирект');
+        log.info('Выполняем редирект');
 
         // Используем уже вычисленный период (loadLastSendDate уже вызван выше)
         const { dateFrom, dateTo } = expectedPeriod;
@@ -3407,16 +3402,13 @@
         // Проверяем что URL отличается
         if (currentUrl !== newUrl) {
             log.success('Редирект на оптимизированный URL');
+            // Запоминаем cid чтобы после редиректа не делать его повторно
+            lastCheckedCampaignId = cid;
             showYdsqNotification(`Период: ${dateFrom} — ${dateTo}`, 'info');
-
-            // Сохраняем флаг в sessionStorage чтобы после редиректа не проверять снова
-            sessionStorage.setItem('yd-sq-redirect-done', 'true');
-            sessionStorage.setItem('yd-sq-last-cid', cid);
-
             window.location.replace(newUrl);
         } else {
-            // URL не изменился, но проверка выполнена
-            initialRedirectDone = true;
+            // URL не изменился, просто запоминаем кампанию
+            lastCheckedCampaignId = cid;
         }
     }
 
