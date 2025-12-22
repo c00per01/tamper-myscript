@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.153
+// @version 0.121.154
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -619,19 +619,20 @@
             }
         });
 
-        // Кнопка открытия в Яндексе
+        // Кнопка открытия в Яндекс
         const searchBtn = document.createElement('button');
         searchBtn.className = 'yd-search-query-btn';
         searchBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
             <path d="M21 21l-4.35-4.35"></path>
         </svg>`;
-        searchBtn.title = 'Открыть в Яндекс Поиске';
+        searchBtn.title = 'Открыть в Яндекс';
 
         searchBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const text = getTextContent(queryCell).replace(/\s+/g, ' ').trim();
-            const searchUrl = `https://yandex.ru/search/?text=${encodeURIComponent(text)}&lr=213`;
+            const encodedQuery = encodeURIComponent(text);
+            const searchUrl = `https://yandex.ru/search/?text=${encodedQuery}&lr=213`;
             window.open(searchUrl, '_blank');
         });
 
@@ -2833,11 +2834,6 @@
                 checkCount++;
                 const popup = findResultPopup();
 
-                // Логируем для отладки
-                if (checkCount <= 3 || checkCount % 10 === 0) {
-                    log.modal(`checkClosed: попытка ${checkCount}, popup=${popup ? 'найден' : 'не найден'}, isSending=${isSending}`);
-                }
-
                 if (popup) {
                     // Попап найден - пытаемся закрыть
                     log.modal('Результат найден, tryCloseResultPopup');
@@ -3056,18 +3052,7 @@
         for (const el of c) {
             const t = el.textContent || '';
             if (!t) continue;
-            // Расширенный поиск - разные варианты текста результата
-            if (
-                (t.includes('Добавлено') && t.includes('минус')) ||
-                (t.includes('добавлено') && t.includes('минус')) ||
-                (t.includes('Добавлен') && t.includes('минус')) ||
-                t.includes('успешно добавлен') ||
-                t.includes('Минус-фраз') ||
-                // Поиск кнопки OK рядом с текстом об успехе
-                (t.includes('OK') && t.length < 500 && el.querySelector('button'))
-            ) {
-                return el.closest('[role="dialog"]') || el;
-            }
+            if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
         }
         return null;
     }
@@ -4156,17 +4141,35 @@
             .yd-phrase-btn-cancel { color: #dc3545; border-color: #dc3545; }
             .yd-phrase-btn-cancel:hover { background: #ffe6e6; }
 
-            /* QUERY ACTIONS CONTAINER */
-            .yd-query-actions {
+            /* COPY КНОПКА */
+            .yd-copy-query-btn {
                 display: inline-flex;
                 align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 4px 6px;
+                cursor: pointer;
+                opacity: 0;
+                transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+                z-index: 10;
+                color: #666;
+                width: 24px;
+                height: 24px;
+                line-height: 1;
+            }
+
+            /* Контейнер для кнопок действий */
+            .yd-query-actions {
+                display: inline-flex;
                 gap: 4px;
                 margin-left: 8px;
                 vertical-align: middle;
             }
 
-            /* COPY КНОПКА */
-            .yd-copy-query-btn,
+            /* Кнопка поиска в Яндекс */
             .yd-search-query-btn {
                 display: inline-flex;
                 align-items: center;
@@ -4177,7 +4180,7 @@
                 padding: 4px 6px;
                 cursor: pointer;
                 opacity: 0;
-                transition: opacity 0.2s, background 0.2s, border-color 0.2s, color 0.2s;
+                transition: opacity 0.2s, background 0.2s, border-color 0.2s;
                 z-index: 10;
                 color: #666;
                 width: 24px;
@@ -4200,8 +4203,8 @@
 
             .yd-search-query-btn:hover {
                 background: #fff;
-                border-color: #fc0;
-                color: #fc0;
+                border-color: #ff6600;
+                color: #ff6600;
             }
 
             .yd-copy-query-btn.yd-copy-success {
@@ -4389,7 +4392,6 @@
     }
 
 })();
-
 
 
 
