@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.149
+// @version 0.121.151
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -583,39 +583,63 @@
     function addCopyButtonToRow(row, queryCell) {
         if (queryCell.querySelector('.yd-copy-query-btn')) return;
 
-        const btn = document.createElement('button');
-        btn.className = 'yd-copy-query-btn';
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        // Контейнер для кнопок
+        const btnContainer = document.createElement('span');
+        btnContainer.className = 'yd-query-actions';
+
+        // Кнопка копирования
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'yd-copy-query-btn';
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>`;
-        btn.title = 'Скопировать запрос';
+        copyBtn.title = 'Скопировать запрос';
 
-        btn.addEventListener('click', async (e) => {
+        copyBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const text = getTextContent(queryCell).replace(/\s+/g, ' ').trim();
 
             try {
                 await navigator.clipboard.writeText(text);
-                btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>`;
-                btn.classList.add('yd-copy-success');
+                copyBtn.classList.add('yd-copy-success');
 
                 setTimeout(() => {
-                    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>`;
-                    btn.classList.remove('yd-copy-success');
+                    copyBtn.classList.remove('yd-copy-success');
                 }, 1500);
             } catch (err) {
                 console.error('[YD-SQ] Ошибка копирования:', err);
             }
         });
 
+        // Кнопка открытия в Яндексе
+        const searchBtn = document.createElement('button');
+        searchBtn.className = 'yd-search-query-btn';
+        searchBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="M21 21l-4.35-4.35"></path>
+        </svg>`;
+        searchBtn.title = 'Открыть в Яндекс Поиске';
+
+        searchBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const text = getTextContent(queryCell).replace(/\s+/g, ' ').trim();
+            const searchUrl = `https://yandex.ru/search/?text=${encodeURIComponent(text)}&lr=213`;
+            window.open(searchUrl, '_blank');
+        });
+
+        btnContainer.appendChild(copyBtn);
+        btnContainer.appendChild(searchBtn);
+
         queryCell.style.position = 'relative';
-        queryCell.appendChild(btn);
+        queryCell.appendChild(btnContainer);
     }
 
     // ==================== АВТОСКРОЛЛ ====================
@@ -4116,20 +4140,28 @@
             .yd-phrase-btn-cancel { color: #dc3545; border-color: #dc3545; }
             .yd-phrase-btn-cancel:hover { background: #ffe6e6; }
 
+            /* QUERY ACTIONS CONTAINER */
+            .yd-query-actions {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                margin-left: 8px;
+                vertical-align: middle;
+            }
+
             /* COPY КНОПКА */
-            .yd-copy-query-btn {
+            .yd-copy-query-btn,
+            .yd-search-query-btn {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                margin-left: 8px;
-                vertical-align: middle;
                 background: rgba(255, 255, 255, 0.9);
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 padding: 4px 6px;
                 cursor: pointer;
                 opacity: 0;
-                transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+                transition: opacity 0.2s, background 0.2s, border-color 0.2s, color 0.2s;
                 z-index: 10;
                 color: #666;
                 width: 24px;
@@ -4138,7 +4170,9 @@
             }
 
             tr:hover .yd-copy-query-btn,
-            [role="row"]:hover .yd-copy-query-btn {
+            tr:hover .yd-search-query-btn,
+            [role="row"]:hover .yd-copy-query-btn,
+            [role="row"]:hover .yd-search-query-btn {
                 opacity: 1;
             }
 
@@ -4146,6 +4180,12 @@
                 background: #fff;
                 border-color: #4a90e2;
                 color: #4a90e2;
+            }
+
+            .yd-search-query-btn:hover {
+                background: #fff;
+                border-color: #fc0;
+                color: #fc0;
             }
 
             .yd-copy-query-btn.yd-copy-success {
@@ -4333,6 +4373,7 @@
     }
 
 })();
+
 
 
 
