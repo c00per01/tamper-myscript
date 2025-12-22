@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.151
+// @version 0.121.153
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2833,6 +2833,11 @@
                 checkCount++;
                 const popup = findResultPopup();
 
+                // Логируем для отладки
+                if (checkCount <= 3 || checkCount % 10 === 0) {
+                    log.modal(`checkClosed: попытка ${checkCount}, popup=${popup ? 'найден' : 'не найден'}, isSending=${isSending}`);
+                }
+
                 if (popup) {
                     // Попап найден - пытаемся закрыть
                     log.modal('Результат найден, tryCloseResultPopup');
@@ -3051,7 +3056,18 @@
         for (const el of c) {
             const t = el.textContent || '';
             if (!t) continue;
-            if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
+            // Расширенный поиск - разные варианты текста результата
+            if (
+                (t.includes('Добавлено') && t.includes('минус')) ||
+                (t.includes('добавлено') && t.includes('минус')) ||
+                (t.includes('Добавлен') && t.includes('минус')) ||
+                t.includes('успешно добавлен') ||
+                t.includes('Минус-фраз') ||
+                // Поиск кнопки OK рядом с текстом об успехе
+                (t.includes('OK') && t.length < 500 && el.querySelector('button'))
+            ) {
+                return el.closest('[role="dialog"]') || el;
+            }
         }
         return null;
     }
@@ -4373,6 +4389,7 @@
     }
 
 })();
+
 
 
 
