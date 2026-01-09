@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.121.154
+// @version 0.122.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -15,64 +15,135 @@
     // ==================== ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ====================
     const DEBUG_MODE = true; // ВРЕМЕННО: для отладки, потом установим false
 
+    // Глобальный буфер логов для диагностики (последние 200 записей)
+    const LOG_BUFFER = [];
+    const LOG_BUFFER_SIZE = 200;
+
+    function addToLogBuffer(level, msg, data) {
+        const entry = {
+            ts: new Date().toISOString(),
+            level,
+            msg,
+            data: data !== undefined ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : null
+        };
+        LOG_BUFFER.push(entry);
+        if (LOG_BUFFER.length > LOG_BUFFER_SIZE) {
+            LOG_BUFFER.shift();
+        }
+        // Экспортируем в window для доступа из консоли
+        window.__YD_SQ_LOGS = LOG_BUFFER;
+    }
+
     const log = {
         // Основные события
         info: (msg, data) => {
+            addToLogBuffer('info', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] ℹ️ ${msg}`, data !== undefined ? data : '');
         },
 
-        // Критические ошибки
+        // Критические ошибки (всегда логируем)
         error: (msg, error) => {
-            console.error(`[YD-SQ] ❌ ${msg}`, error || '');
+            addToLogBuffer('error', msg, error);
+            console.error(`[YD-SQ] ❌ ERROR: ${msg}`, error || '');
         },
 
         // Предупреждения
         warn: (msg, data) => {
+            addToLogBuffer('warn', msg, data);
             if (!DEBUG_MODE) return;
             console.warn(`[YD-SQ] ⚠️ ${msg}`, data !== undefined ? data : '');
         },
 
         // Успешные операции
         success: (msg, data) => {
+            addToLogBuffer('success', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] ✅ ${msg}`, data !== undefined ? data : '');
         },
 
         // Пакетная отправка
         batch: (msg, data) => {
+            addToLogBuffer('batch', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 📦 BATCH: ${msg}`, data !== undefined ? data : '');
         },
 
         // Резервация строк
         reserve: (msg, data) => {
+            addToLogBuffer('reserve', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 🔒 RESERVE: ${msg}`, data !== undefined ? data : '');
         },
 
         // Клики и взаимодействия
         click: (msg, data) => {
+            addToLogBuffer('click', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 👆 CLICK: ${msg}`, data !== undefined ? data : '');
         },
 
         // Состояние selections
         selection: (msg, data) => {
+            addToLogBuffer('selection', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 📝 SELECTION: ${msg}`, data !== undefined ? data : '');
         },
 
         // Модальные окна
         modal: (msg, data) => {
+            addToLogBuffer('modal', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 🪟 MODAL: ${msg}`, data !== undefined ? data : '');
         },
 
         // Синхронизация данных
         sync: (msg, data) => {
+            addToLogBuffer('sync', msg, data);
             if (!DEBUG_MODE) return;
             console.log(`[YD-SQ] 🔄 SYNC: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // UI события (новое)
+        ui: (msg, data) => {
+            addToLogBuffer('ui', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🎨 UI: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Resize события (новое)
+        resize: (msg, data) => {
+            addToLogBuffer('resize', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] ↔️ RESIZE: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Подсветка (новое)
+        highlight: (msg, data) => {
+            addToLogBuffer('highlight', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🔆 HIGHLIGHT: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Storage операции (новое)
+        storage: (msg, data) => {
+            addToLogBuffer('storage', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 💾 STORAGE: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Инициализация (новое)
+        init: (msg, data) => {
+            addToLogBuffer('init', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🚀 INIT: ${msg}`, data !== undefined ? data : '');
+        },
+
+        // Редирект (новое)
+        redirect: (msg, data) => {
+            addToLogBuffer('redirect', msg, data);
+            if (!DEBUG_MODE) return;
+            console.log(`[YD-SQ] 🔀 REDIRECT: ${msg}`, data !== undefined ? data : '');
         },
 
         // Детальный дамп состояния
@@ -87,6 +158,18 @@
             console.log('pendingSentMinuses.length:', pendingSentMinuses.length);
             console.log('importedMinuses.length:', importedMinuses.length);
             console.log('currentPageKey:', currentPageKey);
+            console.groupEnd();
+        },
+
+        // Получить все логи (для диагностики)
+        getLogs: () => LOG_BUFFER,
+
+        // Вывести все логи в консоль
+        dumpLogs: () => {
+            console.group('[YD-SQ] 📋 FULL LOG DUMP');
+            LOG_BUFFER.forEach(entry => {
+                console.log(`${entry.ts} [${entry.level}] ${entry.msg}`, entry.data || '');
+            });
             console.groupEnd();
         }
     };
@@ -2062,6 +2145,16 @@
                     2×клик — режим фразы
                 </div>
             </div>
+
+            <!-- Resize handles -->
+            <div class="yd-sq-resize-handle yd-sq-resize-n" data-resize="n"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-s" data-resize="s"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-e" data-resize="e"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-w" data-resize="w"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-ne" data-resize="ne"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-nw" data-resize="nw"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-se" data-resize="se"></div>
+            <div class="yd-sq-resize-handle yd-sq-resize-sw" data-resize="sw"></div>
         `;
 
         document.body.appendChild(panel);
@@ -2108,6 +2201,7 @@
         // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
 
         makePanelDraggable();
+        makePanelResizable();
 
         // Отображаем дату последней отправки
         updateLastSendDateUI();
@@ -2147,6 +2241,122 @@
                 top: panel.style.top
             };
             syncLocalToGlobal();
+        });
+    }
+
+    // Размер панели (загружаем из localStorage)
+    let panelSize = {
+        width: parseInt(localStorage.getItem('yd-sq-panel-width')) || null,
+        height: parseInt(localStorage.getItem('yd-sq-panel-height')) || null
+    };
+
+    function makePanelResizable() {
+        const panel = document.getElementById('yd-sq-panel');
+        const handles = panel.querySelectorAll('.yd-sq-resize-handle');
+
+        let isResizing = false;
+        let currentHandle = null;
+        let startX, startY, startWidth, startHeight, startLeft, startTop;
+
+        const MIN_WIDTH = 280;
+        const MAX_WIDTH = 600;
+        const MIN_HEIGHT = 200;
+        const MAX_HEIGHT = 800;
+
+        // Применяем сохранённый размер
+        if (panelSize.width) {
+            panel.style.width = panelSize.width + 'px';
+            panel.style.minWidth = 'unset';
+            panel.style.maxWidth = 'unset';
+        }
+        if (panelSize.height) {
+            panel.style.height = panelSize.height + 'px';
+        }
+
+        handles.forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                isResizing = true;
+                currentHandle = handle.dataset.resize;
+                startX = e.clientX;
+                startY = e.clientY;
+                startWidth = panel.offsetWidth;
+                startHeight = panel.offsetHeight;
+                startLeft = panel.offsetLeft;
+                startTop = panel.offsetTop;
+
+                log.resize('Начало resize', { handle: currentHandle, startWidth, startHeight });
+
+                document.body.style.cursor = getComputedStyle(handle).cursor;
+                document.body.style.userSelect = 'none';
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            let newLeft = startLeft;
+            let newTop = startTop;
+
+            // Обработка разных направлений
+            if (currentHandle.includes('e')) {
+                newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + dx));
+            }
+            if (currentHandle.includes('w')) {
+                const potentialWidth = startWidth - dx;
+                if (potentialWidth >= MIN_WIDTH && potentialWidth <= MAX_WIDTH) {
+                    newWidth = potentialWidth;
+                    newLeft = startLeft + dx;
+                }
+            }
+            if (currentHandle.includes('s')) {
+                newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + dy));
+            }
+            if (currentHandle.includes('n')) {
+                const potentialHeight = startHeight - dy;
+                if (potentialHeight >= MIN_HEIGHT && potentialHeight <= MAX_HEIGHT) {
+                    newHeight = potentialHeight;
+                    newTop = startTop + dy;
+                }
+            }
+
+            // Применяем новые размеры
+            panel.style.width = newWidth + 'px';
+            panel.style.minWidth = 'unset';
+            panel.style.maxWidth = 'unset';
+            panel.style.height = newHeight + 'px';
+
+            if (currentHandle.includes('w')) {
+                panel.style.left = newLeft + 'px';
+                panel.style.right = 'auto';
+            }
+            if (currentHandle.includes('n')) {
+                panel.style.top = newTop + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isResizing) return;
+
+            isResizing = false;
+            currentHandle = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            // Сохраняем размер
+            panelSize.width = panel.offsetWidth;
+            panelSize.height = panel.offsetHeight;
+            localStorage.setItem('yd-sq-panel-width', panelSize.width);
+            localStorage.setItem('yd-sq-panel-height', panelSize.height);
+
+            log.resize('Конец resize', { width: panelSize.width, height: panelSize.height });
         });
     }
 
@@ -3724,11 +3934,85 @@
                 min-width: 320px;
                 max-width: 450px;
                 box-sizing: border-box;
-                overflow: hidden;
+                overflow: visible;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             }
 
             #yd-sq-panel * { box-sizing: border-box; }
+
+            /* RESIZE HANDLES */
+            .yd-sq-resize-handle {
+                position: absolute;
+                background: transparent;
+                z-index: 10;
+            }
+
+            /* Top and Bottom edges */
+            .yd-sq-resize-n {
+                top: -4px;
+                left: 10px;
+                right: 10px;
+                height: 8px;
+                cursor: ns-resize;
+            }
+            .yd-sq-resize-s {
+                bottom: -4px;
+                left: 10px;
+                right: 10px;
+                height: 8px;
+                cursor: ns-resize;
+            }
+
+            /* Left and Right edges */
+            .yd-sq-resize-e {
+                top: 10px;
+                bottom: 10px;
+                right: -4px;
+                width: 8px;
+                cursor: ew-resize;
+            }
+            .yd-sq-resize-w {
+                top: 10px;
+                bottom: 10px;
+                left: -4px;
+                width: 8px;
+                cursor: ew-resize;
+            }
+
+            /* Corners */
+            .yd-sq-resize-ne {
+                top: -4px;
+                right: -4px;
+                width: 14px;
+                height: 14px;
+                cursor: nesw-resize;
+            }
+            .yd-sq-resize-nw {
+                top: -4px;
+                left: -4px;
+                width: 14px;
+                height: 14px;
+                cursor: nwse-resize;
+            }
+            .yd-sq-resize-se {
+                bottom: -4px;
+                right: -4px;
+                width: 14px;
+                height: 14px;
+                cursor: nwse-resize;
+            }
+            .yd-sq-resize-sw {
+                bottom: -4px;
+                left: -4px;
+                width: 14px;
+                height: 14px;
+                cursor: nesw-resize;
+            }
+
+            /* Visual indicator on hover */
+            .yd-sq-resize-handle:hover {
+                background: rgba(74, 144, 226, 0.2);
+            }
 
             #yd-sq-panel .yd-sq-header {
                 display: flex;
@@ -4392,6 +4676,7 @@
     }
 
 })();
+
 
 
 
