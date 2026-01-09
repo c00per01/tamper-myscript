@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.123.1
+// @version 0.124.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2131,74 +2131,69 @@
                 </div>
             </div>
 
-            <!-- Body -->
-            <div id="yd-sq-panel-body">
-                <!-- Selected Words Section -->
-                <div class="yd-sq-section yd-sq-section-main">
+            <!-- Body (flex container) -->
+            <div id="yd-sq-panel-body" class="yd-sq-body">
+                <!-- Section: ВЫБРАНО -->
+                <div class="yd-sq-section yd-sq-section-selected">
                     <div class="yd-sq-section-header">
-                        <span class="yd-sq-section-label">ВЫБРАНО</span>
-                        <span id="yd-sq-global-count" class="yd-sq-badge">0</span>
+                        <div class="yd-sq-section-header-left">
+                            <span class="yd-sq-section-label">ВЫБРАНО</span>
+                            <span id="yd-sq-global-count" class="yd-sq-badge">0</span>
+                        </div>
+                        <div class="yd-sq-section-header-right">
+                            <button id="yd-sq-copy-selected" class="yd-sq-icon-btn-sm" title="Копировать">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                            <button id="yd-sq-clear-all" class="yd-sq-icon-btn-sm" title="Очистить всё">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div id="yd-sq-list" class="yd-sq-list"></div>
                 </div>
 
-                <!-- Already in Campaign (Accordion) -->
-                <div id="yd-sq-imported-section" class="yd-sq-section yd-sq-accordion" style="display:none;">
+                <!-- Section: ОТПРАВЛЕННЫЕ (Accordion) -->
+                <div id="yd-sq-imported-section" class="yd-sq-section yd-sq-accordion">
                     <div class="yd-sq-accordion-header" id="yd-sq-imported-toggle">
-                        <span class="yd-sq-section-label">УЖЕ ДОБАВЛЕНО</span>
-                        <span id="yd-sq-imported-count" class="yd-sq-badge yd-sq-badge-green">0</span>
-                        <svg class="yd-sq-accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
+                        <div class="yd-sq-accordion-header-left">
+                            <span class="yd-sq-section-label-muted">ОТПРАВЛЕННЫЕ</span>
+                            <span id="yd-sq-imported-count" class="yd-sq-badge-muted">0</span>
+                            <svg class="yd-sq-accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </div>
+                        <button id="yd-sq-load-clipboard" class="yd-sq-text-btn" title="Импорт из буфера">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <span>Импорт</span>
+                        </button>
                     </div>
                     <div id="yd-sq-imported-list" class="yd-sq-list yd-sq-accordion-content"></div>
                 </div>
+            </div>
 
-                <!-- Toolbar -->
-                <div class="yd-sq-toolbar">
-                    <button id="yd-sq-load-clipboard" class="yd-sq-tool-btn" title="Импорт из буфера обмена">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                    </button>
-                    <button id="yd-sq-copy-imported" class="yd-sq-tool-btn" title="Копировать в буфер">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                    </button>
-                    <button id="yd-sq-clear-all" class="yd-sq-tool-btn" title="Очистить всё">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                    </button>
-                    <div class="yd-sq-toolbar-spacer"></div>
-                    <button id="yd-sq-clear-imported" class="yd-sq-tool-btn yd-sq-tool-btn-danger" title="Очистить импортированные">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="15" y1="9" x2="9" y2="15"/>
-                            <line x1="9" y1="9" x2="15" y2="15"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <!-- Primary CTA -->
+            <!-- Footer -->
+            <div class="yd-sq-footer">
                 <button id="yd-sq-send" class="yd-sq-btn-primary">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="22" y1="2" x2="11" y2="13"/>
                         <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                     </svg>
                     <span>Отправить в Директ</span>
                 </button>
-
-                <!-- Status -->
-                <div id="yd-sq-last-send-info" class="yd-sq-status"></div>
+                <div id="yd-sq-last-send-info" class="yd-sq-status-text"></div>
             </div>
 
-            <!-- Help Tooltip (hidden by default) -->
+            <!-- Help Tooltip -->
             <div id="yd-sq-help-tooltip" class="yd-sq-help-tooltip" style="display:none;">
                 <div class="yd-sq-help-title">Горячие клавиши</div>
                 <div class="yd-sq-help-row"><kbd>Клик</kbd> — мягкое совпадение</div>
@@ -2217,6 +2212,21 @@
             <div class="yd-sq-resize-handle yd-sq-resize-sw" data-resize="sw"></div>
         `;
 
+        // Floating Pill (свёрнутое состояние)
+        const pill = document.createElement('div');
+        pill.id = 'yd-sq-pill';
+        pill.className = 'yd-sq-pill';
+        pill.style.display = 'none';
+        pill.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 100 100">
+                <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
+                <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+            </svg>
+            <span>YD Helper</span>
+            <span id="yd-sq-pill-count" class="yd-sq-pill-badge">0</span>
+        `;
+        document.body.appendChild(pill);
+
         document.body.appendChild(panel);
 
         // Применить позицию
@@ -2226,20 +2236,27 @@
         panel.style.top = panelPosition.top;
 
         // Обработчики
-        // Toggle panel
+        // Toggle panel -> Floating Pill
         document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
-            const body = document.getElementById('yd-sq-panel-body');
+            const panel = document.getElementById('yd-sq-panel');
+            const pill = document.getElementById('yd-sq-pill');
             const helpTooltip = document.getElementById('yd-sq-help-tooltip');
-            const btn = document.getElementById('yd-sq-panel-toggle');
-            if (body.style.display === 'none') {
-                body.style.display = '';
-                helpTooltip.style.display = 'none';
-                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-            } else {
-                body.style.display = 'none';
-                helpTooltip.style.display = 'none';
-                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-            }
+
+            helpTooltip.style.display = 'none';
+            panel.style.display = 'none';
+            pill.style.display = 'flex';
+
+            // Обновляем счётчик на pill
+            document.getElementById('yd-sq-pill-count').textContent = selections.size;
+        });
+
+        // Pill click -> Restore panel
+        document.getElementById('yd-sq-pill').addEventListener('click', () => {
+            const panel = document.getElementById('yd-sq-panel');
+            const pill = document.getElementById('yd-sq-pill');
+
+            pill.style.display = 'none';
+            panel.style.display = '';
         });
 
         // Help tooltip toggle
@@ -2249,8 +2266,8 @@
             tooltip.style.display = tooltip.style.display === 'none' ? 'block' : 'none';
         });
 
-        // Accordion for imported
-        document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
+        // Accordion for imported (click only on header-left, not on Import button)
+        document.querySelector('.yd-sq-accordion-header-left').addEventListener('click', () => {
             const section = document.getElementById('yd-sq-imported-section');
             const list = document.getElementById('yd-sq-imported-list');
             const arrow = section.querySelector('.yd-sq-accordion-arrow');
@@ -2265,21 +2282,59 @@
             }
         });
 
-        document.getElementById('yd-sq-load-clipboard').addEventListener('click', importMinusesFromClipboard);
+        // Import button
+        document.getElementById('yd-sq-load-clipboard').addEventListener('click', (e) => {
+            e.stopPropagation();
+            importMinusesFromClipboard();
+        });
 
-        document.getElementById('yd-sq-copy-imported').addEventListener('click', copyImportedToClipboard);
-
-        document.getElementById('yd-sq-clear-imported').addEventListener('click', clearImportedMinuses);
+        // Copy Selected with feedback
+        document.getElementById('yd-sq-copy-selected').addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            await copySelectedToClipboard();
+            showIconFeedback(btn, 'success');
+        });
 
         document.getElementById('yd-sq-send').addEventListener('click', showSendConfirmDialog);
-
-        // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - handled via delegation
 
         makePanelDraggable();
         makePanelResizable();
 
         // Отображаем дату последней отправки
         updateLastSendDateUI();
+    }
+
+    // Функция обратной связи для иконок
+    function showIconFeedback(btn, type = 'success') {
+        const originalHTML = btn.innerHTML;
+        if (type === 'success') {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#28a745" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`;
+            btn.style.color = '#28a745';
+        }
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.style.color = '';
+        }, 2000);
+    }
+
+    // Копирование выбранных минусов
+    async function copySelectedToClipboard() {
+        const minuses = Array.from(selections.values())
+            .filter(sel => !sel._building)
+            .map(sel => formatMinus(sel));
+
+        if (minuses.length === 0) {
+            showYdsqNotification('Нет слов для копирования', 'info');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(minuses.join('\n'));
+            showYdsqNotification(`Скопировано ${minuses.length} слов`, 'success');
+        } catch (err) {
+            log.error('Ошибка копирования', err);
+            showYdsqNotification('Ошибка копирования', 'error');
+        }
     }
 
     function makePanelDraggable() {
@@ -2469,24 +2524,35 @@
         container.innerHTML = items.map(sel => {
             const isBuilding = sel._building;
 
-            let classes = 'yd-sq-item';
-            if (isBuilding) classes += ' yd-sq-item-building';
-            if (sel.kind === 'phrase') classes += ' yd-sq-item-phrase';
-            if (sel.matchType === 'strict') classes += ' yd-sq-item-strict';
-
-            // Определяем активный тип
+            // Определяем маркеры
             const isQuote = sel.matchType === 'quote';
             const isBracket = sel.matchType === 'bracket';
             const isStrict = sel.matchType === 'strict';
+            const isPhrase = sel.kind === 'phrase';
+
+            // Формируем маркер
+            let marker = '';
+            if (isStrict) {
+                marker = `<span class="yd-sq-marker yd-sq-marker-strict">!</span>`;
+            } else if (isBracket) {
+                marker = `<span class="yd-sq-marker yd-sq-marker-bracket">[ ]</span>`;
+            } else if (isQuote && isPhrase) {
+                marker = `<span class="yd-sq-marker yd-sq-marker-quote">" "</span>`;
+            } else if (isPhrase) {
+                marker = `<span class="yd-sq-marker yd-sq-marker-quote">" "</span>`;
+            } else {
+                marker = `<span class="yd-sq-marker-dot">•</span>`;
+            }
 
             return `
-                <div class="${classes}" data-sel-id="${escapeHtml(sel.id)}">
+                <div class="yd-sq-item${isBuilding ? ' yd-sq-item-building' : ''}" data-sel-id="${escapeHtml(sel.id)}">
+                    ${marker}
                     <span class="yd-sq-item-text" data-sel-id-text="${escapeHtml(sel.id)}">${escapeHtml(sel.display)}</span>
-                    ${isBuilding ? '<span style="font-size:10px;color:var(--yd-primary);margin-left:4px;">(building...)</span>' : ''}
+                    ${isBuilding ? '<span class="yd-sq-item-building-hint">(building...)</span>' : ''}
                     <div class="yd-sq-item-actions">
-                        <button class="yd-sq-item-action yd-sq-chip ${isQuote ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}" title='Фразовое "&nbsp;"'>""</button>
-                        ${sel.kind === 'phrase' ? `<button class="yd-sq-item-action yd-sq-chip ${isBracket ? 'active' : ''}" data-type="bracket" data-sel-id="${escapeHtml(sel.id)}" title="Точное [&nbsp;]">[]</button>` : ''}
-                        <button class="yd-sq-item-action yd-sq-chip ${isStrict ? 'active' : ''}" data-type="strict" data-sel-id="${escapeHtml(sel.id)}" title="Строгое !">!</button>
+                        <button class="yd-sq-item-action yd-sq-chip ${isQuote ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}" title='Фразовое'>" "</button>
+                        ${isPhrase ? `<button class="yd-sq-item-action yd-sq-chip ${isBracket ? 'active' : ''}" data-type="bracket" data-sel-id="${escapeHtml(sel.id)}" title="Точное">[ ]</button>` : ''}
+                        <button class="yd-sq-item-action yd-sq-chip ${isStrict ? 'active' : ''}" data-type="strict" data-sel-id="${escapeHtml(sel.id)}" title="Строгое">!</button>
                         <button class="yd-sq-item-action" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="Редактировать">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -4033,19 +4099,22 @@
                 --yd-success: #28a745;
                 --yd-success-bg: #E8F5E9;
                 --yd-danger: #dc3545;
+                --yd-danger-bg: #FFEBEE;
                 --yd-purple: #7c3aed;
                 --yd-purple-bg: #F3E5F5;
-                --yd-text: #1a1a1a;
+                --yd-text: #222222;
+                --yd-text-muted: #9CA3AF;
                 --yd-text-secondary: #6b7280;
                 --yd-bg: #ffffff;
+                --yd-bg-header: #F9FAFB;
                 --yd-bg-hover: #F5F7FA;
-                --yd-border: rgba(0,0,0,0.06);
-                --yd-shadow: 0 4px 24px rgba(0,0,0,0.08);
+                --yd-border: #E1E4E8;
+                --yd-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
                 --yd-radius: 12px;
                 --yd-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
             }
 
-            /* ===== ПАНЕЛЬ ===== */
+            /* ===== ПАНЕЛЬ (Floating Layer) ===== */
             #yd-sq-panel {
                 position: fixed;
                 z-index: 9999999;
@@ -4053,16 +4122,57 @@
                 border: 1px solid var(--yd-border);
                 border-radius: var(--yd-radius);
                 box-shadow: var(--yd-shadow);
-                font-size: 13px;
-                min-width: 300px;
-                max-width: 400px;
+                font-size: 14px;
+                min-width: 320px;
+                max-width: 380px;
                 box-sizing: border-box;
                 overflow: visible;
                 font-family: var(--yd-font);
                 color: var(--yd-text);
+                display: flex;
+                flex-direction: column;
+                max-height: 80vh;
             }
 
             #yd-sq-panel * { box-sizing: border-box; }
+
+            /* ===== FLOATING PILL ===== */
+            .yd-sq-pill {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 9999999;
+                background: var(--yd-bg);
+                border: 1px solid var(--yd-border);
+                border-radius: 24px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+                padding: 10px 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                font-family: var(--yd-font);
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--yd-text);
+                transition: all 0.2s ease;
+            }
+
+            .yd-sq-pill:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+            }
+
+            .yd-sq-pill-badge {
+                background: var(--yd-primary);
+                color: white;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 10px;
+                min-width: 20px;
+                text-align: center;
+            }
 
             /* ===== RESIZE HANDLES ===== */
             .yd-sq-resize-handle {
@@ -4082,12 +4192,13 @@
 
             /* ===== HEADER ===== */
             #yd-sq-panel .yd-sq-header {
+                flex: 0 0 auto;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 padding: 12px 14px;
                 border-bottom: 1px solid var(--yd-border);
-                background: var(--yd-bg);
+                background: var(--yd-bg-header);
                 cursor: grab;
                 user-select: none;
             }
@@ -4098,9 +4209,7 @@
                 gap: 8px;
             }
 
-            .yd-sq-logo {
-                flex-shrink: 0;
-            }
+            .yd-sq-logo { flex-shrink: 0; }
 
             .yd-sq-title {
                 font-weight: 600;
@@ -4132,10 +4241,50 @@
                 color: var(--yd-text);
             }
 
-            /* ===== BODY ===== */
-            #yd-sq-panel-body {
-                padding: 12px 14px 14px;
-                max-height: 550px;
+            /* Small icon buttons in section headers */
+            .yd-sq-icon-btn-sm {
+                background: none;
+                border: none;
+                padding: 4px;
+                cursor: pointer;
+                color: var(--yd-text-muted);
+                border-radius: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-icon-btn-sm:hover {
+                background: var(--yd-bg-hover);
+                color: var(--yd-text);
+            }
+
+            /* Text button (Import) */
+            .yd-sq-text-btn {
+                background: none;
+                border: none;
+                padding: 4px 8px;
+                cursor: pointer;
+                color: var(--yd-text-muted);
+                font-size: 11px;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                border-radius: 4px;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-text-btn:hover {
+                background: var(--yd-bg-hover);
+                color: var(--yd-primary);
+            }
+
+            /* ===== BODY (flex: 1 1 auto) ===== */
+            #yd-sq-panel-body, .yd-sq-body {
+                flex: 1 1 auto;
+                padding: 12px 14px;
                 overflow-y: auto;
             }
 
@@ -4144,21 +4293,43 @@
                 margin-bottom: 12px;
             }
 
-            .yd-sq-section-main {
-                margin-bottom: 16px;
+            .yd-sq-section-selected {
+                flex: 1 1 auto;
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
             }
 
             .yd-sq-section-header {
                 display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+
+            .yd-sq-section-header-left {
+                display: flex;
                 align-items: center;
                 gap: 8px;
-                margin-bottom: 8px;
+            }
+
+            .yd-sq-section-header-right {
+                display: flex;
+                align-items: center;
+                gap: 2px;
             }
 
             .yd-sq-section-label {
                 font-size: 11px;
                 font-weight: 600;
                 color: var(--yd-text-secondary);
+                letter-spacing: 0.5px;
+            }
+
+            .yd-sq-section-label-muted {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--yd-text-muted);
                 letter-spacing: 0.5px;
             }
 
@@ -4173,55 +4344,103 @@
                 text-align: center;
             }
 
+            .yd-sq-badge-muted {
+                background: var(--yd-bg-hover);
+                color: var(--yd-text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                padding: 2px 6px;
+                border-radius: 8px;
+            }
+
             .yd-sq-badge-green {
                 background: var(--yd-success);
             }
 
             /* ===== LIST ===== */
             #yd-sq-panel .yd-sq-list {
-                max-height: 220px;
+                flex: 1 1 auto;
                 overflow-y: auto;
                 background: var(--yd-bg);
-                border-radius: 8px;
                 scroll-behavior: smooth;
             }
 
             #yd-sq-panel .yd-sq-empty {
-                padding: 32px 16px;
+                padding: 40px 16px;
                 text-align: center;
-                color: var(--yd-text-secondary);
+                color: var(--yd-text-muted);
                 font-size: 13px;
             }
 
             .yd-sq-empty-icon {
-                opacity: 0.2;
+                opacity: 0.15;
                 margin-bottom: 12px;
             }
 
             .yd-sq-empty-text {
                 margin-bottom: 4px;
+                color: var(--yd-text-secondary);
             }
 
             .yd-sq-empty-hint {
                 font-size: 11px;
-                opacity: 0.7;
+                color: var(--yd-text-muted);
             }
+
             /* ===== ITEMS ===== */
             #yd-sq-panel .yd-sq-item {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 8px 10px;
-                border-radius: 6px;
-                margin-bottom: 2px;
-                background: transparent;
+                padding: 10px 8px;
+                margin-bottom: 1px;
+                background: var(--yd-bg);
                 border: none;
-                transition: background 0.15s ease;
+                border-radius: 0;
+                transition: background 0.1s ease;
                 position: relative;
             }
 
             #yd-sq-panel .yd-sq-item:hover {
                 background: var(--yd-bg-hover);
+            }
+
+            /* Markers (Badges before text) */
+            .yd-sq-marker {
+                font-size: 10px;
+                font-weight: 600;
+                padding: 2px 6px;
+                border-radius: 4px;
+                flex-shrink: 0;
+            }
+
+            .yd-sq-marker-strict {
+                background: var(--yd-danger-bg);
+                color: var(--yd-danger);
+            }
+
+            .yd-sq-marker-quote {
+                background: var(--yd-purple-bg);
+                color: var(--yd-purple);
+            }
+
+            .yd-sq-marker-bracket {
+                background: var(--yd-primary-bg);
+                color: var(--yd-primary);
+            }
+
+            .yd-sq-marker-dot {
+                color: var(--yd-primary);
+                font-size: 14px;
+                flex-shrink: 0;
+                width: 20px;
+                text-align: center;
+            }
+
+            .yd-sq-item-building-hint {
+                font-size: 10px;
+                color: var(--yd-primary);
+                margin-left: 4px;
             }
 
             /* Chip для операторов */
@@ -4335,72 +4554,50 @@
             /* ===== ACCORDION ===== */
             .yd-sq-accordion {
                 border-top: 1px solid var(--yd-border);
-                padding-top: 12px;
+                padding-top: 8px;
+                margin-top: 8px;
             }
 
             .yd-sq-accordion-header {
                 display: flex;
+                justify-content: space-between;
                 align-items: center;
-                gap: 8px;
-                padding: 8px 0;
+                padding: 6px 0;
                 cursor: pointer;
-                transition: all 0.15s ease;
             }
 
-            .yd-sq-accordion-header:hover {
-                opacity: 0.8;
+            .yd-sq-accordion-header-left {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                cursor: pointer;
+            }
+
+            .yd-sq-accordion-header-left:hover {
+                opacity: 0.7;
             }
 
             .yd-sq-accordion-arrow {
-                color: var(--yd-text-secondary);
+                color: var(--yd-text-muted);
                 transition: transform 0.2s ease;
-                margin-left: auto;
             }
 
             .yd-sq-accordion-content {
                 display: none;
-                padding-top: 8px;
+                max-height: 150px;
+                overflow-y: auto;
             }
 
             .yd-sq-accordion-open .yd-sq-accordion-content {
                 display: block;
             }
 
-            /* ===== TOOLBAR ===== */
-            .yd-sq-toolbar {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-                padding: 8px 0;
+            /* ===== FOOTER ===== */
+            .yd-sq-footer {
+                flex: 0 0 auto;
+                padding: 12px 14px;
                 border-top: 1px solid var(--yd-border);
-                margin-top: 8px;
-            }
-
-            .yd-sq-toolbar-spacer {
-                flex: 1;
-            }
-
-            .yd-sq-tool-btn {
-                background: none;
-                border: none;
-                padding: 8px;
-                cursor: pointer;
-                color: var(--yd-text-secondary);
-                border-radius: 6px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.15s ease;
-            }
-
-            .yd-sq-tool-btn:hover {
-                background: var(--yd-bg-hover);
-                color: var(--yd-text);
-            }
-
-            .yd-sq-tool-btn-danger:hover {
-                color: var(--yd-danger);
-                background: rgba(220, 53, 69, 0.1);
+                background: var(--yd-bg);
             }
 
             /* ===== PRIMARY CTA ===== */
@@ -4419,7 +4616,6 @@
                 font-weight: 600;
                 cursor: pointer;
                 transition: all 0.2s ease;
-                margin-top: 8px;
             }
 
             #yd-sq-panel .yd-sq-btn-primary:hover {
@@ -4439,7 +4635,19 @@
                 box-shadow: none;
             }
 
-            /* ===== STATUS ===== */
+            /* ===== STATUS TEXT ===== */
+            .yd-sq-status-text {
+                font-size: 10px;
+                color: var(--yd-text-muted);
+                text-align: center;
+                margin-top: 8px;
+            }
+
+            .yd-sq-status-text.success {
+                color: var(--yd-success);
+            }
+
+            /* Legacy */
             .yd-sq-status {
                 font-size: 11px;
                 color: var(--yd-text-secondary);
@@ -5032,6 +5240,7 @@
     }
 
 })();
+
 
 
 
