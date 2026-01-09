@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.124.1
+// @version 0.125.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2236,22 +2236,33 @@
         panel.style.top = panelPosition.top;
 
         // Обработчики
-        // Toggle panel -> Floating Pill
+        // Toggle panel -> Floating Pill with animation
         document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
             const helpTooltip = document.getElementById('yd-sq-help-tooltip');
 
             helpTooltip.style.display = 'none';
-            panel.style.display = 'none';
-            pill.style.display = 'flex';
+
+            // Анимация сворачивания
+            panel.classList.add('yd-sq-panel-minimizing');
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.classList.remove('yd-sq-panel-minimizing');
+                pill.style.display = 'flex';
+                pill.classList.add('yd-sq-pill-appear');
+                setTimeout(() => pill.classList.remove('yd-sq-pill-appear'), 300);
+            }, 200);
 
             // Обновляем счётчик на pill
-            document.getElementById('yd-sq-pill-count').textContent = selections.size;
+            updatePillCount();
         });
 
         // Pill click -> Restore panel
-        document.getElementById('yd-sq-pill').addEventListener('click', () => {
+        document.getElementById('yd-sq-pill').addEventListener('click', (e) => {
+            // Игнорируем если это drag
+            if (e.target.closest('.yd-sq-pill').classList.contains('yd-sq-pill-dragging')) return;
+
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
 
@@ -2259,11 +2270,18 @@
             panel.style.display = '';
         });
 
-        // Help tooltip toggle
-        document.getElementById('yd-sq-help-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tooltip = document.getElementById('yd-sq-help-tooltip');
-            tooltip.style.display = tooltip.style.display === 'none' ? 'block' : 'none';
+        // Pill drag & drop
+        makePillDraggable();
+
+        // Help tooltip - HOVER only (не клик)
+        const helpBtn = document.getElementById('yd-sq-help-btn');
+        const helpTooltip = document.getElementById('yd-sq-help-tooltip');
+
+        helpBtn.addEventListener('mouseenter', () => {
+            helpTooltip.style.display = 'block';
+        });
+        helpBtn.addEventListener('mouseleave', () => {
+            helpTooltip.style.display = 'none';
         });
 
         // Accordion for imported (click only on header-left, not on Import button)
@@ -2295,6 +2313,12 @@
             showIconFeedback(btn, 'success');
         });
 
+        // Clear All with Undo
+        document.getElementById('yd-sq-clear-all').addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            handleClearWithUndo(btn);
+        });
+
         document.getElementById('yd-sq-send').addEventListener('click', showSendConfirmDialog);
 
         makePanelDraggable();
@@ -2302,6 +2326,113 @@
 
         // Отображаем дату последней отправки
         updateLastSendDateUI();
+    }
+
+    // Обновление счётчика на pill
+    function updatePillCount() {
+        const pillCount = document.getElementById('yd-sq-pill-count');
+        if (pillCount) {
+            pillCount.textContent = selections.size;
+            // Красный бейдж если есть слова
+            pillCount.classList.toggle('has-items', selections.size > 0);
+        }
+    }
+
+    // Drag & Drop для pill
+    function makePillDraggable() {
+        const pill = document.getElementById('yd-sq-pill');
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        // Загружаем сохранённую позицию
+        const savedPos = localStorage.getItem('yd-sq-pill-position');
+        if (savedPos) {
+            try {
+                const pos = JSON.parse(savedPos);
+                pill.style.left = pos.left + 'px';
+                pill.style.top = pos.top + 'px';
+                pill.style.right = 'auto';
+                pill.style.bottom = 'auto';
+            } catch (e) { }
+        }
+
+        pill.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = pill.offsetLeft;
+            startTop = pill.offsetTop;
+            pill.classList.add('yd-sq-pill-dragging');
+            pill.style.right = 'auto';
+            pill.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            pill.style.left = (startLeft + dx) + 'px';
+            pill.style.top = (startTop + dy) + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            setTimeout(() => {
+                pill.classList.remove('yd-sq-pill-dragging');
+            }, 100);
+
+            // Сохраняем позицию
+            localStorage.setItem('yd-sq-pill-position', JSON.stringify({
+                left: pill.offsetLeft,
+                top: pill.offsetTop
+            }));
+        });
+    }
+
+    // Clear с Undo
+    let clearUndoBuffer = null;
+    let clearUndoTimeout = null;
+
+    function handleClearWithUndo(btn) {
+        // Если уже в режиме Undo
+        if (clearUndoBuffer) {
+            // Восстанавливаем
+            selections = new Map(clearUndoBuffer);
+            clearUndoBuffer = null;
+            clearTimeout(clearUndoTimeout);
+
+            // Возвращаем иконку
+            restoreClearButton(btn);
+            updateUI();
+            showYdsqNotification('Восстановлено', 'success');
+            return;
+        }
+
+        // Сохраняем буфер для отмены
+        clearUndoBuffer = new Map(selections);
+
+        // Очищаем
+        selections.clear();
+        updateUI();
+
+        // Меняем кнопку на "Вернуть?"
+        btn.innerHTML = `<span style="font-size:10px;">Вернуть?</span>`;
+        btn.title = 'Нажмите чтобы вернуть';
+
+        // Таймаут для сброса
+        clearUndoTimeout = setTimeout(() => {
+            clearUndoBuffer = null;
+            restoreClearButton(btn);
+        }, 3000);
+    }
+
+    function restoreClearButton(btn) {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+        btn.title = 'Очистить всё';
     }
 
     // Функция обратной связи для иконок
@@ -2524,69 +2655,84 @@
         container.innerHTML = items.map(sel => {
             const isBuilding = sel._building;
 
-            // Определяем маркеры
+            // Определяем тип для badge
             const isQuote = sel.matchType === 'quote';
             const isBracket = sel.matchType === 'bracket';
             const isStrict = sel.matchType === 'strict';
             const isPhrase = sel.kind === 'phrase';
 
-            // Формируем маркер
-            let marker = '';
+            // Badge отображает текущий тип (кликабельный для смены)
+            let badgeText = '[ ]'; // пусто
+            let badgeClass = 'yd-sq-badge-type';
             if (isStrict) {
-                marker = `<span class="yd-sq-marker yd-sq-marker-strict">!</span>`;
+                badgeText = '!';
+                badgeClass += ' yd-sq-badge-strict';
             } else if (isBracket) {
-                marker = `<span class="yd-sq-marker yd-sq-marker-bracket">[ ]</span>`;
-            } else if (isQuote && isPhrase) {
-                marker = `<span class="yd-sq-marker yd-sq-marker-quote">" "</span>`;
-            } else if (isPhrase) {
-                marker = `<span class="yd-sq-marker yd-sq-marker-quote">" "</span>`;
-            } else {
-                marker = `<span class="yd-sq-marker-dot">•</span>`;
+                badgeText = '[ ]';
+                badgeClass += ' yd-sq-badge-bracket';
+            } else if (isQuote) {
+                badgeText = '" "';
+                badgeClass += ' yd-sq-badge-quote';
             }
+
+            // Чистый текст без операторов
+            const cleanText = sel.display;
 
             return `
                 <div class="yd-sq-item${isBuilding ? ' yd-sq-item-building' : ''}" data-sel-id="${escapeHtml(sel.id)}">
-                    ${marker}
-                    <span class="yd-sq-item-text" data-sel-id-text="${escapeHtml(sel.id)}">${escapeHtml(sel.display)}</span>
+                    <button class="yd-sq-item-delete" data-action="remove" data-sel-id="${escapeHtml(sel.id)}" title="Удалить">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                    <button class="${badgeClass}" data-action="cycle-type" data-sel-id="${escapeHtml(sel.id)}" title="Клик для смены типа">${badgeText}</button>
+                    <span class="yd-sq-item-text" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="Клик для редактирования">${escapeHtml(cleanText)}</span>
                     ${isBuilding ? '<span class="yd-sq-item-building-hint">(building...)</span>' : ''}
-                    <div class="yd-sq-item-actions">
-                        <button class="yd-sq-item-action yd-sq-chip ${isQuote ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}" title='Фразовое'>" "</button>
-                        ${isPhrase ? `<button class="yd-sq-item-action yd-sq-chip ${isBracket ? 'active' : ''}" data-type="bracket" data-sel-id="${escapeHtml(sel.id)}" title="Точное">[ ]</button>` : ''}
-                        <button class="yd-sq-item-action yd-sq-chip ${isStrict ? 'active' : ''}" data-type="strict" data-sel-id="${escapeHtml(sel.id)}" title="Строгое">!</button>
-                        <button class="yd-sq-item-action" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="Редактировать">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                        </button>
-                        <button class="yd-sq-item-action danger" data-action="remove" data-sel-id="${escapeHtml(sel.id)}" title="Удалить">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </button>
-                    </div>
                 </div>
             `;
         }).join('');
 
-        // Обработчики для chips (операторы)
-        addClickListener(container, '.yd-sq-chip', (e, btn) => {
-            toggleMatchType(btn.dataset.selId, btn.dataset.type);
-        });
-
-        // Обработчик для edit
-        addClickListener(container, '[data-action="edit"]', (e, btn) => {
-            startInlineEdit(btn.dataset.selId);
-        });
-
-        // Обработчик для remove
+        // Delete action
         addClickListener(container, '[data-action="remove"]', (e, btn) => {
+            e.stopPropagation();
             removeSelectionById(btn.dataset.selId);
             updateUI();
+            updatePillCount();
+        });
+
+        // Cycle type on badge click
+        addClickListener(container, '[data-action="cycle-type"]', (e, btn) => {
+            e.stopPropagation();
+            cycleMatchType(btn.dataset.selId);
+        });
+
+        // Edit on text click
+        addClickListener(container, '[data-action="edit"]', (e, el) => {
+            e.stopPropagation();
+            startInlineEdit(el.dataset.selId);
         });
 
         container.scrollTop = container.scrollHeight;
+        updatePillCount();
+    }
+
+    // Циклическая смена типа соответствия
+    function cycleMatchType(id) {
+        const sel = selections.get(id);
+        if (!sel) return;
+
+        const types = sel.kind === 'phrase'
+            ? ['quote', 'bracket', 'strict']
+            : ['quote', 'strict'];
+
+        const currentIndex = types.indexOf(sel.matchType);
+        const nextIndex = (currentIndex + 1) % types.length;
+        sel.matchType = types[nextIndex];
+
+        syncLocalToGlobal();
+        updateHighlights();
+        renderSelectionList();
     }
 
     function renderSentHistory() {
@@ -4102,7 +4248,7 @@
                 --yd-danger-bg: #FFEBEE;
                 --yd-purple: #7c3aed;
                 --yd-purple-bg: #F3E5F5;
-                --yd-text: #222222;
+                --yd-text: #333333;
                 --yd-text-muted: #9CA3AF;
                 --yd-text-secondary: #6b7280;
                 --yd-bg: #ffffff;
@@ -4111,7 +4257,23 @@
                 --yd-border: #E1E4E8;
                 --yd-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
                 --yd-radius: 12px;
-                --yd-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+                --yd-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Roboto', system-ui, sans-serif;
+            }
+
+            /* ===== CUSTOM SCROLLBARS ===== */
+            #yd-sq-panel ::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+            }
+            #yd-sq-panel ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #yd-sq-panel ::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.15);
+                border-radius: 3px;
+            }
+            #yd-sq-panel ::-webkit-scrollbar-thumb:hover {
+                background: rgba(0, 0, 0, 0.25);
             }
 
             /* ===== ПАНЕЛЬ (Floating Layer) ===== */
@@ -4123,15 +4285,20 @@
                 border-radius: var(--yd-radius);
                 box-shadow: var(--yd-shadow);
                 font-size: 14px;
-                min-width: 320px;
-                max-width: 380px;
+                width: 340px;
+                height: 500px;
                 box-sizing: border-box;
-                overflow: visible;
+                overflow: hidden;
                 font-family: var(--yd-font);
                 color: var(--yd-text);
                 display: flex;
                 flex-direction: column;
-                max-height: 80vh;
+                transition: transform 0.2s ease, opacity 0.2s ease;
+            }
+
+            #yd-sq-panel.yd-sq-panel-minimizing {
+                transform: scale(0.5) translateY(50%);
+                opacity: 0;
             }
 
             #yd-sq-panel * { box-sizing: border-box; }
@@ -4144,9 +4311,9 @@
                 z-index: 9999999;
                 background: var(--yd-bg);
                 border: 1px solid var(--yd-border);
-                border-radius: 24px;
+                border-radius: 25px;
                 box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-                padding: 10px 16px;
+                padding: 12px 16px;
                 display: flex;
                 align-items: center;
                 gap: 8px;
@@ -4155,7 +4322,22 @@
                 font-size: 13px;
                 font-weight: 600;
                 color: var(--yd-text);
-                transition: all 0.2s ease;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                user-select: none;
+            }
+
+            .yd-sq-pill.yd-sq-pill-appear {
+                animation: yd-pill-appear 0.3s ease;
+            }
+
+            @keyframes yd-pill-appear {
+                from { transform: scale(0.5); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+
+            .yd-sq-pill.yd-sq-pill-dragging {
+                cursor: grabbing;
+                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
             }
 
             .yd-sq-pill:hover {
@@ -4164,7 +4346,7 @@
             }
 
             .yd-sq-pill-badge {
-                background: var(--yd-primary);
+                background: var(--yd-text-muted);
                 color: white;
                 font-size: 11px;
                 font-weight: 700;
@@ -4172,6 +4354,11 @@
                 border-radius: 10px;
                 min-width: 20px;
                 text-align: center;
+                transition: background 0.2s ease;
+            }
+
+            .yd-sq-pill-badge.has-items {
+                background: var(--yd-danger);
             }
 
             /* ===== RESIZE HANDLES ===== */
@@ -4298,13 +4485,18 @@
                 display: flex;
                 flex-direction: column;
                 min-height: 0;
+                overflow: hidden;
             }
 
             .yd-sq-section-header {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background: var(--yd-bg);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 8px;
+                padding: 8px 0;
             }
 
             .yd-sq-section-header-left {
@@ -4391,9 +4583,9 @@
             #yd-sq-panel .yd-sq-item {
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                padding: 10px 8px;
-                margin-bottom: 1px;
+                gap: 6px;
+                padding: 8px 10px;
+                margin-bottom: 0;
                 background: var(--yd-bg);
                 border: none;
                 border-radius: 0;
@@ -4405,90 +4597,94 @@
                 background: var(--yd-bg-hover);
             }
 
-            /* Markers (Badges before text) */
-            .yd-sq-marker {
-                font-size: 10px;
-                font-weight: 600;
-                padding: 2px 6px;
+            /* Delete button - крайний левый, hover-only */
+            .yd-sq-item-delete {
+                opacity: 0;
+                background: none;
+                border: none;
+                padding: 4px;
+                cursor: pointer;
+                color: var(--yd-text-muted);
                 border-radius: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.1s ease;
                 flex-shrink: 0;
             }
 
-            .yd-sq-marker-strict {
+            #yd-sq-panel .yd-sq-item:hover .yd-sq-item-delete {
+                opacity: 1;
+            }
+
+            .yd-sq-item-delete:hover {
+                color: var(--yd-danger);
+                background: var(--yd-danger-bg);
+            }
+
+            /* Badge Type - кликабельный для смены типа */
+            .yd-sq-badge-type {
+                font-size: 10px;
+                font-weight: 600;
+                padding: 3px 6px;
+                border-radius: 4px;
+                background: var(--yd-bg-hover);
+                color: var(--yd-text-muted);
+                cursor: pointer;
+                transition: all 0.1s ease;
+                flex-shrink: 0;
+                min-width: 26px;
+                text-align: center;
+                border: 1px solid transparent;
+            }
+
+            .yd-sq-badge-type:hover {
+                border-color: var(--yd-text-muted);
+            }
+
+            .yd-sq-badge-strict {
                 background: var(--yd-danger-bg);
                 color: var(--yd-danger);
             }
 
-            .yd-sq-marker-quote {
+            .yd-sq-badge-quote {
                 background: var(--yd-purple-bg);
                 color: var(--yd-purple);
             }
 
-            .yd-sq-marker-bracket {
+            .yd-sq-badge-bracket {
                 background: var(--yd-primary-bg);
                 color: var(--yd-primary);
             }
 
-            .yd-sq-marker-dot {
-                color: var(--yd-primary);
+            /* Item text - кликабельный для редактирования */
+            .yd-sq-item-text {
+                flex: 1;
                 font-size: 14px;
-                flex-shrink: 0;
-                width: 20px;
-                text-align: center;
+                color: var(--yd-text);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                cursor: text;
+                padding: 2px 4px;
+                border-radius: 4px;
+                transition: background 0.1s ease;
+            }
+
+            .yd-sq-item-text:hover {
+                background: rgba(0, 0, 0, 0.03);
             }
 
             .yd-sq-item-building-hint {
                 font-size: 10px;
                 color: var(--yd-primary);
                 margin-left: 4px;
-            }
-
-            /* Chip для операторов */
-            .yd-sq-item-chips {
-                display: flex;
-                gap: 4px;
                 flex-shrink: 0;
             }
 
-            .yd-sq-chip {
-                font-size: 10px;
-                font-weight: 600;
-                padding: 2px 6px;
-                border-radius: 4px;
-                background: var(--yd-bg-hover);
-                color: var(--yd-text-secondary);
-                cursor: pointer;
-                transition: all 0.15s ease;
-                border: 1px solid transparent;
-            }
-
-            .yd-sq-chip:hover {
-                background: var(--yd-primary-bg);
-                color: var(--yd-primary);
-            }
-
-            .yd-sq-chip.active {
-                background: var(--yd-primary-bg);
-                color: var(--yd-primary);
-                border-color: var(--yd-primary);
-            }
-
             /* Item states */
-            #yd-sq-panel .yd-sq-item-phrase {
-                background: var(--yd-purple-bg);
-            }
-
             #yd-sq-panel .yd-sq-item-building {
                 background: var(--yd-primary-bg);
-                border-left: 3px solid var(--yd-primary);
-            }
-
-            #yd-sq-panel .yd-sq-item-sent {
-                opacity: 0.6;
-            }
-
-            #yd-sq-panel .yd-sq-item-imported {
-                opacity: 0.7;
             }
 
             #yd-sq-panel .yd-sq-item-deleted {
@@ -5240,6 +5436,7 @@
     }
 
 })();
+
 
 
 
