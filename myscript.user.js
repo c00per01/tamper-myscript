@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.122.1
+// @version 0.123.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2104,46 +2104,106 @@
         const panel = document.createElement('div');
         panel.id = 'yd-sq-panel';
         panel.innerHTML = `
+            <!-- Header -->
             <div class="yd-sq-header" id="yd-sq-panel-header">
-                <span>📝 Минус-слова</span>
-                <button id="yd-sq-panel-toggle" class="yd-sq-toggle">−</button>
+                <div class="yd-sq-header-left">
+                    <svg class="yd-sq-logo" width="20" height="20" viewBox="0 0 100 100">
+                        <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
+                        <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+                        <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
+                        <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
+                    </svg>
+                    <span class="yd-sq-title">YD Helper</span>
+                </div>
+                <div class="yd-sq-header-right">
+                    <button id="yd-sq-help-btn" class="yd-sq-icon-btn" title="Горячие клавиши">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </button>
+                    <button id="yd-sq-panel-toggle" class="yd-sq-icon-btn" title="Свернуть">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
+            <!-- Body -->
             <div id="yd-sq-panel-body">
-                <div class="yd-sq-section">
-                    <div class="yd-sq-section-title">
-                        ✓ Выбрано (<span id="yd-sq-global-count">0</span>)
+                <!-- Selected Words Section -->
+                <div class="yd-sq-section yd-sq-section-main">
+                    <div class="yd-sq-section-header">
+                        <span class="yd-sq-section-label">ВЫБРАНО</span>
+                        <span id="yd-sq-global-count" class="yd-sq-badge">0</span>
                     </div>
                     <div id="yd-sq-list" class="yd-sq-list"></div>
                 </div>
 
-                <div class="yd-sq-section">
-                    <div class="yd-sq-section-title">
-                        📥 Уже в кампании (<span id="yd-sq-imported-count">0</span>)
-                        <button id="yd-sq-imported-toggle" class="yd-sq-expand-btn">▼</button>
+                <!-- Already in Campaign (Accordion) -->
+                <div id="yd-sq-imported-section" class="yd-sq-section yd-sq-accordion" style="display:none;">
+                    <div class="yd-sq-accordion-header" id="yd-sq-imported-toggle">
+                        <span class="yd-sq-section-label">УЖЕ ДОБАВЛЕНО</span>
+                        <span id="yd-sq-imported-count" class="yd-sq-badge yd-sq-badge-green">0</span>
+                        <svg class="yd-sq-accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
                     </div>
-                    <div id="yd-sq-imported-list" class="yd-sq-list" style="display:none;"></div>
+                    <div id="yd-sq-imported-list" class="yd-sq-list yd-sq-accordion-content"></div>
                 </div>
 
-                <div class="yd-sq-section yd-sq-controls">
-                    <button id="yd-sq-load-clipboard" class="yd-sq-btn-secondary yd-sq-btn-import">📋 Импорт</button>
-                    <button id="yd-sq-copy-imported" class="yd-sq-btn-secondary yd-sq-btn-copy-imported">📋 Копировать</button>
-                    <button id="yd-sq-clear-imported" class="yd-sq-btn-secondary yd-sq-btn-clear-imported">🗑 Удалить</button>
+                <!-- Toolbar -->
+                <div class="yd-sq-toolbar">
+                    <button id="yd-sq-load-clipboard" class="yd-sq-tool-btn" title="Импорт из буфера обмена">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </button>
+                    <button id="yd-sq-copy-imported" class="yd-sq-tool-btn" title="Копировать в буфер">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                    </button>
+                    <button id="yd-sq-clear-all" class="yd-sq-tool-btn" title="Очистить всё">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                    <div class="yd-sq-toolbar-spacer"></div>
+                    <button id="yd-sq-clear-imported" class="yd-sq-tool-btn yd-sq-tool-btn-danger" title="Очистить импортированные">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="15" y1="9" x2="9" y2="15"/>
+                            <line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                    </button>
                 </div>
 
-                <div class="yd-sq-section yd-sq-footer-buttons">
-                    <button id="yd-sq-send" class="yd-sq-btn-primary">✓ Отправить</button>
-                    <button id="yd-sq-clear-all" class="yd-sq-btn-secondary">✕ Очистить выбранные</button>
-                </div>
+                <!-- Primary CTA -->
+                <button id="yd-sq-send" class="yd-sq-btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    <span>Отправить в Директ</span>
+                </button>
 
-                <div id="yd-sq-last-send-info" class="yd-sq-last-send-info" style="display:none;"></div>
+                <!-- Status -->
+                <div id="yd-sq-last-send-info" class="yd-sq-status"></div>
+            </div>
 
-                <div class="yd-sq-hint">
-                    <strong>Горячие клавиши:</strong><br>
-                    Клик — мягкое совпадение<br>
-                    Alt+клик — строгое (!)<br>
-                    2×клик — режим фразы
-                </div>
+            <!-- Help Tooltip (hidden by default) -->
+            <div id="yd-sq-help-tooltip" class="yd-sq-help-tooltip" style="display:none;">
+                <div class="yd-sq-help-title">Горячие клавиши</div>
+                <div class="yd-sq-help-row"><kbd>Клик</kbd> — мягкое совпадение</div>
+                <div class="yd-sq-help-row"><kbd>Alt+Клик</kbd> — строгое (!)</div>
+                <div class="yd-sq-help-row"><kbd>2×Клик</kbd> — режим фразы</div>
             </div>
 
             <!-- Resize handles -->
@@ -2166,27 +2226,42 @@
         panel.style.top = panelPosition.top;
 
         // Обработчики
+        // Toggle panel
         document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
             const body = document.getElementById('yd-sq-panel-body');
+            const helpTooltip = document.getElementById('yd-sq-help-tooltip');
             const btn = document.getElementById('yd-sq-panel-toggle');
             if (body.style.display === 'none') {
                 body.style.display = '';
-                btn.textContent = '−';
+                helpTooltip.style.display = 'none';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
             } else {
                 body.style.display = 'none';
-                btn.textContent = '+';
+                helpTooltip.style.display = 'none';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
             }
         });
 
+        // Help tooltip toggle
+        document.getElementById('yd-sq-help-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tooltip = document.getElementById('yd-sq-help-tooltip');
+            tooltip.style.display = tooltip.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Accordion for imported
         document.getElementById('yd-sq-imported-toggle').addEventListener('click', () => {
+            const section = document.getElementById('yd-sq-imported-section');
             const list = document.getElementById('yd-sq-imported-list');
-            const btn = document.getElementById('yd-sq-imported-toggle');
-            if (list.style.display === 'none') {
+            const arrow = section.querySelector('.yd-sq-accordion-arrow');
+
+            section.classList.toggle('yd-sq-accordion-open');
+            if (section.classList.contains('yd-sq-accordion-open')) {
                 list.style.display = '';
-                btn.textContent = '▲';
+                arrow.style.transform = 'rotate(180deg)';
             } else {
                 list.style.display = 'none';
-                btn.textContent = '▼';
+                arrow.style.transform = 'rotate(0deg)';
             }
         });
 
@@ -2198,7 +2273,7 @@
 
         document.getElementById('yd-sq-send').addEventListener('click', showSendConfirmDialog);
 
-        // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - REMOVED, using delegation
+        // document.getElementById('yd-sq-clear-all').addEventListener('click', ...) - handled via delegation
 
         makePanelDraggable();
         makePanelResizable();
@@ -2374,52 +2449,73 @@
         countIndicator.textContent = selections.size;
 
         if (selections.size === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">Пока ничего не выбрано</div>';
+            container.innerHTML = `
+                <div class="yd-sq-empty">
+                    <div class="yd-sq-empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 100 100" opacity="0.3">
+                            <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="6"/>
+                            <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="8" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="yd-sq-empty-text">Кликните по слову в таблице</div>
+                    <div class="yd-sq-empty-hint">2×клик — для создания фразы</div>
+                </div>
+            `;
             return;
         }
 
-        // Убрана сортировка по pageKey - все минусы в порядке добавления
         const items = Array.from(selections.values());
 
         container.innerHTML = items.map(sel => {
             const isBuilding = sel._building;
 
-            // Убраны классы yd-sq-item-foreign и yd-sq-item-unassigned для единообразия
             let classes = 'yd-sq-item';
             if (isBuilding) classes += ' yd-sq-item-building';
+            if (sel.kind === 'phrase') classes += ' yd-sq-item-phrase';
+            if (sel.matchType === 'strict') classes += ' yd-sq-item-strict';
 
-            // Убраны подсказки о странице - все элементы одинаковые
-            const pageHint = isBuilding ? `<span class="yd-sq-page-hint">(Дб.клик...)</span>` : '';
+            // Определяем активный тип
+            const isQuote = sel.matchType === 'quote';
+            const isBracket = sel.matchType === 'bracket';
+            const isStrict = sel.matchType === 'strict';
 
             return `
                 <div class="${classes}" data-sel-id="${escapeHtml(sel.id)}">
-                    <div class="yd-sq-left">
-                        <button class="type-btn ${sel.matchType === 'quote' ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}">" "</button>
-                        ${sel.kind === 'phrase' ? `<button class="type-btn ${sel.matchType === 'bracket' ? 'active' : ''}" data-type="bracket" data-sel-id="${escapeHtml(sel.id)}">[ ]</button>` : ''}
-                        <button class="type-btn ${sel.matchType === 'strict' ? 'active' : ''}" data-type="strict" data-sel-id="${escapeHtml(sel.id)}">!</button>
-                    </div>
-                    <div class="yd-sq-mid">
-                        <span class="yd-sq-item-text" data-sel-id-text="${escapeHtml(sel.id)}">${escapeHtml(sel.display)}</span>
-                        ${pageHint}
-                    </div>
-                    <div class="yd-sq-right">
-                        <button class="yd-sq-edit" data-sel-id="${escapeHtml(sel.id)}" title="Редактировать">✎</button>
-                        <button class="yd-sq-item-remove" data-sel-id="${escapeHtml(sel.id)}" title="Удалить">×</button>
+                    <span class="yd-sq-item-text" data-sel-id-text="${escapeHtml(sel.id)}">${escapeHtml(sel.display)}</span>
+                    ${isBuilding ? '<span style="font-size:10px;color:var(--yd-primary);margin-left:4px;">(building...)</span>' : ''}
+                    <div class="yd-sq-item-actions">
+                        <button class="yd-sq-item-action yd-sq-chip ${isQuote ? 'active' : ''}" data-type="quote" data-sel-id="${escapeHtml(sel.id)}" title='Фразовое "&nbsp;"'>""</button>
+                        ${sel.kind === 'phrase' ? `<button class="yd-sq-item-action yd-sq-chip ${isBracket ? 'active' : ''}" data-type="bracket" data-sel-id="${escapeHtml(sel.id)}" title="Точное [&nbsp;]">[]</button>` : ''}
+                        <button class="yd-sq-item-action yd-sq-chip ${isStrict ? 'active' : ''}" data-type="strict" data-sel-id="${escapeHtml(sel.id)}" title="Строгое !">!</button>
+                        <button class="yd-sq-item-action" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="Редактировать">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="yd-sq-item-action danger" data-action="remove" data-sel-id="${escapeHtml(sel.id)}" title="Удалить">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             `;
         }).join('');
 
-        // Обработчики
-        addClickListener(container, '.type-btn', (e, btn) => {
+        // Обработчики для chips (операторы)
+        addClickListener(container, '.yd-sq-chip', (e, btn) => {
             toggleMatchType(btn.dataset.selId, btn.dataset.type);
         });
 
-        addClickListener(container, '.yd-sq-edit', (e, btn) => {
+        // Обработчик для edit
+        addClickListener(container, '[data-action="edit"]', (e, btn) => {
             startInlineEdit(btn.dataset.selId);
         });
 
-        addClickListener(container, '.yd-sq-item-remove', (e, btn) => {
+        // Обработчик для remove
+        addClickListener(container, '[data-action="remove"]', (e, btn) => {
             removeSelectionById(btn.dataset.selId);
             updateUI();
         });
@@ -2469,51 +2565,57 @@
     }
 
     function renderImportedMinuses() {
+        const section = document.getElementById('yd-sq-imported-section');
         const container = document.getElementById('yd-sq-imported-list');
         const countIndicator = document.getElementById('yd-sq-imported-count');
 
         const activeCount = importedMinuses.filter(imp => !imp.deleted).length;
         countIndicator.textContent = activeCount;
 
+        // Скрываем секцию если нет импортированных
         if (importedMinuses.length === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">Минусы не загружены</div>';
+            section.style.display = 'none';
             return;
         }
 
+        section.style.display = '';
+
         container.innerHTML = importedMinuses.map((imp, idx) => {
-            const date = new Date(imp.importedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
             const isDeleted = imp.deleted;
-            const isStrict = imp.raw.startsWith('!');  // Проверяем строгое соответствие
+            const isStrict = imp.raw.startsWith('!');
             const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}${isStrict ? ' yd-sq-item-strict' : ''}`;
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
-                    <div class="yd-sq-left">
-                        <span class="yd-sq-import-icon">${isDeleted ? '🗑' : '📥'}</span>
-                    </div>
-                    <div class="yd-sq-mid">
-                        <span class="yd-sq-item-text">${escapeHtml(imp.raw)}</span>
-                        <span class="yd-sq-page-hint">загружено ${date}</span>
-                    </div>
-                    <div class="yd-sq-right">
-                        <button class="yd-sq-item-toggle-delete" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
-                            ${isDeleted ? '↶' : '×'}
+                    <span class="yd-sq-item-text">${escapeHtml(imp.raw)}</span>
+                    <div class="yd-sq-item-actions">
+                        <button class="yd-sq-item-action ${isDeleted ? '' : 'danger'}" data-action="toggle-delete" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
+                            ${isDeleted ? `
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                    <path d="M3 3v5h5"/>
+                                </svg>
+                            ` : `
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            `}
                         </button>
                     </div>
                 </div>
             `;
         }).join('');
 
-        addClickListener(container, '.yd-sq-item-toggle-delete', (e, btn) => {
+        addClickListener(container, '[data-action="toggle-delete"]', (e, btn) => {
             const idx = parseInt(btn.dataset.impIdx);
             const imp = importedMinuses[idx];
 
-            // Переключаем флаг deleted
             imp.deleted = !imp.deleted;
 
             syncLocalToGlobal();
-            updateHighlights(); // Обновляем подсветку в таблице
-            renderImportedMinuses(); // Перерисовываем список
+            updateHighlights();
+            renderImportedMinuses();
         });
     }
 
@@ -3922,224 +4024,468 @@
         const style = document.createElement('style');
         style.id = 'yd-sq-styles';
         style.textContent = `
-            /* ПАНЕЛЬ */
+            /* ===== ОСНОВНЫЕ ПЕРЕМЕННЫЕ ===== */
+            :root {
+                --yd-primary: #205598;
+                --yd-primary-light: #2F6FDB;
+                --yd-primary-bg: #E3F2FD;
+                --yd-accent: #E46924;
+                --yd-success: #28a745;
+                --yd-success-bg: #E8F5E9;
+                --yd-danger: #dc3545;
+                --yd-purple: #7c3aed;
+                --yd-purple-bg: #F3E5F5;
+                --yd-text: #1a1a1a;
+                --yd-text-secondary: #6b7280;
+                --yd-bg: #ffffff;
+                --yd-bg-hover: #F5F7FA;
+                --yd-border: rgba(0,0,0,0.06);
+                --yd-shadow: 0 4px 24px rgba(0,0,0,0.08);
+                --yd-radius: 12px;
+                --yd-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+            }
+
+            /* ===== ПАНЕЛЬ ===== */
             #yd-sq-panel {
                 position: fixed;
                 z-index: 9999999;
-                background: #fff;
-                border: 1px solid rgba(0,0,0,0.08);
-                border-radius: 8px;
-                box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-                font-size: 12px;
-                min-width: 320px;
-                max-width: 450px;
+                background: var(--yd-bg);
+                border: 1px solid var(--yd-border);
+                border-radius: var(--yd-radius);
+                box-shadow: var(--yd-shadow);
+                font-size: 13px;
+                min-width: 300px;
+                max-width: 400px;
                 box-sizing: border-box;
                 overflow: visible;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                font-family: var(--yd-font);
+                color: var(--yd-text);
             }
 
             #yd-sq-panel * { box-sizing: border-box; }
 
-            /* RESIZE HANDLES */
+            /* ===== RESIZE HANDLES ===== */
             .yd-sq-resize-handle {
                 position: absolute;
                 background: transparent;
                 z-index: 10;
             }
+            .yd-sq-resize-n { top: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+            .yd-sq-resize-s { bottom: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+            .yd-sq-resize-e { top: 10px; bottom: 10px; right: -4px; width: 8px; cursor: ew-resize; }
+            .yd-sq-resize-w { top: 10px; bottom: 10px; left: -4px; width: 8px; cursor: ew-resize; }
+            .yd-sq-resize-ne { top: -4px; right: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+            .yd-sq-resize-nw { top: -4px; left: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+            .yd-sq-resize-se { bottom: -4px; right: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+            .yd-sq-resize-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+            .yd-sq-resize-handle:hover { background: rgba(47, 111, 219, 0.15); }
 
-            /* Top and Bottom edges */
-            .yd-sq-resize-n {
-                top: -4px;
-                left: 10px;
-                right: 10px;
-                height: 8px;
-                cursor: ns-resize;
-            }
-            .yd-sq-resize-s {
-                bottom: -4px;
-                left: 10px;
-                right: 10px;
-                height: 8px;
-                cursor: ns-resize;
-            }
-
-            /* Left and Right edges */
-            .yd-sq-resize-e {
-                top: 10px;
-                bottom: 10px;
-                right: -4px;
-                width: 8px;
-                cursor: ew-resize;
-            }
-            .yd-sq-resize-w {
-                top: 10px;
-                bottom: 10px;
-                left: -4px;
-                width: 8px;
-                cursor: ew-resize;
-            }
-
-            /* Corners */
-            .yd-sq-resize-ne {
-                top: -4px;
-                right: -4px;
-                width: 14px;
-                height: 14px;
-                cursor: nesw-resize;
-            }
-            .yd-sq-resize-nw {
-                top: -4px;
-                left: -4px;
-                width: 14px;
-                height: 14px;
-                cursor: nwse-resize;
-            }
-            .yd-sq-resize-se {
-                bottom: -4px;
-                right: -4px;
-                width: 14px;
-                height: 14px;
-                cursor: nwse-resize;
-            }
-            .yd-sq-resize-sw {
-                bottom: -4px;
-                left: -4px;
-                width: 14px;
-                height: 14px;
-                cursor: nesw-resize;
-            }
-
-            /* Visual indicator on hover */
-            .yd-sq-resize-handle:hover {
-                background: rgba(74, 144, 226, 0.2);
-            }
-
+            /* ===== HEADER ===== */
             #yd-sq-panel .yd-sq-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                font-weight: 600;
-                padding: 10px 12px;
-                border-bottom: 1px solid #eee;
-                background: linear-gradient(to bottom, #fafafa, #f5f5f5);
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--yd-border);
+                background: var(--yd-bg);
                 cursor: grab;
                 user-select: none;
             }
 
-            #yd-sq-panel .yd-sq-toggle {
+            .yd-sq-header-left {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .yd-sq-logo {
+                flex-shrink: 0;
+            }
+
+            .yd-sq-title {
+                font-weight: 600;
+                font-size: 14px;
+                color: var(--yd-text);
+            }
+
+            .yd-sq-header-right {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .yd-sq-icon-btn {
                 background: none;
                 border: none;
-                font-size: 16px;
+                padding: 6px;
                 cursor: pointer;
-                padding: 0 4px;
-                color: #666;
-                line-height: 1;
-            }
-
-            #yd-sq-panel-body {
-                padding: 10px 12px 12px;
-                max-height: 600px;
-                overflow-y: auto;
-            }
-
-            #yd-sq-panel .yd-sq-section {
-                margin-bottom: 10px;
-            }
-
-            #yd-sq-panel .yd-sq-section-title {
-                font-weight: 600;
-                margin-bottom: 8px;
-                color: #333;
-                font-size: 13px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-
-            #yd-sq-panel .yd-sq-list {
-                max-height: 250px;
-                overflow-y: auto;
-                border: 1px solid #e0e0e0;
+                color: var(--yd-text-secondary);
                 border-radius: 6px;
-                padding: 8px;
-                background: #fafafa;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-icon-btn:hover {
+                background: var(--yd-bg-hover);
+                color: var(--yd-text);
+            }
+
+            /* ===== BODY ===== */
+            #yd-sq-panel-body {
+                padding: 12px 14px 14px;
+                max-height: 550px;
+                overflow-y: auto;
+            }
+
+            /* ===== SECTIONS ===== */
+            .yd-sq-section {
+                margin-bottom: 12px;
+            }
+
+            .yd-sq-section-main {
+                margin-bottom: 16px;
+            }
+
+            .yd-sq-section-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 8px;
+            }
+
+            .yd-sq-section-label {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--yd-text-secondary);
+                letter-spacing: 0.5px;
+            }
+
+            .yd-sq-badge {
+                background: var(--yd-primary);
+                color: white;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 2px 8px;
+                border-radius: 10px;
+                min-width: 20px;
+                text-align: center;
+            }
+
+            .yd-sq-badge-green {
+                background: var(--yd-success);
+            }
+
+            /* ===== LIST ===== */
+            #yd-sq-panel .yd-sq-list {
+                max-height: 220px;
+                overflow-y: auto;
+                background: var(--yd-bg);
+                border-radius: 8px;
                 scroll-behavior: smooth;
             }
 
             #yd-sq-panel .yd-sq-empty {
-                padding: 16px;
+                padding: 32px 16px;
                 text-align: center;
-                color: #999;
-                font-size: 12px;
+                color: var(--yd-text-secondary);
+                font-size: 13px;
             }
 
+            .yd-sq-empty-icon {
+                opacity: 0.2;
+                margin-bottom: 12px;
+            }
+
+            .yd-sq-empty-text {
+                margin-bottom: 4px;
+            }
+
+            .yd-sq-empty-hint {
+                font-size: 11px;
+                opacity: 0.7;
+            }
+            /* ===== ITEMS ===== */
             #yd-sq-panel .yd-sq-item {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 8px;
+                padding: 8px 10px;
                 border-radius: 6px;
-                margin-bottom: 6px;
-                background: #fff;
-                border: 1px solid #e8e8e8;
-                transition: all 0.2s;
+                margin-bottom: 2px;
+                background: transparent;
+                border: none;
+                transition: background 0.15s ease;
+                position: relative;
             }
 
             #yd-sq-panel .yd-sq-item:hover {
-                border-color: #ccc;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+                background: var(--yd-bg-hover);
             }
 
-            #yd-sq-panel .yd-sq-item-foreign {
-                background: #f9f9f9;
-                opacity: 0.8;
+            /* Chip для операторов */
+            .yd-sq-item-chips {
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
             }
 
-            #yd-sq-panel .yd-sq-item-unassigned {
-                background: #fff8f8;
-                border-color: #e0b0b0;
+            .yd-sq-chip {
+                font-size: 10px;
+                font-weight: 600;
+                padding: 2px 6px;
+                border-radius: 4px;
+                background: var(--yd-bg-hover);
+                color: var(--yd-text-secondary);
+                cursor: pointer;
+                transition: all 0.15s ease;
+                border: 1px solid transparent;
+            }
+
+            .yd-sq-chip:hover {
+                background: var(--yd-primary-bg);
+                color: var(--yd-primary);
+            }
+
+            .yd-sq-chip.active {
+                background: var(--yd-primary-bg);
+                color: var(--yd-primary);
+                border-color: var(--yd-primary);
+            }
+
+            /* Item states */
+            #yd-sq-panel .yd-sq-item-phrase {
+                background: var(--yd-purple-bg);
             }
 
             #yd-sq-panel .yd-sq-item-building {
-                background: #e2f0ff;
-                border-color: #7da9ff;
+                background: var(--yd-primary-bg);
+                border-left: 3px solid var(--yd-primary);
             }
 
             #yd-sq-panel .yd-sq-item-sent {
-                background: #f5f5f5;
-                opacity: 0.7;
-                border-color: #ddd;
+                opacity: 0.6;
             }
 
             #yd-sq-panel .yd-sq-item-imported {
-                background: #fafafa;
-                border: 1px dashed #ccc;
-                opacity: 0.75;
+                opacity: 0.7;
             }
 
             #yd-sq-panel .yd-sq-item-deleted {
-                opacity: 0.5;
-                background: #f5f5f5;
+                opacity: 0.4;
             }
 
             #yd-sq-panel .yd-sq-item-deleted .yd-sq-item-text {
                 text-decoration: line-through;
-                color: #999;
             }
 
-            /* Strict-минусы: тонкое подчеркивание (UI гайды Google/Apple) */
-            #yd-sq-panel .yd-sq-item-strict .yd-sq-item-text {
-                text-decoration: underline dotted rgba(0,0,0,0.3);
-                text-decoration-thickness: 1px;
-                text-underline-offset: 2px;
+            #yd-sq-panel .yd-sq-item-strict .yd-sq-item-text::before {
+                content: "!";
+                font-weight: 700;
+                color: var(--yd-danger);
+                margin-right: 4px;
             }
 
-            #yd-sq-panel .yd-sq-page-hint {
-                font-size: 10px;
-                color: #999;
-                margin-left: 5px;
+            /* Item text */
+            .yd-sq-item-text {
+                flex: 1;
+                font-size: 13px;
+                color: var(--yd-text);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
+            /* Item actions - hidden by default */
+            .yd-sq-item-actions {
+                display: flex;
+                gap: 4px;
+                opacity: 0;
+                transition: opacity 0.15s ease;
+            }
+
+            #yd-sq-panel .yd-sq-item:hover .yd-sq-item-actions {
+                opacity: 1;
+            }
+
+            .yd-sq-item-action {
+                background: none;
+                border: none;
+                padding: 4px;
+                cursor: pointer;
+                color: var(--yd-text-secondary);
+                border-radius: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-item-action:hover {
+                background: var(--yd-bg-hover);
+                color: var(--yd-text);
+            }
+
+            .yd-sq-item-action.danger:hover {
+                color: var(--yd-danger);
+                background: rgba(220, 53, 69, 0.1);
+            }
+
+            /* ===== ACCORDION ===== */
+            .yd-sq-accordion {
+                border-top: 1px solid var(--yd-border);
+                padding-top: 12px;
+            }
+
+            .yd-sq-accordion-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 0;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-accordion-header:hover {
+                opacity: 0.8;
+            }
+
+            .yd-sq-accordion-arrow {
+                color: var(--yd-text-secondary);
+                transition: transform 0.2s ease;
+                margin-left: auto;
+            }
+
+            .yd-sq-accordion-content {
+                display: none;
+                padding-top: 8px;
+            }
+
+            .yd-sq-accordion-open .yd-sq-accordion-content {
+                display: block;
+            }
+
+            /* ===== TOOLBAR ===== */
+            .yd-sq-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                padding: 8px 0;
+                border-top: 1px solid var(--yd-border);
+                margin-top: 8px;
+            }
+
+            .yd-sq-toolbar-spacer {
+                flex: 1;
+            }
+
+            .yd-sq-tool-btn {
+                background: none;
+                border: none;
+                padding: 8px;
+                cursor: pointer;
+                color: var(--yd-text-secondary);
+                border-radius: 6px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            }
+
+            .yd-sq-tool-btn:hover {
+                background: var(--yd-bg-hover);
+                color: var(--yd-text);
+            }
+
+            .yd-sq-tool-btn-danger:hover {
+                color: var(--yd-danger);
+                background: rgba(220, 53, 69, 0.1);
+            }
+
+            /* ===== PRIMARY CTA ===== */
+            #yd-sq-panel .yd-sq-btn-primary {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                width: 100%;
+                padding: 12px 16px;
+                background: var(--yd-primary);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                margin-top: 8px;
+            }
+
+            #yd-sq-panel .yd-sq-btn-primary:hover {
+                background: var(--yd-primary-light);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3);
+            }
+
+            #yd-sq-panel .yd-sq-btn-primary:active {
+                transform: translateY(0);
+            }
+
+            #yd-sq-panel .yd-sq-btn-primary:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+                transform: none;
+                box-shadow: none;
+            }
+
+            /* ===== STATUS ===== */
+            .yd-sq-status {
+                font-size: 11px;
+                color: var(--yd-text-secondary);
+                text-align: center;
+                padding: 8px 0 0;
+            }
+
+            .yd-sq-status-success {
+                color: var(--yd-success);
+            }
+
+            /* ===== HELP TOOLTIP ===== */
+            .yd-sq-help-tooltip {
+                position: absolute;
+                top: 48px;
+                right: 10px;
+                background: var(--yd-text);
+                color: white;
+                padding: 12px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                z-index: 100;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            }
+
+            .yd-sq-help-title {
+                font-weight: 600;
+                margin-bottom: 8px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.2);
+            }
+
+            .yd-sq-help-row {
+                margin-bottom: 4px;
+            }
+
+            .yd-sq-help-tooltip kbd {
+                background: rgba(255,255,255,0.2);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: inherit;
+                font-size: 11px;
+                margin-right: 4px;
+            }
+
+            /* Legacy compatibility */
             #yd-sq-panel .yd-sq-left,
             #yd-sq-panel .yd-sq-right {
                 display: flex;
@@ -4344,56 +4690,66 @@
             }
 
             .yd-word:hover {
-                background: rgba(74, 144, 226, 0.1);
+                background: rgba(47, 111, 219, 0.1);
             }
 
             /* Отключаем hover для импортированных слов */
             .yd-imported-minus:hover {
-                background: rgba(0, 0, 0, 0.04) !important;
+                background: var(--yd-success-bg) !important;
             }
 
+            /* Одиночное слово - синий */
             .yd-selected-soft {
-                background: #fff3bf !important;
+                background: var(--yd-primary-bg) !important;
+                border: 1px solid var(--yd-primary) !important;
+                border-radius: 2px;
             }
 
+            /* Строгое слово */
             .yd-selected-strict {
-                background: #ffd6d6 !important;
+                background: rgba(220, 53, 69, 0.15) !important;
+                border: 1px solid var(--yd-danger) !important;
+                border-radius: 2px;
             }
 
+            /* Фраза - фиолетовый */
             .yd-selected-phrase {
-                background: #cce5ff !important;
+                background: var(--yd-purple-bg) !important;
+                border: 1px solid var(--yd-purple) !important;
+                border-radius: 2px;
             }
 
-            /* Строящаяся фраза - стиль из Малый код.txt */
+            /* Строящаяся фраза */
             .yd-phrase-building {
-                background: #e2f0ff !important;
-                outline: 2px dashed #7da9ff;
-                outline-offset: 1px;
+                background: var(--yd-primary-bg) !important;
+                border: 2px dashed var(--yd-primary) !important;
+                border-radius: 2px;
                 animation: yd-phrase-blink 1.5s infinite ease-in-out;
             }
 
             @keyframes yd-phrase-blink {
-                0% { background-color: #e2f0ff; opacity: 1; }
-                50% { background-color: transparent; opacity: 0.3; }
-                100% { background-color: #e2f0ff; opacity: 1; }
+                0% { opacity: 1; }
+                50% { opacity: 0.6; }
+                100% { opacity: 1; }
             }
 
             .yd-primary-soft {
-                box-shadow: 0 0 0 2px #f0c200 inset;
+                box-shadow: 0 0 0 2px var(--yd-primary) inset;
                 font-weight: 600;
             }
 
             .yd-primary-strict {
-                box-shadow: 0 0 0 2px #d90000 inset;
-                background: #ffd6d6 !important;
+                box-shadow: 0 0 0 2px var(--yd-danger) inset;
+                background: rgba(220, 53, 69, 0.15) !important;
                 font-weight: 600;
             }
 
+            /* Уже добавлено - зелёный */
             .yd-imported-minus {
-                background: rgba(0, 0, 0, 0.04) !important;
-                color: #aaa !important;
+                background: var(--yd-success-bg) !important;
+                color: var(--yd-text-secondary) !important;
                 text-decoration: none !important;
-                opacity: 0.7;
+                opacity: 0.8;
                 cursor: default !important;
                 pointer-events: none !important;
             }
@@ -4676,6 +5032,7 @@
     }
 
 })();
+
 
 
 
