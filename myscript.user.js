@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.129.1
+// @version 0.130.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2245,6 +2245,13 @@
             const pill = document.getElementById('yd-sq-pill');
             const helpTooltip = document.getElementById('yd-sq-help-tooltip');
 
+            console.log('[YD-SQ] 🔽 СВОРАЧИВАНИЕ: начало');
+
+            if (!pill) {
+                console.error('[YD-SQ] ❌ Pill не найден!');
+                return;
+            }
+
             helpTooltip.style.display = 'none';
 
             // Анимация сворачивания
@@ -2252,9 +2259,19 @@
             setTimeout(() => {
                 panel.style.display = 'none';
                 panel.classList.remove('yd-sq-panel-minimizing');
+
+                // Показываем pill
                 pill.style.display = 'flex';
+                pill.style.opacity = '1';
+                pill.style.visibility = 'visible';
+
                 pill.classList.add('yd-sq-pill-appear');
                 setTimeout(() => pill.classList.remove('yd-sq-pill-appear'), 300);
+
+                console.log('[YD-SQ] 🔽 СВОРАЧИВАНИЕ: pill показан', {
+                    display: pill.style.display,
+                    inDOM: document.body.contains(pill)
+                });
             }, 200);
 
             // Обновляем счётчик на pill
@@ -2263,8 +2280,13 @@
 
         // Pill click -> Restore panel
         document.getElementById('yd-sq-pill').addEventListener('click', (e) => {
+            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: клик по pill');
+
             // Игнорируем если это drag
-            if (e.target.closest('.yd-sq-pill').classList.contains('yd-sq-pill-dragging')) return;
+            if (e.target.closest('.yd-sq-pill').classList.contains('yd-sq-pill-dragging')) {
+                console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: пропуск (drag)');
+                return;
+            }
 
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
@@ -2277,6 +2299,12 @@
             panel.style.display = 'flex';
             panel.style.opacity = '1';
             panel.style.transform = 'none';
+            panel.style.visibility = 'visible';
+
+            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель показана', {
+                panelDisplay: panel.style.display,
+                panelInDOM: document.body.contains(panel)
+            });
         });
 
         // Pill drag & drop
@@ -3504,13 +3532,15 @@
             log.modal('waitForResultPopupClosed: начинаем ожидание');
             let checkCount = 0;
             const maxChecks = 120; // 60 секунд макс
+            let popupWasFound = false; // Флаг - был ли popup найден хотя бы раз
 
             const checkClosed = () => {
                 checkCount++;
 
                 // Проверяем - не закрылось ли модальное окно (отмена пользователем)
+                // НО только если popup ещё НЕ появлялся (иначе это нормальное закрытие)
                 const modal = findMinusModal();
-                if (!modal && checkCount > 2) {
+                if (!modal && checkCount > 4 && !popupWasFound) {
                     log.warn('Модальное окно закрыто (возможно отмена)');
                     isSending = false;
                     resolve();
@@ -3520,6 +3550,7 @@
                 const popup = findResultPopup();
 
                 if (popup) {
+                    popupWasFound = true; // Запоминаем что popup появился
                     // Попап найден - пытаемся закрыть
                     log.modal('Результат найден, tryCloseResultPopup');
                     const closed = tryCloseResultPopup();
@@ -5617,6 +5648,7 @@
     }
 
 })();
+
 
 
 
