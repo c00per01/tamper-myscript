@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.126.2
+// @version 0.127.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1959,96 +1959,72 @@
 
 
     async function importMinusesFromClipboard() {
-        const btn = document.getElementById('yd-sq-load-clipboard');
+        try {
+            const text = await navigator.clipboard.readText();
+            const newPhrases = normalizeMinusInput(text);
 
-        // Если кнопка уже в режиме подтверждения
-        if (btn && btn.dataset.confirming === 'true') {
-            // Второе нажатие - выполняем импорт
-            try {
-                const text = await navigator.clipboard.readText();
-                const newPhrases = normalizeMinusInput(text);
+            if (newPhrases.size === 0) {
+                showYdsqNotification('В буфере не найдено минусов', 'warn');
+                return { success: false, count: 0 };
+            }
 
-                if (newPhrases.size === 0) {
-                    showYdsqNotification('В буфере не найдено минусов', 'warn');
-                    // Сброс кнопки
-                    btn.textContent = '📋 Загрузить из буфера';
-                    delete btn.dataset.confirming;
-                    btn.style.background = '';
-                    btn.style.color = '';
-                    return;
-                }
+            // Собираем существующие для проверки дубликатов
+            const existingRaw = new Set(importedMinuses.map(imp => imp.raw.toLowerCase().trim()));
 
-                const newItems = [];
-                for (const phrase of newPhrases) {
-                    if (!importedMinuses.some(imp => imp.raw === phrase)) {
-                        newItems.push({
-                            id: `imp:${Date.now()}_${Math.random()}`,
-                            raw: phrase,
-                            importedAt: Date.now()
-                        });
-                    }
-                }
-
-                if (newItems.length > 0) {
-                    importedMinuses = [...importedMinuses, ...newItems];
-                    syncLocalToGlobal();
-                    rebuildCampaignMinusList();
-                    updateHighlights();
-                    resetClearAllButton();
-                    updateUI();
-                    showYdsqNotification(`Добавлено ${newItems.length} минусов в "В кампании"`, 'success');
-                } else {
-                    showYdsqNotification('Все минусы уже есть в списке', 'info');
-                }
-
-                // Сброс кнопки
-                btn.textContent = '📋 Загрузить из буфера';
-                delete btn.dataset.confirming;
-                btn.style.background = '';
-                btn.style.color = '';
-            } catch (err) {
-                console.error('[YD-SQ] Ошибка импорта:', err);
-                showYdsqNotification('Ошибка чтения буфера обмена', 'error');
-                // Сброс кнопки
-                if (btn) {
-                    btn.textContent = '📋 Загрузить из буфера';
-                    delete btn.dataset.confirming;
-                    btn.style.background = '';
-                    btn.style.color = '';
+            const newItems = [];
+            for (const phrase of newPhrases) {
+                const normalized = phrase.toLowerCase().trim();
+                if (!existingRaw.has(normalized)) {
+                    newItems.push({
+                        id: `imp:${Date.now()}_${Math.random()}`,
+                        raw: phrase,
+                        source: 'clipboard', // Различаем импортированные
+                        importedAt: Date.now()
+                    });
+                    existingRaw.add(normalized); // Добавляем чтобы не дублировать в текущем импорте
                 }
             }
-        } else {
-            // Первое нажатие - запрашиваем подтверждение
-            try {
-                const text = await navigator.clipboard.readText();
-                const newPhrases = normalizeMinusInput(text);
 
-                if (newPhrases.size === 0) {
-                    showYdsqNotification('В буфере не найдено минусов', 'warn');
-                    return;
+            if (newItems.length > 0) {
+                importedMinuses = [...importedMinuses, ...newItems];
+                syncLocalToGlobal();
+                rebuildCampaignMinusList();
+                updateHighlights();
+                resetClearAllButton();
+                updateUI();
+
+                const duplicates = newPhrases.size - newItems.length;
+                let msg = `Импортировано ${newItems.length} минусов`;
+                if (duplicates > 0) {
+                    msg += ` (${duplicates} дубликатов пропущено)`;
                 }
-
-                // Показываем количество и просим подтверждение
-                if (btn) {
-                    btn.dataset.confirming = 'true';
-                    btn.textContent = `Импортировать ${newPhrases.size} шт?`;
-                    btn.style.background = '#4a90e2';
-                    btn.style.color = 'white';
-
-                    // Сброс через 5 секунд
-                    setTimeout(() => {
-                        if (btn.dataset.confirming === 'true') {
-                            btn.textContent = '📋 Загрузить из буфера';
-                            delete btn.dataset.confirming;
-                            btn.style.background = '';
-                            btn.style.color = '';
-                        }
-                    }, 5000);
-                }
-            } catch (err) {
-                console.error('[YD-SQ] Ошибка чтения буфера:', err);
-                showYdsqNotification('Ошибка чтения буфера обмена', 'error');
+                showYdsqNotification(msg, 'success');
+                return { success: true, count: newItems.length };
+            } else {
+                showYdsqNotification('Все минусы уже есть в списке', 'info');
+                return { success: false, count: 0 };
             }
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка импорта:', err);
+            showYdsqNotification('Ошибка чтения буфера обмена', 'error');
+            return { success: false, count: 0, error: err };
+        }
+    }
+
+    // Копирование отправленных минусов
+    async function copyImportedToClipboard() {
+        if (importedMinuses.length === 0) {
+            showYdsqNotification('Нет элементов для копирования', 'info');
+            return;
+        }
+
+        const text = importedMinuses.map(imp => imp.raw).join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            showYdsqNotification(`Скопировано ${importedMinuses.length} минусов`, 'success');
+        } catch (err) {
+            console.error('[YD-SQ] Ошибка копирования:', err);
+            showYdsqNotification('Ошибка копирования', 'error');
         }
     }
 
@@ -2170,14 +2146,27 @@
                                 <polyline points="6 9 12 15 18 9"/>
                             </svg>
                         </div>
-                        <button id="yd-sq-load-clipboard" class="yd-sq-text-btn" title="Импорт из буфера">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="17 8 12 3 7 8"/>
-                                <line x1="12" y1="3" x2="12" y2="15"/>
-                            </svg>
-                            <span>Импорт</span>
-                        </button>
+                        <div class="yd-sq-section-header-right">
+                            <button id="yd-sq-copy-imported" class="yd-sq-icon-btn-sm" title="Копировать">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                            <button id="yd-sq-load-clipboard" class="yd-sq-icon-btn-sm" title="Импорт из буфера">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </button>
+                            <button id="yd-sq-clear-imported" class="yd-sq-icon-btn-sm" title="Очистить">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div id="yd-sq-imported-list" class="yd-sq-list yd-sq-accordion-content"></div>
                 </div>
@@ -2302,10 +2291,36 @@
             }
         });
 
-        // Import button
-        document.getElementById('yd-sq-load-clipboard').addEventListener('click', (e) => {
+        // Import button - сразу импортирует из буфера
+        document.getElementById('yd-sq-load-clipboard').addEventListener('click', async (e) => {
             e.stopPropagation();
-            importMinusesFromClipboard();
+            const btn = e.currentTarget;
+            const result = await importMinusesFromClipboard();
+            if (result.success) {
+                showIconFeedback(btn, 'success');
+            }
+        });
+
+        // Copy Imported
+        document.getElementById('yd-sq-copy-imported').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            await copyImportedToClipboard();
+            showIconFeedback(btn, 'success');
+        });
+
+        // Clear Imported
+        document.getElementById('yd-sq-clear-imported').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (importedMinuses.length === 0) {
+                showYdsqNotification('Нет элементов для очистки', 'info');
+                return;
+            }
+            importedMinuses = [];
+            syncLocalToGlobal();
+            renderImportedMinuses();
+            updateHighlights();
+            showYdsqNotification('Отправленные очищены', 'success');
         });
 
         // Copy Selected with feedback
@@ -2405,6 +2420,10 @@
             if (clearUndoBuffer) {
                 selections = new Map(clearUndoBuffer);
                 clearUndoBuffer = null;
+                // Восстанавливаем чекбоксы
+                selections.forEach(sel => {
+                    if (sel.rowId) ensureRowChecked(sel.rowId);
+                });
             }
             restoreClearButton(btn);
             updateUI();
@@ -2420,6 +2439,19 @@
 
         // Сохраняем буфер для отмены
         clearUndoBuffer = new Map(selections);
+
+        // Снимаем чекбоксы в таблице
+        selections.forEach(sel => {
+            if (sel.rowId) {
+                const row = document.querySelector(`[data-yd-row-id="${sel.rowId}"]`);
+                if (row) {
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    if (cb && cb.checked) {
+                        clickCheckbox(cb, false);
+                    }
+                }
+            }
+        });
 
         // Очищаем
         selections.clear();
@@ -2750,19 +2782,22 @@
         updatePillCount();
     }
 
-    // Циклическая смена типа соответствия
+    // Циклическая смена типа соответствия (включая нейтральный)
     function cycleMatchType(id) {
         const sel = selections.get(id);
         if (!sel) return;
 
+        // Цикл: нейтральный -> quote -> bracket (для phrase) -> strict -> нейтральный
         const types = sel.kind === 'phrase'
-            ? ['quote', 'bracket', 'strict']
-            : ['quote', 'strict'];
+            ? [null, 'quote', 'bracket', 'strict']
+            : [null, 'quote', 'strict'];
 
         const currentIndex = types.indexOf(sel.matchType);
         const nextIndex = (currentIndex + 1) % types.length;
         sel.matchType = types[nextIndex];
 
+        // Применяем изменения
+        applyMatchTypeToSelection(sel, sel.matchType);
         syncLocalToGlobal();
         updateHighlights();
         renderSelectionList();
@@ -2827,32 +2862,37 @@
 
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const isDeleted = imp.deleted;
-            const isStrict = imp.raw.startsWith('!');
-            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}${isStrict ? ' yd-sq-item-strict' : ''}`;
+            const isImported = imp.source === 'clipboard';
+            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}`;
+
+            // Иконка источника
+            const sourceIcon = isImported
+                ? '<span class="yd-sq-source-icon" title="Импортировано">📥</span>'
+                : '<span class="yd-sq-source-icon" title="Из таблицы">➕</span>';
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
+                    <button class="yd-sq-item-delete" data-action="remove-imported" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
+                        ${isDeleted ? `
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                        ` : `
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        `}
+                    </button>
+                    ${sourceIcon}
                     <span class="yd-sq-item-text">${escapeHtml(imp.raw)}</span>
-                    <div class="yd-sq-item-actions">
-                        <button class="yd-sq-item-action ${isDeleted ? '' : 'danger'}" data-action="toggle-delete" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
-                            ${isDeleted ? `
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                    <path d="M3 3v5h5"/>
-                                </svg>
-                            ` : `
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"/>
-                                    <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                            `}
-                        </button>
-                    </div>
                 </div>
             `;
         }).join('');
 
-        addClickListener(container, '[data-action="toggle-delete"]', (e, btn) => {
+        addClickListener(container, '[data-action="remove-imported"]', (e, btn) => {
+            e.stopPropagation();
             const idx = parseInt(btn.dataset.impIdx);
             const imp = importedMinuses[idx];
 
@@ -3693,6 +3733,7 @@
                         importedMinuses.push({
                             id: `imp:${Date.now()}_${Math.random()}`,
                             raw: item.raw,
+                            source: 'table', // Различаем: из таблицы, не импортированные
                             importedAt: Date.now(),
                             deleted: false
                         });
@@ -4517,6 +4558,13 @@
             .yd-sq-icon-btn-sm:hover {
                 background: var(--yd-bg-hover);
                 color: var(--yd-text);
+            }
+
+            /* Source icon (📥 or ➕) */
+            .yd-sq-source-icon {
+                font-size: 10px;
+                flex-shrink: 0;
+                opacity: 0.6;
             }
 
             /* Text button (Import) */
@@ -5512,6 +5560,7 @@
     }
 
 })();
+
 
 
 
