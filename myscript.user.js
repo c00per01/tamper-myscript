@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.128.1
+// @version 0.129.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2073,9 +2073,21 @@
     // ==================== UI ПАНЕЛЬ ====================
 
     function createPanel() {
-        const existing = document.getElementById('yd-sq-panel');
-        if (existing) {
-            existing.style.display = '';
+        const existingPanel = document.getElementById('yd-sq-panel');
+        const existingPill = document.getElementById('yd-sq-pill');
+
+        // Если панель и pill уже существуют - не пересоздаём
+        if (existingPanel && existingPill) {
+            // Проверяем что хотя бы одно из них видимо
+            // Если оба скрыты - показываем панель
+            const panelVisible = existingPanel.style.display !== 'none';
+            const pillVisible = existingPill.style.display !== 'none';
+
+            if (!panelVisible && !pillVisible) {
+                existingPanel.style.display = 'flex';
+                existingPanel.style.opacity = '1';
+                existingPanel.style.transform = 'none';
+            }
             return;
         }
 
@@ -3742,22 +3754,26 @@
         const pop = findResultPopup();
         if (!pop) return false;
 
+        // Prevent double success logic (debounce 2 seconds)
+        if (Date.now() - lastResultPopupSuccessTime < 2000) {
+            log.modal('Debounce: пропускаем (менее 2 сек)');
+            return false; // Важно: false чтобы не считалось успехом
+        }
+
         log.modal('tryCloseResultPopup: найден попап результата');
 
-        const ok = Array.from(pop.querySelectorAll('button, span, div')).find(el => {
-            const s = (el.textContent || '').trim();
-            return ['OK', 'ОК', 'Ok', 'ok'].includes(s);
+        // Улучшенный поиск кнопки OK
+        const allButtons = Array.from(pop.querySelectorAll('button, span[role="button"], div[role="button"], a'));
+        const ok = allButtons.find(el => {
+            const s = (el.textContent || '').trim().toLowerCase();
+            // Проверяем точное совпадение или близкое
+            return s === 'ok' || s === 'ок' || s === 'хорошо' || s === 'понятно' || s === 'закрыть';
         });
 
         if (ok) {
             log.modal('Нажимаем кнопку OK');
             ok.click();
 
-            // Prevent double success logic (debounce 2 seconds)
-            if (Date.now() - lastResultPopupSuccessTime < 2000) {
-                log.modal('Debounce: пропускаем (менее 2 сек)');
-                return true;
-            }
             lastResultPopupSuccessTime = Date.now();
 
             // После успешного сохранения:
@@ -3816,12 +3832,14 @@
             return true;
         }
 
-        const close = pop.querySelector('button[aria-label="Закрыть"], [role="button"] svg, button');
+        // Если кнопка OK не найдена - пробуем найти любую кнопку закрытия
+        const close = pop.querySelector('button[aria-label="Закрыть"], button[aria-label="Close"], button.close');
         if (close) {
             log.modal('Нажимаем кнопку Закрыть');
             close.click();
             return true;
         }
+
         return false;
     }
 
@@ -5599,6 +5617,7 @@
     }
 
 })();
+
 
 
 
