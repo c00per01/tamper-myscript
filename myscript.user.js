@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.127.1
+// @version 0.128.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2257,8 +2257,14 @@
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
 
+            // Скрываем pill
             pill.style.display = 'none';
-            panel.style.display = '';
+
+            // Восстанавливаем панель
+            panel.classList.remove('yd-sq-panel-minimizing');
+            panel.style.display = 'flex';
+            panel.style.opacity = '1';
+            panel.style.transform = 'none';
         });
 
         // Pill drag & drop
@@ -2309,19 +2315,51 @@
             showIconFeedback(btn, 'success');
         });
 
-        // Clear Imported
+        // Clear Imported - с undo
+        let importedUndoMode = false;
         document.getElementById('yd-sq-clear-imported').addEventListener('click', (e) => {
             e.stopPropagation();
-            if (importedMinuses.length === 0) {
+            const btn = e.currentTarget;
+
+            // Если в режиме undo - восстановить
+            if (importedUndoMode) {
+                importedMinuses.forEach(imp => imp.deleted = false);
+                importedUndoMode = false;
+                restoreClearImportedButton(btn);
+                syncLocalToGlobal();
+                renderImportedMinuses();
+                updateHighlights();
+                showYdsqNotification('Восстановлено', 'success');
+                return;
+            }
+
+            // Проверяем есть ли неудалённые
+            const activeCount = importedMinuses.filter(imp => !imp.deleted).length;
+            if (activeCount === 0) {
                 showYdsqNotification('Нет элементов для очистки', 'info');
                 return;
             }
-            importedMinuses = [];
+
+            // Помечаем все как deleted
+            importedMinuses.forEach(imp => imp.deleted = true);
+            importedUndoMode = true;
+
+            // Меняем кнопку на иконку Undo
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h12a5 5 0 0 1 0 10H9"/><polyline points="7 8 3 12 7 16"/></svg>`;
+            btn.title = 'Нажмите чтобы вернуть';
+            btn.style.color = 'var(--yd-primary)';
+
             syncLocalToGlobal();
             renderImportedMinuses();
             updateHighlights();
-            showYdsqNotification('Отправленные очищены', 'success');
         });
+
+        function restoreClearImportedButton(btn) {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+            btn.title = 'Очистить';
+            btn.style.color = '';
+        }
+
 
         // Copy Selected with feedback
         document.getElementById('yd-sq-copy-selected').addEventListener('click', async (e) => {
@@ -4105,7 +4143,8 @@
     function resetClearAllButton() {
         const btn = document.getElementById('yd-sq-clear-all');
         if (btn && btn.dataset.undoMode === 'true') {
-            btn.textContent = 'Очистить все';
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+            btn.title = 'Очистить всё';
             delete btn.dataset.undoMode;
             btn.style.background = '';
             btn.style.color = '';
@@ -4471,7 +4510,7 @@
             }
 
             .yd-sq-pill-badge.has-items {
-                background: var(--yd-danger);
+                background: var(--yd-primary);
             }
 
             /* ===== RESIZE HANDLES ===== */
@@ -5560,6 +5599,7 @@
     }
 
 })();
+
 
 
 
