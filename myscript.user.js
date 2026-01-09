@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.125.1
+// @version 0.126.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -919,6 +919,7 @@
         log.selection(`Selection добавлен`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
+        clearUndoModeOnNewSelection();
     }
 
     function toggleStrictWord(span, wordLower, word, rowId) {
@@ -939,6 +940,7 @@
         log.selection(`Selection добавлен (strict)`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
+        clearUndoModeOnNewSelection();
     }
 
     function onWordDoubleClick(e, targetSpan) {
@@ -2398,17 +2400,21 @@
     let clearUndoTimeout = null;
 
     function handleClearWithUndo(btn) {
-        // Если уже в режиме Undo
-        if (clearUndoBuffer) {
-            // Восстанавливаем
-            selections = new Map(clearUndoBuffer);
-            clearUndoBuffer = null;
-            clearTimeout(clearUndoTimeout);
-
-            // Возвращаем иконку
+        // Если уже в режиме Undo - восстановить
+        if (btn.dataset.undoMode === 'true') {
+            if (clearUndoBuffer) {
+                selections = new Map(clearUndoBuffer);
+                clearUndoBuffer = null;
+            }
             restoreClearButton(btn);
             updateUI();
             showYdsqNotification('Восстановлено', 'success');
+            return;
+        }
+
+        // Нечего очищать
+        if (selections.size === 0) {
+            showYdsqNotification('Нет слов для очистки', 'info');
             return;
         }
 
@@ -2419,20 +2425,29 @@
         selections.clear();
         updateUI();
 
-        // Меняем кнопку на "Вернуть?"
-        btn.innerHTML = `<span style="font-size:10px;">Вернуть?</span>`;
+        // Меняем кнопку на иконку Undo (стрелка назад)
+        btn.dataset.undoMode = 'true';
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h12a5 5 0 0 1 0 10H9"/><polyline points="7 8 3 12 7 16"/></svg>`;
         btn.title = 'Нажмите чтобы вернуть';
+        btn.style.color = 'var(--yd-primary)';
 
-        // Таймаут для сброса
-        clearUndoTimeout = setTimeout(() => {
-            clearUndoBuffer = null;
+        // НЕ ставим таймаут - сбрасывается только при добавлении нового минуса
+    }
+
+    // Вызывать при добавлении нового минуса чтобы сбросить режим undo
+    function clearUndoModeOnNewSelection() {
+        clearUndoBuffer = null;
+        const btn = document.getElementById('yd-sq-clear-all');
+        if (btn && btn.dataset.undoMode === 'true') {
             restoreClearButton(btn);
-        }, 3000);
+        }
     }
 
     function restoreClearButton(btn) {
+        delete btn.dataset.undoMode;
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
         btn.title = 'Очистить всё';
+        btn.style.color = '';
     }
 
     // Функция обратной связи для иконок
@@ -2448,11 +2463,29 @@
         }, 2000);
     }
 
+    // Форматирование минуса для копирования/отправки (с операторами)
+    function formatMinusForCopy(sel) {
+        if (!sel) return '';
+        const raw = sel.raw || sel.display;
+
+        // Применяем операторы на основе matchType
+        if (sel.matchType === 'strict') {
+            // Для strict - добавляем ! к каждому слову
+            const words = raw.split(/\s+/).filter(Boolean);
+            return words.map(w => w.startsWith('!') ? w : '!' + w).join(' ');
+        } else if (sel.matchType === 'bracket' && sel.kind === 'phrase') {
+            return '[' + raw + ']';
+        } else if (sel.matchType === 'quote') {
+            return '"' + raw + '"';
+        }
+        return raw;
+    }
+
     // Копирование выбранных минусов
     async function copySelectedToClipboard() {
         const minuses = Array.from(selections.values())
             .filter(sel => !sel._building)
-            .map(sel => formatMinus(sel));
+            .map(sel => formatMinusForCopy(sel));
 
         if (minuses.length === 0) {
             showYdsqNotification('Нет слов для копирования', 'info');
@@ -2662,7 +2695,7 @@
             const isPhrase = sel.kind === 'phrase';
 
             // Badge отображает текущий тип (кликабельный для смены)
-            let badgeText = '[ ]'; // пусто
+            let badgeText = '—'; // нет оператора
             let badgeClass = 'yd-sq-badge-type';
             if (isStrict) {
                 badgeText = '!';
@@ -2675,8 +2708,8 @@
                 badgeClass += ' yd-sq-badge-quote';
             }
 
-            // Чистый текст без операторов
-            const cleanText = sel.display;
+            // Чистый текст без операторов - берём из raw
+            const cleanText = sel.raw || sel.display;
 
             return `
                 <div class="yd-sq-item${isBuilding ? ' yd-sq-item-building' : ''}" data-sel-id="${escapeHtml(sel.id)}">
@@ -2873,46 +2906,64 @@
     }
 
     function startInlineEdit(id) {
-        const span = document.querySelector(`[data-sel-id-text="${id}"]`);
+        // Ищем span с текстом по data-sel-id
+        const span = document.querySelector(`.yd-sq-item-text[data-sel-id="${id}"]`);
         const sel = selections.get(id);
         if (!span || !sel) return;
 
+        // Уже редактируется?
+        if (span.dataset.editing === 'true') return;
+        span.dataset.editing = 'true';
+
         const input = document.createElement('input');
         input.type = 'text';
-        input.value = sel.raw;
-        input.style.width = '100%';
-        input.style.fontSize = '13px';
-        input.style.padding = '2px 4px';
-        input.style.border = '1px solid #4a90e2';
-        input.style.borderRadius = '3px';
+        input.value = sel.raw || sel.display;
+        input.className = 'yd-sq-item-edit-input';
+        input.style.cssText = `
+            width: 100%;
+            font-size: 14px;
+            padding: 4px 6px;
+            border: 2px solid var(--yd-primary);
+            border-radius: 4px;
+            outline: none;
+            background: var(--yd-bg);
+            color: var(--yd-text);
+        `;
 
-        const finishEdit = () => {
-            const newValue = input.value.trim();
-            sel.raw = newValue;
+        const finishEdit = (save = true) => {
+            if (save) {
+                const newValue = input.value.trim();
+                if (newValue) {
+                    sel.raw = newValue;
 
-            if (sel.kind === 'phrase') {
-                sel.words = sel.raw.split(/\s+/).filter(w => w);
-            } else if (sel.kind === 'soft-word') {
-                sel.stem = stemWord(sel.raw);
-            } else if (sel.kind === 'strict-word') {
-                sel.wordLower = sel.raw.toLowerCase();
+                    if (sel.kind === 'phrase') {
+                        sel.words = sel.raw.split(/\s+/).filter(w => w);
+                    } else if (sel.kind === 'soft-word') {
+                        sel.stem = stemWord(sel.raw);
+                    } else if (sel.kind === 'strict-word') {
+                        sel.wordLower = sel.raw.toLowerCase();
+                    }
+
+                    applyMatchTypeToSelection(sel, sel.matchType);
+                    syncLocalToGlobal();
+                }
             }
-
-            applyMatchTypeToSelection(sel, sel.matchType);
-            syncLocalToGlobal();
             updateUI();
         };
 
-        input.addEventListener('blur', finishEdit);
+        input.addEventListener('blur', () => finishEdit(true));
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                finishEdit();
+                e.preventDefault();
+                input.blur();
             } else if (e.key === 'Escape') {
-                updateUI();
+                e.preventDefault();
+                finishEdit(false);
             }
         });
 
-        span.replaceWith(input);
+        span.innerHTML = '';
+        span.appendChild(input);
         input.focus();
         input.select();
     }
@@ -3222,7 +3273,10 @@
             }
         });
 
+        console.log(`[YD-SQ] 🔍 ДИАГНОСТИКА: values=${values.length}, rowsWithSelections=${rowsWithSelections.size}, currentPageKey=${currentPageKey}`);
+
         const allRows = getAllRowsOnPage();
+        let uncheckedCount = 0;
         allRows.forEach(row => {
             const cb = row.querySelector('input[type="checkbox"]');
             const rowId = row.dataset.ydRowId;
@@ -3231,13 +3285,20 @@
                 clickCheckbox(cb, false);
                 delete cb.dataset.ydAuto;
                 delete row.dataset.ydAutoRow;
+                uncheckedCount++;
             }
         });
+
+        if (uncheckedCount > 0) {
+            console.log(`[YD-SQ] ⚠️ Сняли ${uncheckedCount} лишних чекбоксов`);
+        }
 
         const rows = getAllRowsOnPage();
         let checkedCount = rows.filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
+
+        console.log(`[YD-SQ] 📊 ПЕРЕД ОТПРАВКОЙ: checkedCount=${checkedCount}, neededTotal=${neededTotal}, availableRows=${availableRows}`);
 
         // **ГРАНИЧНЫЙ СЛУЧАЙ: Нет доступных строк**
         if (availableRows === 0) {
@@ -3356,6 +3417,16 @@
 
             const checkClosed = () => {
                 checkCount++;
+
+                // Проверяем - не закрылось ли модальное окно (отмена пользователем)
+                const modal = findMinusModal();
+                if (!modal && checkCount > 2) {
+                    log.warn('Модальное окно закрыто (возможно отмена)');
+                    isSending = false;
+                    resolve();
+                    return;
+                }
+
                 const popup = findResultPopup();
 
                 if (popup) {
@@ -3373,6 +3444,7 @@
                     setTimeout(checkClosed, 500);
                 } else {
                     log.warn('Таймаут ожидания результата, продолжаем');
+                    isSending = false;
                     resolve(); // Продолжаем даже если таймаут
                 }
             };
@@ -4468,23 +4540,27 @@
                 color: var(--yd-primary);
             }
 
-            /* ===== BODY (flex: 1 1 auto) ===== */
+            /* ===== BODY (flex container) ===== */
             #yd-sq-panel-body, .yd-sq-body {
                 flex: 1 1 auto;
                 padding: 12px 14px;
-                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                min-height: 0;
             }
 
             /* ===== SECTIONS ===== */
             .yd-sq-section {
-                margin-bottom: 12px;
+                flex-shrink: 0;
             }
 
+            /* Секция ВЫБРАНО - занимает всё доступное место, имеет свой скролл */
             .yd-sq-section-selected {
                 flex: 1 1 auto;
                 display: flex;
                 flex-direction: column;
-                min-height: 0;
+                min-height: 100px;
                 overflow: hidden;
             }
 
@@ -5436,6 +5512,7 @@
     }
 
 })();
+
 
 
 
