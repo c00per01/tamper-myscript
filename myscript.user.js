@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.138.1
+// @version 1.138.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1978,6 +1978,35 @@
     const SYNC_DATA_KEY = 'yd-sq-synced-minuses';
     const SYNC_RETURN_URL_KEY = 'yd-sq-sync-return-url';
 
+    // Toast уведомление для страницы настроек (где нет нашей панели)
+    function showSyncStatusToast(message) {
+        let toast = document.getElementById('yd-sync-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'yd-sync-toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                color: #fff;
+                padding: 16px 24px;
+                border-radius: 12px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 999999;
+                border: 1px solid rgba(255,255,255,0.1);
+                backdrop-filter: blur(10px);
+                transition: opacity 0.3s ease, transform 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }
+
     // Определяем URL настроек кампании из текущего URL статистики
     function getCampaignSettingsUrl() {
         const params = new URLSearchParams(window.location.search);
@@ -2105,6 +2134,9 @@
 
         log.info('Обнаружена страница настроек с pending sync');
 
+        // Показываем уведомление на странице настроек
+        showSyncStatusToast('🔄 Синхронизация: загрузка данных...');
+
         // Ждём загрузки данных
         let attempts = 0;
         const maxAttempts = 20;
@@ -2112,6 +2144,10 @@
         const tryParse = () => {
             attempts++;
             const minuses = parseMinusesFromSettingsPage();
+
+            if (minuses.length > 0) {
+                showSyncStatusToast(`✅ Найдено ${minuses.length} минусов. Возврат...`);
+            }
 
             if (minuses.length > 0 || attempts >= maxAttempts) {
                 // Сохраняем результат
@@ -2131,14 +2167,19 @@
 
                 log.success(`Синхронизировано ${minuses.length} минусов, возврат...`);
 
-                // Возвращаемся назад
-                if (returnUrl) {
-                    window.location.href = returnUrl;
-                } else {
-                    window.history.back();
-                }
+                // Возвращаемся назад с небольшой задержкой
+                setTimeout(() => {
+                    if (returnUrl) {
+                        window.location.href = returnUrl;
+                    } else {
+                        window.history.back();
+                    }
+                }, 500);
                 return;
             }
+
+            // Обновляем статус
+            showSyncStatusToast(`🔄 Поиск минус-фраз... (попытка ${attempts}/${maxAttempts})`);
 
             // Ждём ещё
             setTimeout(tryParse, 500);
@@ -2670,15 +2711,18 @@
             showIconFeedback(btn, 'success');
         });
 
-        // Clear Imported - с undo
+        // Clear Imported - удаляет всё с возможностью отмены
         let importedUndoMode = false;
+        let importedBackup = [];
+
         document.getElementById('yd-sq-clear-imported').addEventListener('click', (e) => {
             e.stopPropagation();
             const btn = e.currentTarget;
 
-            // Если в режиме undo - восстановить
+            // Если в режиме undo - восстановить из backup
             if (importedUndoMode) {
-                importedMinuses.forEach(imp => imp.deleted = false);
+                importedMinuses.push(...importedBackup);
+                importedBackup = [];
                 importedUndoMode = false;
                 restoreClearImportedButton(btn);
                 syncLocalToGlobal();
@@ -2688,15 +2732,15 @@
                 return;
             }
 
-            // Проверяем есть ли неудалённые
-            const activeCount = importedMinuses.filter(imp => !imp.deleted).length;
-            if (activeCount === 0) {
+            // Проверяем есть ли элементы
+            if (importedMinuses.length === 0) {
                 showYdsqNotification('Нет элементов для очистки', 'info');
                 return;
             }
 
-            // Помечаем все как deleted
-            importedMinuses.forEach(imp => imp.deleted = true);
+            // Сохраняем backup и очищаем
+            importedBackup = [...importedMinuses];
+            importedMinuses.length = 0;
             importedUndoMode = true;
 
             // Меняем кнопку на иконку Undo
@@ -2707,6 +2751,8 @@
             syncLocalToGlobal();
             renderImportedMinuses();
             updateHighlights();
+
+            showYdsqNotification(`Удалено ${importedBackup.length} элементов (нажмите ↩ чтобы вернуть)`, 'info');
         });
 
         function restoreClearImportedButton(btn) {
@@ -3243,8 +3289,7 @@
         const container = document.getElementById('yd-sq-imported-list');
         const countIndicator = document.getElementById('yd-sq-imported-count');
 
-        const activeCount = importedMinuses.filter(imp => !imp.deleted).length;
-        countIndicator.textContent = activeCount;
+        countIndicator.textContent = importedMinuses.length;
 
         // Скрываем секцию если нет импортированных
         if (importedMinuses.length === 0) {
@@ -3255,8 +3300,7 @@
         section.style.display = '';
 
         container.innerHTML = importedMinuses.map((imp, idx) => {
-            const isDeleted = imp.deleted;
-            const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}`;
+            const itemClass = `yd-sq-item yd-sq-item-imported`;
 
             // Иконка источника
             let sourceIcon = '';
@@ -3275,18 +3319,11 @@
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
-                    <button class="yd-sq-item-delete" data-action="remove-imported" data-imp-idx="${idx}" title="${isDeleted ? 'Восстановить' : 'Удалить'}">
-                        ${isDeleted ? `
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
-                            </svg>
-                        ` : `
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        `}
+                    <button class="yd-sq-item-delete" data-action="remove-imported" data-imp-idx="${idx}" title="Удалить">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
                     </button>
                     ${sourceIcon}
                     <span class="yd-sq-item-text">${escapeHtml(imp.raw)}</span>
@@ -3297,9 +3334,9 @@
         addClickListener(container, '[data-action="remove-imported"]', (e, btn) => {
             e.stopPropagation();
             const idx = parseInt(btn.dataset.impIdx);
-            const imp = importedMinuses[idx];
 
-            imp.deleted = !imp.deleted;
+            // Удаляем элемент сразу
+            importedMinuses.splice(idx, 1);
 
             syncLocalToGlobal();
             updateHighlights();
@@ -6015,6 +6052,7 @@
     }
 
 })();
+
 
 
 
