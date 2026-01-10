@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.134.1
+// @version 0.135.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2312,12 +2312,16 @@
             // Скрываем pill
             pill.style.display = 'none';
 
-            // Восстанавливаем панель с принудительным позиционированием
+            // Восстанавливаем панель с анимацией
             panel.classList.remove('yd-sq-panel-minimizing');
             panel.style.display = 'flex';
             panel.style.opacity = '1';
             panel.style.transform = 'none';
             panel.style.visibility = 'visible';
+
+            // Запускаем анимацию появления
+            panel.classList.add('yd-sq-panel-appearing');
+            setTimeout(() => panel.classList.remove('yd-sq-panel-appearing'), 400);
 
             // Проверяем что панель в видимой области
             const rect = panel.getBoundingClientRect();
@@ -2330,11 +2334,7 @@
                 panel.style.bottom = 'auto';
             }
 
-            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель показана', {
-                panelDisplay: panel.style.display,
-                panelInDOM: document.body.contains(panel),
-                rect: panel.getBoundingClientRect()
-            });
+            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель показана');
         });
 
         // Pill drag & drop
@@ -3548,7 +3548,10 @@
                 } else {
                     log.error('Модальное окно не найдено после 50 попыток');
                     showYdsqNotification('Окно не обнаружено', 'error');
-                    isSending = false;
+                    // В пакетном режиме НЕ сбрасываем isSending
+                    if (batchQueue.length === 0) {
+                        isSending = false;
+                    }
                     reject(new Error('Modal not found'));
                 }
             };
@@ -3564,6 +3567,7 @@
             let checkCount = 0;
             const maxChecks = 120; // 60 секунд макс
             let popupWasFound = false; // Флаг - был ли popup найден хотя бы раз
+            const isBatchMode = batchQueue.length > 0; // Проверяем пакетный режим
 
             const checkClosed = () => {
                 checkCount++;
@@ -3573,7 +3577,10 @@
                 const modal = findMinusModal();
                 if (!modal && checkCount > 4 && !popupWasFound) {
                     log.warn('Модальное окно закрыто (возможно отмена)');
-                    isSending = false;
+                    // В пакетном режиме НЕ сбрасываем isSending - это сделает sendBatch
+                    if (!isBatchMode) {
+                        isSending = false;
+                    }
                     resolve();
                     return;
                 }
@@ -3596,7 +3603,10 @@
                     setTimeout(checkClosed, 500);
                 } else {
                     log.warn('Таймаут ожидания результата, продолжаем');
-                    isSending = false;
+                    // В пакетном режиме НЕ сбрасываем isSending
+                    if (!isBatchMode) {
+                        isSending = false;
+                    }
                     resolve(); // Продолжаем даже если таймаут
                 }
             };
@@ -4529,8 +4539,24 @@
             }
 
             #yd-sq-panel.yd-sq-panel-minimizing {
-                transform: scale(0.5) translateY(50%);
+                transform: scale(0.3) translate(50%, 100%);
                 opacity: 0;
+                transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            }
+
+            #yd-sq-panel.yd-sq-panel-appearing {
+                animation: yd-panel-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            @keyframes yd-panel-appear {
+                from {
+                    transform: scale(0.3) translate(50%, 100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: scale(1) translate(0, 0);
+                    opacity: 1;
+                }
             }
 
             #yd-sq-panel * { box-sizing: border-box; }
@@ -5679,6 +5705,7 @@
     }
 
 })();
+
 
 
 
