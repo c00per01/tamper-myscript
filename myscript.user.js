@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.138.3
+// @version 1.139.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2135,21 +2135,42 @@
         log.info('Обнаружена страница настроек с pending sync');
 
         // Показываем уведомление на странице настроек
-        showSyncStatusToast('🔄 Синхронизация: загрузка данных...');
+        showSyncStatusToast('🔄 Ожидание загрузки страницы...');
 
-        // Ждём загрузки данных
+        // Ждём полной загрузки страницы
         let attempts = 0;
-        const maxAttempts = 20;
+        const maxAttempts = 30; // Увеличено до 30 попыток
+        let lastCount = 0;
+        let stableCount = 0; // Сколько раз подряд количество было стабильным
 
         const tryParse = () => {
             attempts++;
             const minuses = parseMinusesFromSettingsPage();
+            const currentCount = minuses.length;
 
-            if (minuses.length > 0) {
-                showSyncStatusToast(`✅ Найдено ${minuses.length} минусов. Возврат...`);
+            // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
+            if (currentCount > 0 && currentCount === lastCount) {
+                stableCount++;
+            } else {
+                stableCount = 0;
+            }
+            lastCount = currentCount;
+
+            // Показываем прогресс
+            if (currentCount > 0) {
+                showSyncStatusToast(`🔄 Загрузка: ${currentCount} минусов (проверка ${stableCount}/3)...`);
+            } else {
+                showSyncStatusToast(`🔄 Ожидание загрузки данных... (${attempts}/${maxAttempts})`);
             }
 
-            if (minuses.length > 0 || attempts >= maxAttempts) {
+            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума
+            if ((currentCount > 0 && stableCount >= 3) || attempts >= maxAttempts) {
+                if (currentCount === 0) {
+                    showSyncStatusToast('⚠️ Минус-фразы не найдены. Возврат...');
+                } else {
+                    showSyncStatusToast(`✅ Синхронизировано: ${currentCount} минусов. Возврат...`);
+                }
+
                 // Сохраняем результат
                 const syncData = {
                     minuses: minuses,
@@ -2165,28 +2186,25 @@
                 const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
                 sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
 
-                log.success(`Синхронизировано ${minuses.length} минусов, возврат...`);
+                log.success(`Синхронизировано ${currentCount} минусов, возврат...`);
 
-                // Возвращаемся назад с небольшой задержкой
+                // Возвращаемся назад с задержкой для показа уведомления
                 setTimeout(() => {
                     if (returnUrl) {
                         window.location.href = returnUrl;
                     } else {
                         window.history.back();
                     }
-                }, 500);
+                }, 1500);
                 return;
             }
 
-            // Обновляем статус
-            showSyncStatusToast(`🔄 Поиск минус-фраз... (попытка ${attempts}/${maxAttempts})`);
-
-            // Ждём ещё
-            setTimeout(tryParse, 500);
+            // Ждём ещё (1 секунда между попытками)
+            setTimeout(tryParse, 1000);
         };
 
-        // Начинаем парсинг через небольшую задержку
-        setTimeout(tryParse, 1000);
+        // Начинаем парсинг через 2 секунды для загрузки страницы
+        setTimeout(tryParse, 2000);
         return true;
     }
 
@@ -2207,37 +2225,18 @@
             const syncedMinuses = syncData.minuses || [];
             log.info(`Применяем синхронизированные данные: ${syncedMinuses.length} минусов`);
 
-            // Сравниваем с текущим списком
-            const existingRaw = new Set(importedMinuses.map(imp => imp.raw.toLowerCase().trim()));
-            const syncedSet = new Set(syncedMinuses.map(m => m.toLowerCase().trim()));
+            // ПОЛНАЯ ЗАМЕНА: очищаем текущий список и заполняем из кампании
+            const oldCount = importedMinuses.length;
+            importedMinuses.length = 0; // Очищаем
 
-            let addedCount = 0;
-            let removedCount = 0;
-
-            // Добавляем новые
+            // Добавляем все минусы из кампании
             for (const phrase of syncedMinuses) {
-                const normalized = phrase.toLowerCase().trim();
-                if (!existingRaw.has(normalized)) {
-                    importedMinuses.push({
-                        id: `imp:${Date.now()}_${Math.random()}`,
-                        raw: phrase,
-                        source: 'sync', // Источник: синхронизация
-                        importedAt: Date.now(),
-                        deleted: false
-                    });
-                    addedCount++;
-                }
-            }
-
-            // Помечаем удалённые (которые есть у нас, но нет в кампании)
-            for (const imp of importedMinuses) {
-                const normalized = imp.raw.toLowerCase().trim();
-                if (!syncedSet.has(normalized) && !imp.deleted) {
-                    // Этого минуса нет в кампании - возможно он был удалён
-                    // Пока не удаляем автоматически, только логируем
-                    log.warn(`Минус "${imp.raw}" отсутствует в кампании`);
-                    removedCount++;
-                }
+                importedMinuses.push({
+                    id: `sync:${Date.now()}_${Math.random()}`,
+                    raw: phrase,
+                    source: 'sync',
+                    importedAt: Date.now()
+                });
             }
 
             // Сохраняем время последней синхронизации
@@ -2252,9 +2251,7 @@
             updateHighlights();
 
             // Показываем результат
-            let msg = `Синхронизировано: ${syncedMinuses.length} минусов`;
-            if (addedCount > 0) msg += ` (+${addedCount} новых)`;
-            showYdsqNotification(msg, 'success');
+            showYdsqNotification(`✅ В кампании: ${syncedMinuses.length} минусов`, 'success');
 
             // Убираем анимацию с кнопки
             const syncBtn = document.getElementById('yd-sq-sync-campaign');
@@ -2461,41 +2458,42 @@
                     <div id="yd-sq-list" class="yd-sq-list"></div>
                 </div>
 
-                <!-- Section: ОТПРАВЛЕННЫЕ (Accordion) -->
+                <!-- Section: В КАМПАНИИ (Accordion) -->
                 <div id="yd-sq-imported-section" class="yd-sq-section yd-sq-accordion">
                     <div class="yd-sq-accordion-header" id="yd-sq-imported-toggle">
                         <div class="yd-sq-accordion-header-left">
-                            <span class="yd-sq-section-label-muted">ОТПРАВЛЕННЫЕ</span>
+                            <span class="yd-sq-section-label-muted">В КАМПАНИИ</span>
                             <span id="yd-sq-imported-count" class="yd-sq-badge-muted">0</span>
-                            <svg class="yd-sq-accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
+                            <svg class="yd-sq-accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 9l6 6 6-6"/>
                             </svg>
                         </div>
                         <div class="yd-sq-section-header-right">
                             <button id="yd-sq-sync-campaign" class="yd-sq-icon-btn-sm yd-sq-sync-btn" title="Синхронизировать с кампанией">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 12a9 9 0 0 1-9 9m-9-9a9 9 0 0 1 9-9"/>
-                                    <path d="M16 3l5 3-5 3"/>
-                                    <path d="M8 21l-5-3 5-3"/>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                                    <path d="M21 3v5h-5"/>
+                                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                                    <path d="M3 21v-5h5"/>
                                 </svg>
                             </button>
                             <button id="yd-sq-copy-imported" class="yd-sq-icon-btn-sm" title="Копировать">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/>
                                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                 </svg>
                             </button>
-                            <button id="yd-sq-load-clipboard" class="yd-sq-icon-btn-sm" title="Импорт из буфера">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="17 8 12 3 7 8"/>
-                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                            <button id="yd-sq-load-clipboard" class="yd-sq-icon-btn-sm" title="Вставить из буфера">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                    <rect x="8" y="2" width="8" height="4" rx="1"/>
                                 </svg>
                             </button>
                             <button id="yd-sq-clear-imported" class="yd-sq-icon-btn-sm" title="Очистить">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"/>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 6h18"/>
+                                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
                                 </svg>
                             </button>
                         </div>
@@ -3291,13 +3289,18 @@
 
         countIndicator.textContent = importedMinuses.length;
 
-        // Скрываем секцию если нет импортированных
+        // Всегда показываем секцию
+        section.style.display = '';
+
+        // Если пусто - показываем placeholder
         if (importedMinuses.length === 0) {
-            section.style.display = 'none';
+            container.innerHTML = `
+                <div class="yd-sq-empty-placeholder">
+                    <span style="opacity: 0.5; font-size: 11px;">Нажмите ⟳ для синхронизации с кампанией</span>
+                </div>
+            `;
             return;
         }
-
-        section.style.display = '';
 
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const itemClass = `yd-sq-item yd-sq-item-imported`;
@@ -5180,6 +5183,12 @@
                 font-size: 13px;
             }
 
+            .yd-sq-empty-placeholder {
+                padding: 12px 16px;
+                text-align: center;
+                color: var(--yd-text-muted);
+            }
+
             .yd-sq-empty-icon {
                 opacity: 0.15;
                 margin-bottom: 12px;
@@ -6052,6 +6061,7 @@
     }
 
 })();
+
 
 
 
