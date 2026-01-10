@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.139.1
+// @version 1.139.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1398,17 +1398,17 @@
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
             delete sp.dataset.importedAt;
+            sp.title = ''; // Очищаем tooltip
         }
 
         // 2. Prepare Rules
-        // Пересчитываем кэш, если изменился массив или количество активных элементов
-        const activeImported = importedMinuses.filter(imp => !imp.deleted);
+        // Пересчитываем кэш, если изменился массив или количество элементов
         const shouldRebuild = lastImportedMinusesRef !== importedMinuses ||
             !cachedImportedRules ||
-            cachedImportedRules.length !== activeImported.length;
+            cachedImportedRules.length !== importedMinuses.length;
 
         if (shouldRebuild) {
-            cachedImportedRules = activeImported.map(imp => {
+            cachedImportedRules = importedMinuses.map(imp => {
                 const r = parseMinusRule(imp.raw);
                 r.source = 'imported';
                 return r;
@@ -1603,6 +1603,10 @@
                             span.classList.add('yd-selected-strict');
                         } else {
                             span.classList.add(baseClass);
+                        }
+                        // Добавляем tooltip для imported минусов
+                        if (rule.source === 'imported') {
+                            span.title = 'Уже добавлено';
                         }
                     }
                 }
@@ -6061,6 +6065,7 @@
     }
 
 })();
+
 
 
 
