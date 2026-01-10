@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.130.2
+// @version 0.131.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2260,17 +2260,30 @@
                 panel.style.display = 'none';
                 panel.classList.remove('yd-sq-panel-minimizing');
 
-                // Показываем pill
-                pill.style.display = 'flex';
-                pill.style.opacity = '1';
-                pill.style.visibility = 'visible';
+                // Показываем pill с принудительным позиционированием
+                pill.style.cssText = `
+                    display: flex !important;
+                    position: fixed !important;
+                    bottom: 20px !important;
+                    right: 20px !important;
+                    z-index: 9999999 !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    pointer-events: auto !important;
+                `;
 
                 pill.classList.add('yd-sq-pill-appear');
                 setTimeout(() => pill.classList.remove('yd-sq-pill-appear'), 300);
 
                 console.log('[YD-SQ] 🔽 СВОРАЧИВАНИЕ: pill показан', {
                     display: pill.style.display,
-                    inDOM: document.body.contains(pill)
+                    position: pill.style.position,
+                    bottom: pill.style.bottom,
+                    right: pill.style.right,
+                    zIndex: pill.style.zIndex,
+                    inDOM: document.body.contains(pill),
+                    computedDisplay: window.getComputedStyle(pill).display,
+                    computedVisibility: window.getComputedStyle(pill).visibility
                 });
             }, 200);
 
@@ -5648,6 +5661,7 @@
     }
 
 })();
+
 
 
 
