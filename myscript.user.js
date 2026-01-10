@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.132.1
+// @version 0.133.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2312,16 +2312,28 @@
             // Скрываем pill
             pill.style.display = 'none';
 
-            // Восстанавливаем панель
+            // Восстанавливаем панель с принудительным позиционированием
             panel.classList.remove('yd-sq-panel-minimizing');
             panel.style.display = 'flex';
             panel.style.opacity = '1';
             panel.style.transform = 'none';
             panel.style.visibility = 'visible';
 
+            // Проверяем что панель в видимой области
+            const rect = panel.getBoundingClientRect();
+            if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
+                // Панель за экраном - возвращаем в стандартную позицию
+                console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель за экраном, возвращаем');
+                panel.style.right = '20px';
+                panel.style.top = '100px';
+                panel.style.left = 'auto';
+                panel.style.bottom = 'auto';
+            }
+
             console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель показана', {
                 panelDisplay: panel.style.display,
-                panelInDOM: document.body.contains(panel)
+                panelInDOM: document.body.contains(panel),
+                rect: panel.getBoundingClientRect()
             });
         });
 
@@ -5666,6 +5678,7 @@
     }
 
 })();
+
 
 
 
