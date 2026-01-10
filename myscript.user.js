@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.133.1
+// @version 0.134.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2467,29 +2467,20 @@
     function makePillDraggable() {
         const pill = document.getElementById('yd-sq-pill');
         let isDragging = false;
+        let hasMoved = false; // Флаг - было ли реальное перемещение
         let startX, startY, startLeft, startTop;
 
-        // Загружаем сохранённую позицию
-        const savedPos = localStorage.getItem('yd-sq-pill-position');
-        if (savedPos) {
-            try {
-                const pos = JSON.parse(savedPos);
-                pill.style.left = pos.left + 'px';
-                pill.style.top = pos.top + 'px';
-                pill.style.right = 'auto';
-                pill.style.bottom = 'auto';
-            } catch (e) { }
-        }
+        // Загружаем сохранённую позицию - НЕ применяем, т.к. сбрасываем при сворачивании
+        // const savedPos = localStorage.getItem('yd-sq-pill-position');
 
         pill.addEventListener('mousedown', (e) => {
             isDragging = true;
+            hasMoved = false; // Сбрасываем флаг перемещения
             startX = e.clientX;
             startY = e.clientY;
             startLeft = pill.offsetLeft;
             startTop = pill.offsetTop;
-            pill.classList.add('yd-sq-pill-dragging');
-            pill.style.right = 'auto';
-            pill.style.bottom = 'auto';
+            e.preventDefault(); // Предотвращаем выделение текста
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -2498,23 +2489,33 @@
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
-            pill.style.left = (startLeft + dx) + 'px';
-            pill.style.top = (startTop + dy) + 'px';
+            // Считаем drag только если сдвинули больше 5px
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                hasMoved = true;
+                pill.classList.add('yd-sq-pill-dragging');
+                pill.style.right = 'auto';
+                pill.style.bottom = 'auto';
+                pill.style.left = (startLeft + dx) + 'px';
+                pill.style.top = (startTop + dy) + 'px';
+            }
         });
 
         document.addEventListener('mouseup', () => {
             if (!isDragging) return;
             isDragging = false;
 
-            setTimeout(() => {
-                pill.classList.remove('yd-sq-pill-dragging');
-            }, 100);
+            if (hasMoved) {
+                // Был drag - сохраняем позицию
+                setTimeout(() => {
+                    pill.classList.remove('yd-sq-pill-dragging');
+                }, 100);
 
-            // Сохраняем позицию
-            localStorage.setItem('yd-sq-pill-position', JSON.stringify({
-                left: pill.offsetLeft,
-                top: pill.offsetTop
-            }));
+                localStorage.setItem('yd-sq-pill-position', JSON.stringify({
+                    left: pill.offsetLeft,
+                    top: pill.offsetTop
+                }));
+            }
+            // Если не было перемещения - это click, обработчик click сработает
         });
     }
 
@@ -5678,6 +5679,7 @@
     }
 
 })();
+
 
 
 
