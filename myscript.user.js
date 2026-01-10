@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.131.1
+// @version 0.132.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2260,17 +2260,21 @@
                 panel.style.display = 'none';
                 panel.classList.remove('yd-sq-panel-minimizing');
 
-                // Показываем pill с принудительным позиционированием
-                pill.style.cssText = `
-                    display: flex !important;
-                    position: fixed !important;
-                    bottom: 20px !important;
-                    right: 20px !important;
-                    z-index: 9999999 !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    pointer-events: auto !important;
-                `;
+                // Сбрасываем сохранённую позицию чтобы pill появился в стандартном месте
+                localStorage.removeItem('yd-sq-pill-position');
+
+                // Показываем pill в правом нижнем углу (стандартная позиция)
+                pill.style.cssText = '';
+                pill.style.display = 'flex';
+                pill.style.position = 'fixed';
+                pill.style.bottom = '20px';
+                pill.style.right = '20px';
+                pill.style.left = 'auto';
+                pill.style.top = 'auto';
+                pill.style.zIndex = '9999999';
+                pill.style.opacity = '1';
+                pill.style.visibility = 'visible';
+                pill.style.pointerEvents = 'auto';
 
                 pill.classList.add('yd-sq-pill-appear');
                 setTimeout(() => pill.classList.remove('yd-sq-pill-appear'), 300);
@@ -2280,10 +2284,11 @@
                     position: pill.style.position,
                     bottom: pill.style.bottom,
                     right: pill.style.right,
+                    left: pill.style.left,
+                    top: pill.style.top,
                     zIndex: pill.style.zIndex,
                     inDOM: document.body.contains(pill),
-                    computedDisplay: window.getComputedStyle(pill).display,
-                    computedVisibility: window.getComputedStyle(pill).visibility
+                    rect: pill.getBoundingClientRect()
                 });
             }, 200);
 
@@ -5661,6 +5666,7 @@
     }
 
 })();
+
 
 
 
