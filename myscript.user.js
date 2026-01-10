@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.139.3
+// @version 1.139.5
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1664,6 +1664,12 @@
     // Парсер минус-правил
     function parseMinusRule(raw) {
         raw = raw.trim();
+
+        // Удаляем начальный минус (минус-фразы часто хранятся как "-слово")
+        if (raw.startsWith('-')) {
+            raw = raw.substring(1).trim();
+        }
+
         let type = 'broad';
         let content = raw;
 
@@ -6065,6 +6071,7 @@
     }
 
 })();
+
 
 
 
