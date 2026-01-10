@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.137.38
+// @version 1.138.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -239,6 +239,13 @@
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     function init() {
+        // Проверяем: если мы на странице настроек кампании и идёт синхронизация
+        if (isOnCampaignSettingsPage()) {
+            if (handleSettingsPageSync()) {
+                return; // Обработка синхронизации завершится автоматически
+            }
+        }
+
         if (!window.location.href.includes('stat_type=search_queries')) {
             return;
         }
@@ -249,6 +256,12 @@
         loadGlobalState();
         loadLastSendDate(); // Загружаем дату последней отправки
         setupGlobalListeners();
+
+        // Проверяем есть ли синхронизированные данные для применения
+        setTimeout(() => {
+            checkAndApplySyncedData();
+        }, 1000);
+
         detectPageChange();
         waitForTableAndInit();
     }
@@ -1957,6 +1970,265 @@
     }
 
 
+    // ========================================
+    // СИНХРОНИЗАЦИЯ С НАСТРОЙКАМИ КАМПАНИИ
+    // ========================================
+
+    const SYNC_STORAGE_KEY = 'yd-sq-sync-pending';
+    const SYNC_DATA_KEY = 'yd-sq-synced-minuses';
+    const SYNC_RETURN_URL_KEY = 'yd-sq-sync-return-url';
+
+    // Определяем URL настроек кампании из текущего URL статистики
+    function getCampaignSettingsUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const cid = params.get('cid');
+        const ulogin = params.get('ulogin');
+
+        if (!cid || !ulogin) {
+            log.warn('Не удалось определить cid или ulogin');
+            return null;
+        }
+
+        // Пробуем найти ссылку "Изменить параметры" на странице
+        const editLink = Array.from(document.querySelectorAll('a')).find(a =>
+            a.textContent.includes('Изменить параметры') ||
+            a.textContent.includes('Редактировать') ||
+            a.href?.includes('/edit')
+        );
+
+        if (editLink && editLink.href) {
+            log.info('Найдена ссылка на настройки:', editLink.href);
+            return editLink.href;
+        }
+
+        // Формируем URL для wizard кампании (новый интерфейс)
+        // Это работает для большинства кампаний
+        const wizardUrl = `https://direct.yandex.ru/wizard/campaigns/${cid}/edit/?ulogin=${ulogin}`;
+        log.info('Сформирован URL настроек (wizard):', wizardUrl);
+        return wizardUrl;
+    }
+
+    // Начать синхронизацию - переход на страницу настроек
+    function startCampaignSync() {
+        const settingsUrl = getCampaignSettingsUrl();
+        if (!settingsUrl) {
+            showYdsqNotification('Не удалось определить URL настроек кампании', 'error');
+            return;
+        }
+
+        // Сохраняем флаг что идёт синхронизация
+        sessionStorage.setItem(SYNC_STORAGE_KEY, 'true');
+        sessionStorage.setItem(SYNC_RETURN_URL_KEY, window.location.href);
+
+        // Показываем анимацию
+        const syncBtn = document.getElementById('yd-sq-sync-campaign');
+        if (syncBtn) {
+            syncBtn.classList.add('syncing');
+        }
+
+        showYdsqNotification('Переход к настройкам кампании...', 'info');
+
+        // Переходим на страницу настроек
+        setTimeout(() => {
+            window.location.href = settingsUrl;
+        }, 500);
+    }
+
+    // Парсинг минус-фраз на странице настроек (вызывается на странице настроек)
+    function parseMinusesFromSettingsPage() {
+        const minuses = [];
+
+        // Тип 1: Wizard кампании (textarea с contenteditable)
+        // Селектор: [data-testid="MinusKeywords.SingleInput"]
+        const wizardTextarea = document.querySelector('[data-testid="MinusKeywords.SingleInput"]');
+        if (wizardTextarea) {
+            log.info('Найден wizard формат минус-фраз');
+            const html = wizardTextarea.innerHTML;
+            // Минусы разделены <br>, формат: -!слово<br>-слово2<br>
+            const items = html.split(/<br\s*\/?>/i).filter(Boolean);
+            items.forEach(item => {
+                // Убираем HTML теги и пробелы
+                let clean = item.replace(/<[^>]*>/g, '').trim();
+                // Убираем начальный минус если есть
+                if (clean.startsWith('-')) {
+                    clean = clean.substring(1).trim();
+                }
+                if (clean) {
+                    minuses.push(clean);
+                }
+            });
+            log.info(`Распарсено ${minuses.length} минусов из wizard формата`);
+        }
+
+        // Тип 2: DNA кампании (теги)
+        // Селектор: [data-testid^="ExceptionsEditor.Tag_phrase."]
+        const dnaTags = document.querySelectorAll('[data-testid^="ExceptionsEditor.Tag_phrase."]');
+        if (dnaTags.length > 0) {
+            log.info('Найден DNA формат минус-фраз');
+            dnaTags.forEach(tag => {
+                // Ищем текст внутри: span > div или просто textContent
+                const textDiv = tag.querySelector('span.dc-Text__text div');
+                let phrase = textDiv ? textDiv.textContent.trim() : '';
+
+                if (!phrase) {
+                    // Попробуем из data-testid
+                    const testId = tag.getAttribute('data-testid') || '';
+                    const match = testId.match(/ExceptionsEditor\.Tag_phrase\.(.+)$/);
+                    if (match) {
+                        phrase = match[1];
+                    }
+                }
+
+                if (phrase && !phrase.endsWith('.close')) {
+                    minuses.push(phrase);
+                }
+            });
+            log.info(`Распарсено ${minuses.length} минусов из DNA формата`);
+        }
+
+        return minuses;
+    }
+
+    // Проверка: находимся ли мы на странице настроек кампании
+    function isOnCampaignSettingsPage() {
+        const url = window.location.href;
+        return url.includes('/wizard/campaigns/') && url.includes('/edit') ||
+            url.includes('/dna/campaigns-edit');
+    }
+
+    // Обработка страницы настроек (парсинг и возврат)
+    function handleSettingsPageSync() {
+        if (!isOnCampaignSettingsPage()) return false;
+
+        const syncPending = sessionStorage.getItem(SYNC_STORAGE_KEY);
+        if (syncPending !== 'true') return false;
+
+        log.info('Обнаружена страница настроек с pending sync');
+
+        // Ждём загрузки данных
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        const tryParse = () => {
+            attempts++;
+            const minuses = parseMinusesFromSettingsPage();
+
+            if (minuses.length > 0 || attempts >= maxAttempts) {
+                // Сохраняем результат
+                const syncData = {
+                    minuses: minuses,
+                    timestamp: Date.now(),
+                    campaignUrl: window.location.href
+                };
+                localStorage.setItem(SYNC_DATA_KEY, JSON.stringify(syncData));
+
+                // Очищаем флаг
+                sessionStorage.removeItem(SYNC_STORAGE_KEY);
+
+                // Получаем URL для возврата
+                const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
+                sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
+
+                log.success(`Синхронизировано ${minuses.length} минусов, возврат...`);
+
+                // Возвращаемся назад
+                if (returnUrl) {
+                    window.location.href = returnUrl;
+                } else {
+                    window.history.back();
+                }
+                return;
+            }
+
+            // Ждём ещё
+            setTimeout(tryParse, 500);
+        };
+
+        // Начинаем парсинг через небольшую задержку
+        setTimeout(tryParse, 1000);
+        return true;
+    }
+
+    // Проверка и применение синхронизированных данных (на странице статистики)
+    function checkAndApplySyncedData() {
+        const syncDataStr = localStorage.getItem(SYNC_DATA_KEY);
+        if (!syncDataStr) return false;
+
+        try {
+            const syncData = JSON.parse(syncDataStr);
+
+            // Проверяем что данные свежие (не старше 5 минут)
+            if (Date.now() - syncData.timestamp > 5 * 60 * 1000) {
+                localStorage.removeItem(SYNC_DATA_KEY);
+                return false;
+            }
+
+            const syncedMinuses = syncData.minuses || [];
+            log.info(`Применяем синхронизированные данные: ${syncedMinuses.length} минусов`);
+
+            // Сравниваем с текущим списком
+            const existingRaw = new Set(importedMinuses.map(imp => imp.raw.toLowerCase().trim()));
+            const syncedSet = new Set(syncedMinuses.map(m => m.toLowerCase().trim()));
+
+            let addedCount = 0;
+            let removedCount = 0;
+
+            // Добавляем новые
+            for (const phrase of syncedMinuses) {
+                const normalized = phrase.toLowerCase().trim();
+                if (!existingRaw.has(normalized)) {
+                    importedMinuses.push({
+                        id: `imp:${Date.now()}_${Math.random()}`,
+                        raw: phrase,
+                        source: 'sync', // Источник: синхронизация
+                        importedAt: Date.now(),
+                        deleted: false
+                    });
+                    addedCount++;
+                }
+            }
+
+            // Помечаем удалённые (которые есть у нас, но нет в кампании)
+            for (const imp of importedMinuses) {
+                const normalized = imp.raw.toLowerCase().trim();
+                if (!syncedSet.has(normalized) && !imp.deleted) {
+                    // Этого минуса нет в кампании - возможно он был удалён
+                    // Пока не удаляем автоматически, только логируем
+                    log.warn(`Минус "${imp.raw}" отсутствует в кампании`);
+                    removedCount++;
+                }
+            }
+
+            // Сохраняем время последней синхронизации
+            localStorage.setItem('yd-sq-last-sync-time', syncData.timestamp.toString());
+
+            // Очищаем данные синхронизации
+            localStorage.removeItem(SYNC_DATA_KEY);
+
+            // Обновляем UI
+            syncLocalToGlobal();
+            renderImportedMinuses();
+            updateHighlights();
+
+            // Показываем результат
+            let msg = `Синхронизировано: ${syncedMinuses.length} минусов`;
+            if (addedCount > 0) msg += ` (+${addedCount} новых)`;
+            showYdsqNotification(msg, 'success');
+
+            // Убираем анимацию с кнопки
+            const syncBtn = document.getElementById('yd-sq-sync-campaign');
+            if (syncBtn) {
+                syncBtn.classList.remove('syncing');
+            }
+
+            return true;
+        } catch (e) {
+            log.error('Ошибка применения синхронизированных данных:', e);
+            localStorage.removeItem(SYNC_DATA_KEY);
+            return false;
+        }
+    }
+
 
     async function importMinusesFromClipboard() {
         try {
@@ -2159,6 +2431,13 @@
                             </svg>
                         </div>
                         <div class="yd-sq-section-header-right">
+                            <button id="yd-sq-sync-campaign" class="yd-sq-icon-btn-sm yd-sq-sync-btn" title="Синхронизировать с кампанией">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 12a9 9 0 0 1-9 9m-9-9a9 9 0 0 1 9-9"/>
+                                    <path d="M16 3l5 3-5 3"/>
+                                    <path d="M8 21l-5-3 5-3"/>
+                                </svg>
+                            </button>
                             <button id="yd-sq-copy-imported" class="yd-sq-icon-btn-sm" title="Копировать">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -2375,6 +2654,12 @@
             if (result.success) {
                 showIconFeedback(btn, 'success');
             }
+        });
+
+        // Sync with campaign button
+        document.getElementById('yd-sq-sync-campaign').addEventListener('click', (e) => {
+            e.stopPropagation();
+            startCampaignSync();
         });
 
         // Copy Imported
@@ -2971,13 +3256,22 @@
 
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const isDeleted = imp.deleted;
-            const isImported = imp.source === 'clipboard';
             const itemClass = `yd-sq-item yd-sq-item-imported${isDeleted ? ' yd-sq-item-deleted' : ''}`;
 
             // Иконка источника
-            const sourceIcon = isImported
-                ? '<span class="yd-sq-source-icon" title="Импортировано">📥</span>'
-                : '<span class="yd-sq-source-icon" title="Из таблицы">➕</span>';
+            let sourceIcon = '';
+            switch (imp.source) {
+                case 'clipboard':
+                    sourceIcon = '<span class="yd-sq-source-icon" title="Импортировано из буфера">📋</span>';
+                    break;
+                case 'sync':
+                    sourceIcon = '<span class="yd-sq-source-icon" title="Синхронизировано">☁️</span>';
+                    break;
+                case 'table':
+                default:
+                    sourceIcon = '<span class="yd-sq-source-icon" title="Отправлено через расширение">📤</span>';
+                    break;
+            }
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
@@ -4706,6 +5000,21 @@
                 color: var(--yd-text);
             }
 
+            /* Sync button special styles */
+            .yd-sq-sync-btn {
+                color: var(--yd-primary);
+            }
+            .yd-sq-sync-btn:hover {
+                background: rgba(0, 122, 255, 0.1);
+            }
+            .yd-sq-sync-btn.syncing svg {
+                animation: yd-spin 1s linear infinite;
+            }
+            @keyframes yd-spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+
             /* Source icon (📥 or ➕) */
             .yd-sq-source-icon {
                 font-size: 10px;
@@ -5706,6 +6015,7 @@
     }
 
 })();
+
 
 
 
