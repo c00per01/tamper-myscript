@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 0.135.1
+// @version 0.136.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3826,12 +3826,6 @@
         const pop = findResultPopup();
         if (!pop) return false;
 
-        // Prevent double success logic (debounce 2 seconds)
-        if (Date.now() - lastResultPopupSuccessTime < 2000) {
-            log.modal('Debounce: пропускаем (менее 2 сек)');
-            return false; // Важно: false чтобы не считалось успехом
-        }
-
         log.modal('tryCloseResultPopup: найден попап результата');
 
         // Улучшенный поиск кнопки OK
@@ -3845,6 +3839,13 @@
         if (ok) {
             log.modal('Нажимаем кнопку OK');
             ok.click();
+
+            // Prevent double success logic (debounce 1.5 seconds)
+            // OK нажимается ВСЕГДА, но логика обработки только если debounce прошёл
+            if (Date.now() - lastResultPopupSuccessTime < 1500) {
+                log.modal('Debounce: OK нажат, но логика пропущена');
+                return true; // Возвращаем true т.к. OK нажат
+            }
 
             lastResultPopupSuccessTime = Date.now();
 
@@ -5705,6 +5706,7 @@
     }
 
 })();
+
 
 
 
