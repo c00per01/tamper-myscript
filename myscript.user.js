@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.158.1
+// @version 1.159.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -373,20 +373,26 @@
         // Устанавливаем чекбоксы для найденных строк
         let restoredCount = 0;
         for (const rowId of rowsWithSelections) {
-            const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
-            if (row) {
-                const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && !checkbox.checked) {
-                    clickCheckbox(checkbox, true);
-                    checkbox.dataset.ydAuto = 'true';
-                    restoredCount++;
+            try {
+                const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+                if (row) {
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox && !checkbox.checked) {
+                        clickCheckbox(checkbox, true);
+                        checkbox.dataset.ydAuto = 'true';
+                        restoredCount++;
+                    }
                 }
+            } catch (err) {
+                console.error('[YD-SQ] ❌ Ошибка восстановления чекбокса для rowId:', rowId, err);
             }
         }
 
         if (restoredCount > 0) {
             log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
         }
+
+        console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes завершен');
     }
 
     function setupTableObserver(table) {
@@ -6488,6 +6494,7 @@
     }
 
 })();
+
 
 
 
