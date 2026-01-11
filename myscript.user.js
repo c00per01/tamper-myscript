@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.150.2
+// @version 1.151.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -182,8 +182,6 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
-    let lastBatchSentMinuses = []; // Тост для передачи списка отправленных минусов между пакетами
-    let lastAutoScrolledRowId = null; // Последняя строка к которой был автоскролл (чтобы не дергать экран при повторных кликах)
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -793,7 +791,6 @@
 
     function trackManualScroll() {
         lastManualScrollTime = Date.now();
-        lastAutoScrolledRowId = null; // Сбрасываем память автоскролла при ручном вмешательстве
     }
 
     function autoScrollToRow(rowId) {
@@ -813,7 +810,20 @@
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // Позиционируем строку на 15% от верха экрана (на 50% выше чем было 30%)
+        // УМНЫЙ СКРОЛЛ: не скроллим если строка уже видна на экране
+        // Считаем строку видимой, если она полностью в пределах viewport с отступами
+        const topMargin = viewportHeight * 0.1;  // 10% сверху
+        const bottomMargin = viewportHeight * 0.15; // 15% снизу
+
+        const isRowVisible = rowRect.top >= topMargin &&
+            rowRect.bottom <= (viewportHeight - bottomMargin);
+
+        if (isRowVisible) {
+            // Строка уже видна - не скроллим
+            return;
+        }
+
+        // Позиционируем строку на 15% от верха экрана
         const targetY = rowRect.top + window.scrollY - viewportHeight * 0.15;
 
         console.log('[YD-SQ] Скроллим к строке:', rowId, 'targetY:', targetY);
@@ -962,12 +972,7 @@
 
         resetClearAllButton();
         updateUI();
-
-        // Smart Scroll: скроллим только если это НОВАЯ строка
-        if (lastAutoScrolledRowId !== rowId) {
-            debounceAutoScroll(rowId, 180);
-            lastAutoScrolledRowId = rowId;
-        }
+        debounceAutoScroll(rowId, 180);
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
@@ -3707,34 +3712,40 @@
             log.success(`Пакет ${currentBatchIndex + 1} успешно завершён`);
 
             // ВАЖНО: Удаляем ТОЛЬКО реально отправленные минусы (не весь пакет!)
-            // Используем глобальную переменную, так как локальная pendingSentMinusesBackup недоступна здесь
-            const sentCount = lastBatchSentMinuses.length;
-            const itemsToSend = lastBatchSentMinuses.length > 0 ? lastBatchSentMinuses : batchQueue[currentBatchIndex].map(sel => ({ raw: sel.display }));
-
-            // Если отправка была реальная - используем lastBatchSentMinuses
-            // Если это был первый пакет и он упал - возможно lastBatchSentMinuses пуст, но мы считаем success?
-            // Логика: waitForMinusModal заполнит lastBatchSentMinuses при успехе.
-
+            const currentBatch = batchQueue[currentBatchIndex];
+            const sentBackup = pendingSentMinusesBackup || [];
+            const sentCount = sentBackup.length;
             let deletedCount = 0;
-            const items = lastBatchSentMinuses.length > 0 ? lastBatchSentMinuses : [];
 
-            for (const item of items) {
-                for (const [key, sel] of selections.entries()) {
-                    if (sel.display === item.raw) {
-                        selections.delete(key);
+            log.batch(`Обработка пакета: currentBatch=${currentBatch?.length || 0}, sentBackup=${sentCount}`);
+
+            if (sentCount > 0) {
+                // Удаляем по backup (реально отправленные)
+                for (const item of sentBackup) {
+                    for (const [key, sel] of selections.entries()) {
+                        if (sel.display === item.raw) {
+                            selections.delete(key);
+                            deletedCount++;
+                            break;
+                        }
+                    }
+                }
+            } else if (currentBatch && currentBatch.length > 0) {
+                // Fallback: если backup пуст, удаляем по currentBatch
+                log.warn('pendingSentMinusesBackup пуст, используем currentBatch');
+                for (const sel of currentBatch) {
+                    if (selections.has(sel.id)) {
+                        selections.delete(sel.id);
                         deletedCount++;
-                        break;
                     }
                 }
             }
 
-            log.selection(`Удалено ${deletedCount}/${sentCount} selections после пакета ${currentBatchIndex + 1}`);
+            log.selection(`Удалено ${deletedCount} selections после пакета ${currentBatchIndex + 1}`);
 
             // Проверяем, остались ли минусы которые не влезли в модалку
             const remainingInSelections = selections.size;
-            const expectedRemaining = batchQueue.slice(currentBatchIndex + 1).reduce((sum, b) => sum + b.length, 0);
-            const actualRemaining = remainingInSelections;
-            const lostInThisBatch = batchQueue[currentBatchIndex].length - sentCount;
+            const lostInThisBatch = (currentBatch?.length || 0) - deletedCount;
 
             if (lostInThisBatch > 0) {
                 log.warn(`⚠️ В пакете ${currentBatchIndex + 1} не влезло ${lostInThisBatch} минусов - они остаются в selections`);
@@ -4420,7 +4431,6 @@
             log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
 
             const pendingSentMinusesBackup = [...pendingSentMinuses];
-            lastBatchSentMinuses = [...pendingSentMinuses]; // Сохраняем в глобальную для sendBatch
 
             if (pendingSentMinuses.length > 0) {
                 for (const item of pendingSentMinuses) {
