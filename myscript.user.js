@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.145.1
+// @version 1.146.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -322,14 +322,16 @@
             updateHighlights();
             updateUI();
 
-            // Отложенное восстановление чекбоксов (Яндекс может пересоздавать строки)
+            // Отложенное восстановление UI (Яндекс может пересоздавать ячейки и затирать классы при SPA навигации)
             setTimeout(() => {
                 restoreCheckboxes();
-            }, 500);
+                updateHighlights();
+            }, 1000);
 
             setTimeout(() => {
                 restoreCheckboxes();
-            }, 1500);
+                updateHighlights();
+            }, 2500);
 
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -1490,7 +1492,7 @@
         }
 
         if (rules.length > 0 || sentHistory.length > 0) {
-            console.log(`[YD-SQ] 🎨 UPDATE HIGHLIGHTS: Total rules: ${rules.length} (from selected: ${rules.length - initialRulesCount}, from imported: ${initialRulesCount}), sentHistory: ${sentHistory.length}`);
+            console.log(`[YD-SQ] 🎨 UPDATE HIGHLIGHTS: Spans: ${wordSpans.length}, Rules: ${rules.length} (sel: ${rules.length - initialRulesCount}, imp: ${initialRulesCount}), history: ${sentHistory.length}`);
         }
 
         if (rules.length === 0 && sentHistory.length === 0) return;
@@ -6234,6 +6236,7 @@
     }
 
 })();
+
 
 
 
