@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.154.1
+// @version 1.155.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -272,6 +272,18 @@
         document.addEventListener('scroll', trackManualScroll, { passive: true });
         document.addEventListener('wheel', trackManualScroll, { passive: true });
         document.addEventListener('touchmove', trackManualScroll, { passive: true });
+
+        // КРИТИЧНО: Сохраняем состояние перед перезагрузкой/закрытием страницы
+        window.addEventListener('beforeunload', () => {
+            syncLocalToGlobal();
+        });
+
+        // Периодическое автосохранение каждые 5 секунд
+        setInterval(() => {
+            if (selections.size > 0) {
+                syncLocalToGlobal();
+            }
+        }, 5000);
     }
 
     function waitForTableAndInit(attempt = 0) {
@@ -319,20 +331,24 @@
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
+
+            // Логируем состояние selections при инициализации
+            console.log(`[YD-SQ] 📊 INIT: selections.size=${selections.size}, currentPageKey=${currentPageKey}`);
+
             restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
             updateHighlights();
             updateUI();
 
             // Отложенное восстановление UI (Яндекс может пересоздавать ячейки и затирать классы при SPA навигации)
-            setTimeout(() => {
-                restoreCheckboxes();
-                updateHighlights();
-            }, 1000);
-
-            setTimeout(() => {
-                restoreCheckboxes();
-                updateHighlights();
-            }, 2500);
+            // Несколько попыток с разными задержками для надежности
+            const restoreDelays = [500, 1500, 3000, 5000];
+            for (const delay of restoreDelays) {
+                setTimeout(() => {
+                    restoreCheckboxes();
+                    updateHighlights();
+                    updateUI();
+                }, delay);
+            }
 
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -6495,6 +6511,7 @@
     }
 
 })();
+
 
 
 
