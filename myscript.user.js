@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.160.1
+// @version 1.161.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -327,16 +327,8 @@
             updateHighlights();
             updateUI();
 
-            // Отложенное восстановление UI (Яндекс может пересоздавать ячейки и затирать классы при SPA навигации)
-            setTimeout(() => {
-                restoreCheckboxes();
-                updateHighlights();
-            }, 1000);
-
-            setTimeout(() => {
-                restoreCheckboxes();
-                updateHighlights();
-            }, 2500);
+            // MutationObserver (setupTableObserver) отслеживает изменения DOM
+            // и вызывает restoreCheckboxes/updateHighlights при необходимости
 
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -6502,6 +6494,7 @@
     }
 
 })();
+
 
 
 
