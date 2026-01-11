@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.142.2
+// @version 1.143.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4168,12 +4168,34 @@
         rebuildCampaignMinusList();
     }
 
+    // Время начала текущей операции отправки (для защиты от race condition)
+    let currentSendStartTime = 0;
+
+    // Время когда последний раз видели попап результата (для определения "нового" попапа)
+    let lastPopupSeenTime = 0;
+
     function findResultPopup() {
-        const c = document.querySelectorAll('[role="dialog"], div, section');
-        for (const el of c) {
+        // Сначала ищем по точному селектору Яндекса
+        const popup = document.querySelector('.popup.popup_visibility_visible.b-confirm');
+        if (popup) {
+            const text = popup.textContent || '';
+            if (text.includes('Добавлено') && text.includes('минус')) {
+                return popup;
+            }
+        }
+
+        // Fallback: ищем по тексту
+        const candidates = document.querySelectorAll('.popup, [role="dialog"], div, section');
+        for (const el of candidates) {
             const t = el.textContent || '';
             if (!t) continue;
-            if (t.includes('Добавлено') && t.includes('минус')) return el.closest('[role="dialog"]') || el;
+            if (t.includes('Добавлено') && t.includes('минус')) {
+                // Проверяем что это видимый элемент
+                const rect = el.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    return el.closest('.popup') || el.closest('[role="dialog"]') || el;
+                }
+            }
         }
         return null;
     }
@@ -4192,22 +4214,37 @@
         log.modal('tryCloseResultPopup: найден попап результата');
 
         // Улучшенный поиск кнопки OK
-        const allButtons = Array.from(pop.querySelectorAll('button, span[role="button"], div[role="button"], a'));
-        const ok = allButtons.find(el => {
-            const s = (el.textContent || '').trim().toLowerCase();
-            // Проверяем точное совпадение или близкое
-            return s === 'ok' || s === 'ок' || s === 'хорошо' || s === 'понятно' || s === 'закрыть';
-        });
+        // 1. Сначала по классу Яндекса
+        let ok = pop.querySelector('.b-confirm__yes, button.button_action_confirm');
+
+        // 2. Fallback: по тексту
+        if (!ok) {
+            const allButtons = Array.from(pop.querySelectorAll('button, span[role="button"], div[role="button"], a'));
+            ok = allButtons.find(el => {
+                const s = (el.textContent || '').trim().toLowerCase();
+                return s === 'ok' || s === 'ок' || s === 'хорошо' || s === 'понятно' || s === 'закрыть';
+            });
+        }
 
         if (ok) {
             log.modal('Нажимаем кнопку OK');
+
+            // Используем несколько способов клика для надёжности
             ok.click();
+            ok.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
             // Prevent double success logic (debounce 1.5 seconds)
             // OK нажимается ВСЕГДА, но логика обработки только если debounce прошёл
             if (Date.now() - lastResultPopupSuccessTime < 1500) {
                 log.modal('Debounce: OK нажат, но логика пропущена');
                 return true; // Возвращаем true т.к. OK нажат
+            }
+
+            // ЗАЩИТА от race condition: проверяем есть ли pendingSentMinuses
+            // Если их 0, значит это старый попап от предыдущей операции
+            if (pendingSentMinuses.length === 0) {
+                log.modal('SKIP: pendingSentMinuses пустой - это старый попап');
+                return true;
             }
 
             lastResultPopupSuccessTime = Date.now();
@@ -6156,6 +6193,7 @@
     }
 
 })();
+
 
 
 
