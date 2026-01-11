@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.149.2
+// @version 1.150.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2213,13 +2213,30 @@
             const currentCount = minuses.length;
 
             // Проверяем, загружена ли страница полностью (есть ключевые элементы UI)
+            // Расширенные селекторы для разных типов страниц настроек
             const hasMinusContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]') ||
                 document.querySelector('[data-testid^="ExceptionsEditor"]') ||
                 document.querySelector('.minus-keywords-editor') ||
-                document.querySelector('[class*="MinusKeywords"]');
+                document.querySelector('[class*="MinusKeywords"]') ||
+                // Дополнительные селекторы для определения загрузки формы
+                document.querySelector('[data-testid*="minus"]') ||
+                document.querySelector('[data-testid*="Minus"]');
+
+            // Проверяем что страница настроек загружена (есть форма редактирования)
+            const hasFormLoaded = document.querySelector('button[type="submit"]') ||
+                document.querySelector('[data-testid="submit-button"]') ||
+                document.querySelector('button[class*="Save"]') ||
+                document.querySelector('[class*="CampaignEdit"]') ||
+                document.querySelector('[class*="wizard"]') ||
+                document.querySelector('[data-testid="CampaignEditForm"]');
 
             const hasPageLoaded = document.querySelector('[data-testid]') !== null &&
                 document.readyState === 'complete';
+
+            // Логируем состояние для отладки (каждые 5 попыток)
+            if (attempts % 5 === 0) {
+                console.log(`[YD-SQ] 🔍 SYNC попытка ${attempts}: minuses=${currentCount}, hasMinusContainer=${!!hasMinusContainer}, hasFormLoaded=${!!hasFormLoaded}, hasPageLoaded=${hasPageLoaded}`);
+            }
 
             // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
             if (currentCount > 0 && currentCount === lastCount) {
@@ -2229,11 +2246,13 @@
             }
             lastCount = currentCount;
 
-            // Быстрое завершение: если страница загружена, контейнер есть, но минусов нет
-            if (hasPageLoaded && hasMinusContainer && currentCount === 0) {
+            // Быстрое завершение: если форма загружена, но минусов нет
+            // Условие: страница загружена И (есть контейнер минусов ИЛИ есть форма редактирования) И минусов 0
+            if (hasPageLoaded && (hasMinusContainer || hasFormLoaded) && currentCount === 0) {
                 pageLoadedButEmpty++;
                 if (pageLoadedButEmpty >= 3) {
-                    // Страница загружена, контейнер минусов есть, но он пуст - минусов реально нет
+                    // Страница загружена, но минусов нет
+                    console.log(`[YD-SQ] ✅ SYNC: Форма загружена, минусов нет (попытка ${attempts})`);
                     showSyncStatusToast('ℹ️ Минус-фразы не найдены (пустой список). Возврат...');
                     finishSync(minuses, 0);
                     return;
@@ -3679,10 +3698,31 @@
             await waitForMinusModal(values);
             log.success(`Пакет ${currentBatchIndex + 1} успешно завершён`);
 
-            // Удаляем selections из текущего пакета
-            const currentBatch = batchQueue[currentBatchIndex];
-            currentBatch.forEach(sel => selections.delete(sel.id));
-            log.selection(`Удалено ${currentBatch.length} selections после пакета ${currentBatchIndex + 1}`);
+            // ВАЖНО: Удаляем ТОЛЬКО реально отправленные минусы (не весь пакет!)
+            const sentCount = pendingSentMinusesBackup.length;
+            let deletedCount = 0;
+
+            for (const item of pendingSentMinusesBackup) {
+                for (const [key, sel] of selections.entries()) {
+                    if (sel.display === item.raw) {
+                        selections.delete(key);
+                        deletedCount++;
+                        break;
+                    }
+                }
+            }
+
+            log.selection(`Удалено ${deletedCount}/${sentCount} selections после пакета ${currentBatchIndex + 1}`);
+
+            // Проверяем, остались ли минусы которые не влезли в модалку
+            const remainingInSelections = selections.size;
+            const expectedRemaining = batchQueue.slice(currentBatchIndex + 1).reduce((sum, b) => sum + b.length, 0);
+            const actualRemaining = remainingInSelections;
+            const lostInThisBatch = batchQueue[currentBatchIndex].length - sentCount;
+
+            if (lostInThisBatch > 0) {
+                log.warn(`⚠️ В пакете ${currentBatchIndex + 1} не влезло ${lostInThisBatch} минусов - они остаются в selections`);
+            }
 
             syncLocalToGlobal();
             updateUI();
@@ -3698,12 +3738,28 @@
             } else {
                 // Все пакеты отправлены
                 const totalBatches = batchQueue.length;
+                const remainingAfterAllBatches = selections.size;
+
                 batchQueue = [];
                 currentBatchIndex = 0;
                 isSending = false;
                 pendingSentMinuses = []; // Очищаем pending
-                log.success(`✅ Все ${totalBatches} пакетов успешно отправлены!`);
-                showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
+
+                if (remainingAfterAllBatches > 0) {
+                    // Остались минусы которые не влезли в модалки - запускаем автоповтор
+                    log.batch(`⚠️ После ${totalBatches} пакетов осталось ${remainingAfterAllBatches} минусов - автоповтор`);
+                    showYdsqNotification(`Пакеты отправлены, осталось ${remainingAfterAllBatches}. Автоотправка...`, 'info');
+
+                    setTimeout(() => {
+                        if (selections.size > 0) {
+                            log.batch('=== АВТОПОВТОРНАЯ ОТПРАВКА ПОСЛЕ ПАКЕТОВ ===');
+                            sendToMinusPhrases();
+                        }
+                    }, 2000);
+                } else {
+                    log.success(`✅ Все ${totalBatches} пакетов успешно отправлены!`);
+                    showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
+                }
                 resetClearAllButton();
             }
 
@@ -6323,6 +6379,7 @@
     }
 
 })();
+
 
 
 
