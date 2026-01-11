@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.139.5
+// @version 1.139.7
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1398,7 +1398,7 @@
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
             delete sp.dataset.importedAt;
-            sp.title = ''; // Очищаем tooltip
+            delete sp.dataset.tooltip; // Очищаем кастомный tooltip
         }
 
         // 2. Prepare Rules
@@ -1606,7 +1606,7 @@
                         }
                         // Добавляем tooltip для imported минусов
                         if (rule.source === 'imported') {
-                            span.title = 'Уже добавлено';
+                            span.dataset.tooltip = 'Уже добавлено';
                         }
                     }
                 }
@@ -2249,11 +2249,17 @@
                 });
             }
 
+            log.success(`Синхронизировано ${importedMinuses.length} минусов (было ${oldCount})`);
+            console.log('[YD-SQ] importedMinuses после синхронизации:', importedMinuses.slice(0, 5));
+
             // Сохраняем время последней синхронизации
             localStorage.setItem('yd-sq-last-sync-time', syncData.timestamp.toString());
 
             // Очищаем данные синхронизации
             localStorage.removeItem(SYNC_DATA_KEY);
+
+            // Обновляем кэш минусов кампании
+            rebuildCampaignMinusList();
 
             // Обновляем UI
             syncLocalToGlobal();
@@ -5783,21 +5789,38 @@
                 font-weight: 600;
             }
 
-            /* Уже добавлено - зелёный */
+            /* Уже добавлено - серый с tooltip */
             .yd-imported-minus {
                 background: var(--yd-success-bg) !important;
                 color: var(--yd-text-secondary) !important;
                 text-decoration: none !important;
-                opacity: 0.8;
-                cursor: default !important;
-                pointer-events: none !important;
+                opacity: 0.7;
+                cursor: help !important;
+                position: relative;
             }
 
-            /* Убираем любые псевдоэлементы для импортированных слов */
-            .yd-imported-minus::before,
-            .yd-imported-minus::after {
-                content: none !important;
-                display: none !important;
+            /* Кастомный tooltip для imported минусов */
+            .yd-imported-minus[data-tooltip]::after {
+                content: attr(data-tooltip);
+                position: absolute;
+                bottom: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.85);
+                color: #fff;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s ease;
+                z-index: 10000;
+                margin-bottom: 4px;
+            }
+
+            .yd-imported-minus[data-tooltip]:hover::after {
+                opacity: 1;
             }
 
             .yd-row-deactivated {
@@ -6071,6 +6094,7 @@
     }
 
 })();
+
 
 
 
