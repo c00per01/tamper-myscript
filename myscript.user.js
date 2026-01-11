@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.148.1
+// @version 1.149.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2202,34 +2202,56 @@
 
         // Ждём полной загрузки страницы
         let attempts = 0;
-        const maxAttempts = 30; // Увеличено до 30 попыток
+        const maxAttempts = 15; // Уменьшено: быстрее определяем пустую кампанию
         let lastCount = 0;
         let stableCount = 0; // Сколько раз подряд количество было стабильным
+        let pageLoadedButEmpty = false; // Флаг: страница загружена, но минусов нет
+
+        // Функция проверки, что страница настроек полностью загружена
+        const isSettingsPageLoaded = () => {
+            // Проверяем наличие ключевых UI элементов страницы настроек
+            const wizardContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]');
+            const dnaContainer = document.querySelector('[data-testid^="ExceptionsEditor"]');
+            const saveButton = document.querySelector('button[data-testid*="Save"], button[type="submit"]');
+            const campaignName = document.querySelector('[data-testid*="CampaignName"], h1, .campaign-name');
+
+            // Страница загружена если есть хотя бы 2 из этих элементов
+            const loadedElements = [wizardContainer, dnaContainer, saveButton, campaignName].filter(Boolean).length;
+            return loadedElements >= 1;
+        };
 
         const tryParse = () => {
             attempts++;
             const minuses = parseMinusesFromSettingsPage();
             const currentCount = minuses.length;
+            const pageLoaded = isSettingsPageLoaded();
 
             // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
             if (currentCount > 0 && currentCount === lastCount) {
                 stableCount++;
+            } else if (currentCount === 0 && pageLoaded) {
+                // Страница загружена, но минусов 0 — это пустая кампания
+                stableCount++;
+                pageLoadedButEmpty = true;
             } else {
                 stableCount = 0;
+                pageLoadedButEmpty = false;
             }
             lastCount = currentCount;
 
             // Показываем прогресс
             if (currentCount > 0) {
                 showSyncStatusToast(`🔄 Загрузка: ${currentCount} минусов (проверка ${stableCount}/3)...`);
+            } else if (pageLoaded) {
+                showSyncStatusToast(`🔄 Страница загружена, минусов не найдено (${stableCount}/3)...`);
             } else {
                 showSyncStatusToast(`🔄 Ожидание загрузки данных... (${attempts}/${maxAttempts})`);
             }
 
-            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума
-            if ((currentCount > 0 && stableCount >= 3) || attempts >= maxAttempts) {
+            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума ИЛИ пустая кампания подтверждена
+            if ((currentCount > 0 && stableCount >= 3) || (pageLoadedButEmpty && stableCount >= 2) || attempts >= maxAttempts) {
                 if (currentCount === 0) {
-                    showSyncStatusToast('⚠️ Минус-фразы не найдены. Возврат...');
+                    showSyncStatusToast('ℹ️ Минус-фразы отсутствуют в кампании. Возврат...');
                 } else {
                     showSyncStatusToast(`✅ Синхронизировано: ${currentCount} минусов. Возврат...`);
                 }
@@ -3803,6 +3825,10 @@
         if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
         if (isSending) return;
         isSending = true;
+
+        // ВАЖНО: Очищаем pending перед новой отправкой, чтобы не накапливались неудачные попытки
+        pendingSentMinuses = [];
+
         log.batch('=== ОТПРАВКА НАЧАТА ===');
         console.log('[YD SQ] === ОТПРАВКА ===');
         await delay(150);
@@ -6284,6 +6310,7 @@
     }
 
 })();
+
 
 
 
