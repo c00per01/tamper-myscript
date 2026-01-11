@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.164.1
+// @version 1.164.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1518,19 +1518,7 @@
     let cachedImportedRules = null;
     let lastImportedMinusesRef = null;
 
-    // Debounce для updateHighlights
-    let updateHighlightsTimer = null;
-
     function updateHighlights() {
-        // Debounce: откладываем выполнение на 30ms
-        // При быстрых кликах выполнится только последний вызов
-        if (updateHighlightsTimer) {
-            clearTimeout(updateHighlightsTimer);
-        }
-        updateHighlightsTimer = setTimeout(updateHighlightsImmediate, 30);
-    }
-
-    function updateHighlightsImmediate() {
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
@@ -3344,8 +3332,7 @@
     }
 
     function updateUI() {
-        // НЕ вызываем updateHighlights() здесь - это делается отдельно!
-        // updateUI только обновляет панель (список, кнопки)
+        updateHighlights();
         renderSelectionList();
         renderImportedMinuses();
         updateUndoRedoButtons();
@@ -4230,21 +4217,7 @@
         return null;
     }
 
-    function fillMinusModal(modal, values) {
-        const selects = Array.from(modal.querySelectorAll('select'));
-        selects.forEach((select) => {
-            const opts = Array.from(select.options);
-            const opt = opts.find(o => o.textContent.trim() === 'на кампанию' || o.textContent.trim() === 'На кампанию');
-            if (opt) {
-                select.value = opt.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                select.dispatchEvent(new Event('input', { bubbles: true }));
-                const btn = select.closest('.select')?.querySelector('button.select__button');
-                if (btn) { const t = btn.querySelector('.button__text'); if (t) t.textContent = 'на кампанию'; }
-            }
-        });
-        waitForInputFields(modal, values, 0);
-    }
+
 
     // Async версия для пакетной отправки
     function fillMinusModalAsync(modal, values) {
@@ -4349,34 +4322,6 @@
         rebuildCampaignMinusList();
     }
 
-    function waitForInputFields(modal, values, attempt) {
-        if (attempt > 12) {
-            console.error('[YD SQ] Поля не найдены');
-            showYdsqNotification('Поля ввода не найдены', 'error');
-            isSending = false;
-            return;
-        }
-        setTimeout(() => {
-            const textareas = modal.querySelectorAll('textarea.textarea__control, textarea');
-            const textInputs = modal.querySelectorAll('input.text-input__control, input[type="text"]');
-            const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
-            const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
-
-            const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
-            const uniq = [...new Set(all)];
-            const visible = uniq.filter(el => {
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-            });
-
-            if (visible.length > 0) {
-                fillFields(visible, values);
-                setTimeout(() => tryCloseResultPopup(), 1200);
-            } else {
-                waitForInputFields(modal, values, attempt + 1);
-            }
-        }, 300);
-    }
 
     async function fillFields(inputs, values) {
         // Очищаем поля перед заполнением
@@ -6500,53 +6445,6 @@
     }
 
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
