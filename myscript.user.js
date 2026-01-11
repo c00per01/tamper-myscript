@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.152.1
+// @version 1.153.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -788,54 +788,103 @@
         queryCell.appendChild(btnContainer);
     }
 
-    // ==================== АВТОСКРОЛЛ ====================
+    // ==================== SMART SCROLL (DEFERRED) ====================
+    // Константы скролла
+    const SCROLL_BOTTOM_TRIGGER_ZONE = 0.4; // Нижние 40% экрана - зона требующая скролла
+    const SCROLL_TARGET_POSITION = 0.3;     // Целевая позиция строки - 30% от верха
+
+    // Состояние отложенного скролла
+    let pendingScrollRowId = null;
+    let pendingScrollNeedsScroll = false;
 
     function trackManualScroll() {
         lastManualScrollTime = Date.now();
+        // При ручном скролле сбрасываем отложенный скролл
+        pendingScrollNeedsScroll = false;
     }
 
-    function autoScrollToRow(rowId) {
+    /**
+     * Проверяет нужен ли скролл для строки и устанавливает флаг.
+     * Скролл НЕ выполняется сразу - только при mouseleave.
+     */
+    function checkScrollNeeded(rowId) {
         // Не скроллим, если была ручная прокрутка менее 500ms назад
         const timeSinceLastScroll = Date.now() - lastManualScrollTime;
         if (lastManualScrollTime > 0 && timeSinceLastScroll < 500) {
-            return; // Тихо пропускаем без лога
+            return;
         }
 
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
-        if (!row) {
-            return;
-        }
+        if (!row) return;
 
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // ========== SMART SMOOTH SCROLL ==========
-        // Порог: 80% высоты экрана
-        const bottomThreshold = viewportHeight * 0.80;
+        // Граница нижней зоны (верхние 60% экрана - безопасная зона)
+        const bottomZoneStart = viewportHeight * (1 - SCROLL_BOTTOM_TRIGGER_ZONE);
 
-        // Условие 1 (Анти-дребезг): Если строка в диапазоне 0px — 80% экрана, НЕ скроллить
-        // Это даёт стабильность для мульти-выделения в одной строке
-        if (rowRect.top >= 0 && rowRect.top < bottomThreshold) {
-            return; // Строка видна и в комфортной зоне - не трогаем
-        }
-
-        // Условие 2 (Помощь): Если строка ниже 80% (пользователь уперся в дно)
-        // Плавно сдвигаем страницу вниз на фиксированное значение (высота 3-4 строк ≈ 150px)
-        if (rowRect.top >= bottomThreshold) {
-            window.scrollBy({
-                top: 150,
-                behavior: 'smooth'
-            });
+        // Если row.bottom выше чем нижняя зона - скролл не нужен
+        if (rowRect.bottom < bottomZoneStart) {
+            pendingScrollNeedsScroll = false;
+            pendingScrollRowId = null;
             return;
         }
 
-        // Если строка выше экрана (редкий случай при скролле вверх)
-        if (rowRect.top < 0) {
-            window.scrollBy({
-                top: -150,
-                behavior: 'smooth'
-            });
+        // Строка в нижней зоне - нужен скролл, но откладываем
+        pendingScrollNeedsScroll = true;
+        pendingScrollRowId = rowId;
+
+        // Устанавливаем обработчик mouseleave на строку
+        setupRowMouseLeaveHandler(row);
+    }
+
+    /**
+     * Устанавливает обработчик mouseleave для отложенного скролла
+     */
+    function setupRowMouseLeaveHandler(row) {
+        // Удаляем старый обработчик если есть
+        if (row._scrollMouseLeaveHandler) {
+            row.removeEventListener('mouseleave', row._scrollMouseLeaveHandler);
         }
+
+        // Создаем новый обработчик
+        row._scrollMouseLeaveHandler = function onRowMouseLeave() {
+            if (pendingScrollNeedsScroll && pendingScrollRowId) {
+                executeScrollToRow(pendingScrollRowId);
+            }
+            // Сбрасываем состояние
+            pendingScrollNeedsScroll = false;
+            pendingScrollRowId = null;
+            // Удаляем обработчик после срабатывания
+            row.removeEventListener('mouseleave', row._scrollMouseLeaveHandler);
+            row._scrollMouseLeaveHandler = null;
+        };
+
+        row.addEventListener('mouseleave', row._scrollMouseLeaveHandler);
+    }
+
+    /**
+     * Выполняет плавный скролл к строке на позицию TARGET_POSITION
+     */
+    function executeScrollToRow(rowId) {
+        const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+        if (!row) return;
+
+        const rowRect = row.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+
+        // Вычисляем целевую позицию: верхняя граница строки на 30% от верха экрана
+        const targetY = rowRect.top + window.scrollY - (viewportHeight * SCROLL_TARGET_POSITION);
+
+        window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth'
+        });
+    }
+
+    // Совместимость со старым API (для debounceAutoScroll)
+    function autoScrollToRow(rowId) {
+        checkScrollNeeded(rowId);
     }
 
     function debounceAutoScroll(rowId, delay = 180) {
@@ -846,7 +895,7 @@
 
         // Set new timeout
         const timeoutId = setTimeout(() => {
-            autoScrollToRow(rowId);
+            checkScrollNeeded(rowId);
             autoScrollDebounceMap.delete(rowId);
         }, delay);
 
@@ -6410,6 +6459,7 @@
     }
 
 })();
+
 
 
 
