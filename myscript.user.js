@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.139.7
+// @version 1.141.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -482,56 +482,50 @@
         });
     }
 
+    /**
+     * Упрощённый стеммер для Яндекс Директ
+     * 
+     * Логика Яндекс Директ: минус-слово без оператора ! исключает ВСЕ СЛОВОФОРМЫ,
+     * но НЕ однокоренные слова другой части речи.
+     * 
+     * Примеры:
+     * - "шина" исключает: шины, шине, шиной, шину (словоформы существительного)
+     * - "шина" НЕ исключает: шинный, шинная (прилагательные - другое слово)
+     * 
+     * Решение: убираем только падежные/числовые окончания существительных,
+     * НЕ трогаем окончания прилагательных (-ый, -ая, -ое, -ые и т.д.)
+     */
     function stemWord(word) {
         word = word.toLowerCase().replace(/ё/g, 'е');
-        // RV region extraction
-        const match = RE_RVRE.exec(word);
-        if (!match || match.length < 3) {
+
+        // Минимальная длина для стемминга
+        if (word.length < 4) return word;
+
+        // Окончания прилагательных - НЕ УБИРАЕМ (это другие слова)
+        const adjEndings = /(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ого|его|ому|ему|ым|им|ой|ей|ую|юю|ых|их|ыми|ими)$/;
+        if (adjEndings.test(word)) {
+            // Это прилагательное - возвращаем как есть (или с минимальной нормализацией)
             return word;
         }
 
-        const head = match[1];
-        let rv = match[2];
+        // Окончания существительных (падежи и числа)
+        // Порядок важен: сначала длинные, потом короткие
+        const nounEndings = [
+            // Множественное число + падежи
+            'ами', 'ями', 'ах', 'ях', 'ам', 'ям', 'ов', 'ев', 'ей',
+            // Единственное число падежи
+            'ой', 'ей', 'ом', 'ем', 'ою', 'ею', 'ий',
+            // Простые окончания
+            'а', 'я', 'о', 'е', 'у', 'ю', 'ы', 'и', 'ь'
+        ];
 
-        // Step 1: Perfective Gerund
-        const tempRv = rv.replace(RE_PERFECTIVEGERUND, '');
-        if (tempRv !== rv) {
-            rv = tempRv;
-        } else {
-            // Step 2: Reflexive
-            rv = rv.replace(RE_REFLEXIVE, '');
-
-            // Step 3: Adjective or Verb
-            const tempRv2 = rv.replace(RE_ADJECTIVE, '');
-            if (tempRv2 !== rv) {
-                rv = tempRv2;
-                rv = rv.replace(RE_PARTICIPLE, '');
-            } else {
-                const tempRv3 = rv.replace(RE_VERB, '');
-                if (tempRv3 !== rv) {
-                    rv = tempRv3;
-                } else {
-                    rv = rv.replace(RE_NOUN, '');
-                }
+        for (const ending of nounEndings) {
+            if (word.endsWith(ending) && word.length - ending.length >= 2) {
+                return word.slice(0, -ending.length);
             }
         }
 
-        // Step 4: I
-        rv = rv.replace(RE_I, '');
-
-        // Step 5: Derivational
-        rv = rv.replace(RE_DERIVATIONAL_SIMPLE, '');
-
-        // Step 6: NN
-        rv = rv.replace(RE_NN, 'н');
-
-        // Step 7: Superlative
-        rv = rv.replace(RE_SUPERLATIVE, '');
-
-        // Step 8: P
-        rv = rv.replace(RE_P, '');
-
-        return head + rv;
+        return word;
     }
 
     function getTextContent(node) {
@@ -4561,20 +4555,47 @@
     // ==================== УВЕДОМЛЕНИЯ ====================
 
     function showYdsqNotification(message, type = 'info') {
+        // Иконки для разных типов уведомлений (Apple SF Symbols style)
+        const icons = {
+            info: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 16v-4"/>
+                <path d="M12 8h.01"/>
+            </svg>`,
+            success: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5"/>
+            </svg>`,
+            warn: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 9v4"/>
+                <path d="M12 17h.01"/>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            </svg>`,
+            error: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M15 9l-6 6"/>
+                <path d="M9 9l6 6"/>
+            </svg>`
+        };
+
         const notification = document.createElement('div');
         notification.className = `yd-sq-notification yd-sq-notification-${type}`;
-        notification.textContent = message;
+        notification.innerHTML = `
+            <span class="yd-sq-notification-icon">${icons[type] || icons.info}</span>
+            <span>${message}</span>
+        `;
 
         document.body.appendChild(notification);
 
-        setTimeout(() => {
+        // Анимация появления
+        requestAnimationFrame(() => {
             notification.classList.add('yd-sq-notification-show');
-        }, 10);
+        });
 
+        // Автоскрытие
         setTimeout(() => {
             notification.classList.remove('yd-sq-notification-show');
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
+            setTimeout(() => notification.remove(), 350);
+        }, 3500);
     }
 
     // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
@@ -5794,33 +5815,36 @@
                 background: var(--yd-success-bg) !important;
                 color: var(--yd-text-secondary) !important;
                 text-decoration: none !important;
-                opacity: 0.7;
-                cursor: help !important;
+                opacity: 0.65;
+                cursor: default !important;
                 position: relative;
             }
 
-            /* Кастомный tooltip для imported минусов */
+            /* Apple-style tooltip для imported минусов */
             .yd-imported-minus[data-tooltip]::after {
                 content: attr(data-tooltip);
                 position: absolute;
-                bottom: 100%;
+                bottom: calc(100% + 6px);
                 left: 50%;
-                transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.85);
+                transform: translateX(-50%) scale(0.95);
+                background: rgba(30, 30, 30, 0.95);
                 color: #fff;
-                padding: 4px 8px;
-                border-radius: 4px;
+                padding: 6px 10px;
+                border-radius: 6px;
                 font-size: 11px;
+                font-weight: 500;
+                letter-spacing: -0.2px;
                 white-space: nowrap;
                 opacity: 0;
                 pointer-events: none;
-                transition: opacity 0.2s ease;
+                transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
                 z-index: 10000;
-                margin-bottom: 4px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             }
 
             .yd-imported-minus[data-tooltip]:hover::after {
                 opacity: 1;
+                transform: translateX(-50%) scale(1);
             }
 
             .yd-row-deactivated {
@@ -5941,46 +5965,65 @@
                 font-size: 11px;
             }
 
-            /* УВЕДОМЛЕНИЯ */
+            /* ==================== УВЕДОМЛЕНИЯ (Apple Style) ==================== */
             .yd-sq-notification {
                 position: fixed;
                 top: 20px;
                 right: 20px;
                 z-index: 2147483647;
-                padding: 12px 20px;
-                border-radius: 6px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 14px 18px;
+                border-radius: 12px;
                 font-size: 13px;
                 font-weight: 500;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                letter-spacing: -0.2px;
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                box-shadow: 
+                    0 4px 24px rgba(0, 0, 0, 0.12),
+                    0 1px 3px rgba(0, 0, 0, 0.08),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
                 opacity: 0;
-                transform: translateY(-20px);
-                transition: all 0.3s ease;
-                max-width: 350px;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                transform: translateX(100%) scale(0.9);
+                transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+                max-width: 380px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .yd-sq-notification-icon {
+                flex-shrink: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
 
             .yd-sq-notification-show {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateX(0) scale(1);
             }
 
             .yd-sq-notification-info {
-                background: #4a90e2;
+                background: rgba(10, 132, 255, 0.9);
                 color: #fff;
             }
 
             .yd-sq-notification-success {
-                background: #28a745;
+                background: rgba(48, 209, 88, 0.9);
                 color: #fff;
             }
 
             .yd-sq-notification-warn {
-                background: #ff9800;
+                background: rgba(255, 159, 10, 0.9);
                 color: #fff;
             }
 
             .yd-sq-notification-error {
-                background: #dc3545;
+                background: rgba(255, 69, 58, 0.9);
                 color: #fff;
             }
 
@@ -6094,6 +6137,7 @@
     }
 
 })();
+
 
 
 
