@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.157.1
+// @version 1.158.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -313,13 +313,17 @@
     function initWithTable(table) {
         try {
             inited = true;
+            console.log('[YD-SQ] 🔧 INIT: wrapTableWords...');
             wrapTableWords(table);
+            console.log('[YD-SQ] 🔧 INIT: wordSpans.length =', wordSpans.length);
             setupTableObserver(table);
             injectStyles();
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
+            console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes...');
             restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
+            console.log('[YD-SQ] 🔧 INIT: updateHighlights (selections.size=' + selections.size + ')...');
             updateHighlights();
             updateUI();
 
@@ -6484,6 +6488,7 @@
     }
 
 })();
+
 
 
 
