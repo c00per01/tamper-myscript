@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.144.1
+// @version 1.145.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -340,28 +340,45 @@
     function restoreCheckboxes() {
         // Восстанавливаем чекбоксы для строк, которые есть в selections на текущей странице
         const rowsWithSelections = new Set();
+        const allSelectionsCount = selections.size;
 
-        for (const sel of selections.values()) {
-            if (sel.pageKey === currentPageKey && sel.rowId) {
+        for (const [selKey, sel] of selections.entries()) {
+            // Пытаемся сопоставить по pageKey ИЛИ если ключ в Map совпадает с текущим pageKey
+            if (sel.pageKey === currentPageKey) {
                 rowsWithSelections.add(sel.rowId);
+            } else {
+                // FALLBACK: если в ключе записи есть хеш, который присутствует на текущей странице
+                // Это помогает, если страница определилась как page:1 вместо page:3
+                const parts = selKey.split(':');
+                const hash = parts[parts.length - 1]; // Последняя часть - всегда хеш
+                const potentialRowId = `${currentPageKey}:${hash}`;
+                // Если в текущем DOM есть строка с таким хешем - восстановим её
+                if (document.querySelector(`[data-yd-row-id="${potentialRowId}"]`)) {
+                    rowsWithSelections.add(potentialRowId);
+                }
             }
         }
 
-        if (rowsWithSelections.size > 0) {
-            log.checkbox(`Восстанавливаем ${rowsWithSelections.size} чекбоксов`);
+        if (rowsWithSelections.size > 0 || allSelectionsCount > 0) {
+            console.log(`[YD-SQ] 🔲 RESTORE: Page=${currentPageKey}, CurrentPageSels=${rowsWithSelections.size}, TotalSels=${allSelectionsCount}`);
         }
 
         // Устанавливаем чекбоксы для найденных строк
+        let restoredCount = 0;
         for (const rowId of rowsWithSelections) {
             const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
             if (row) {
                 const checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && !checkbox.checked) {
-                    // Используем clickCheckbox для правильной активации Яндекс-обработчиков
                     clickCheckbox(checkbox, true);
                     checkbox.dataset.ydAuto = 'true';
+                    restoredCount++;
                 }
             }
+        }
+
+        if (restoredCount > 0) {
+            log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
         }
     }
 
@@ -1447,6 +1464,7 @@
 
         // Combine cached imported rules with current selections
         const rules = [...(cachedImportedRules || [])];
+        const initialRulesCount = rules.length;
 
         for (const sel of selections.values()) {
             if (sel.display) {
@@ -1469,6 +1487,10 @@
 
                 rules.push(r);
             }
+        }
+
+        if (rules.length > 0 || sentHistory.length > 0) {
+            console.log(`[YD-SQ] 🎨 UPDATE HIGHLIGHTS: Total rules: ${rules.length} (from selected: ${rules.length - initialRulesCount}, from imported: ${initialRulesCount}), sentHistory: ${sentHistory.length}`);
         }
 
         if (rules.length === 0 && sentHistory.length === 0) return;
@@ -4365,9 +4387,12 @@
                 // Восстановить selections
                 if (data.selections) {
                     selections.clear();
+                    let selCount = 0;
                     for (const [key, val] of Object.entries(data.selections)) {
                         selections.set(key, val);
+                        selCount++;
                     }
+                    console.log(`[YD-SQ] 💾 LOAD: Загружено ${selCount} выделений, ${importedMinuses.length} имп/эксп минусов, ${sentHistory.length} в истории`);
                 }
 
                 rebuildCampaignMinusList();
@@ -6209,6 +6234,7 @@
     }
 
 })();
+
 
 
 
