@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.156.2
+// @version 1.156.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -864,8 +864,7 @@
     }
 
     /**
-     * Apple-style плавный скролл с custom easing
-     * Использует ease-out-quint для приятного замедления в конце
+     * Выполняет плавный скролл к строке на позицию TARGET_POSITION
      */
     function executeScrollToRow(rowId) {
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
@@ -876,35 +875,33 @@
 
         // Вычисляем целевую позицию: верхняя граница строки на 30% от верха экрана
         const targetY = rowRect.top + window.scrollY - (viewportHeight * SCROLL_TARGET_POSITION);
-        const startY = window.scrollY;
-        const deltaY = Math.max(0, targetY) - startY;
 
-        // Если разница слишком маленькая - не скроллим
-        if (Math.abs(deltaY) < 10) return;
+        // Apple-like smooth scroll
+        const scrollStart = window.scrollY;
+        const scrollDiff = Math.max(0, targetY) - scrollStart;
 
-        // Apple-style параметры анимации
-        const duration = 600; // 600ms - плавный и не слишком медленный
+        if (Math.abs(scrollDiff) < 5) {
+            window.scrollTo(0, Math.max(0, targetY));
+            return;
+        }
+
+        const duration = 1000;
         const startTime = performance.now();
 
-        // Ease-out-quint для Apple-like замедления в конце
-        const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-
-        function animateScroll(currentTime) {
+        function step(currentTime) {
             const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
+            let progress = Math.min(elapsed / duration, 1);
+            // easeOutQuart
+            const ease = 1 - Math.pow(1 - progress, 4);
 
-            // Применяем easing
-            const eased = easeOutQuint(progress);
-            const currentY = startY + (deltaY * eased);
-
-            window.scrollTo(0, currentY);
+            window.scrollTo(0, scrollStart + scrollDiff * ease);
 
             if (progress < 1) {
-                requestAnimationFrame(animateScroll);
+                requestAnimationFrame(step);
             }
         }
 
-        requestAnimationFrame(animateScroll);
+        requestAnimationFrame(step);
     }
 
     // Совместимость со старым API (для debounceAutoScroll)
