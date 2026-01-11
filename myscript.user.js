@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.146.1
+// @version 1.148.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4068,7 +4068,7 @@
     }
 
     // Async версия waitForInputFields
-    function waitForInputFieldsAsync(modal, values, attempt, resolve, reject) {
+    async function waitForInputFieldsAsync(modal, values, attempt, resolve, reject) {
         if (attempt > 12) {
             log.error('Поля ввода не найдены после 12 попыток');
             showYdsqNotification('Поля ввода не найдены', 'error');
@@ -4083,16 +4083,45 @@
             const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
             const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
 
+            // 🔬 ДИАГНОСТИКА: Подсчет полей по типам
+            console.log('[YD-SQ] 🔬 ЭКСПЕРИМЕНТ: Анализ полей в модалке');
+            console.log(`  📝 textareas: ${textareas.length}`);
+            console.log(`  📝 textInputs: ${textInputs.length}`);
+            console.log(`  📝 otherInputs: ${otherInputs.length}`);
+            console.log(`  📝 contentEditables: ${contentEditables.length}`);
+
             const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
             const uniq = [...new Set(all)];
+            console.log(`  📊 Всего уникальных элементов: ${uniq.length}`);
+
             const visible = uniq.filter(el => {
                 const r = el.getBoundingClientRect();
                 return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
             });
 
+            // 🔬 ДИАГНОСТИКА: Сколько строк отмечено чекбоксами
+            const checkedRows = document.querySelectorAll('input[type="checkbox"]:checked').length;
+            console.log(`  ✅ Отмечено строк чекбоксами: ${checkedRows}`);
+            console.log(`  👁️ Видимых полей для ввода: ${visible.length}`);
+            console.log(`  🎯 Нужно отправить слов: ${values.length}`);
+
             if (visible.length > 0) {
-                log.modal(`Найдено ${visible.length} видимых полей, заполняем`);
-                await fillFields(visible, values);
+                // Определяем сколько слов реально влезет
+                const canFitCount = Math.min(visible.length, values.length);
+                const valuesToFit = values.slice(0, canFitCount);
+                const remainingValues = values.slice(canFitCount);
+
+                log.modal(`Найдено ${visible.length} полей. Влезет: ${canFitCount}, Остаток: ${remainingValues.length}`);
+
+                if (remainingValues.length > 0) {
+                    showYdsqNotification(`Не все слова влезли (${canFitCount}/${values.length}). Остаток будет в следующем пакете.`, 'warn');
+                }
+
+                await fillFields(visible, valuesToFit);
+
+                // ВАЖНО: сохраняем в pending ТОЛЬКО те слова, которые влезли
+                preparePendingMinuses(valuesToFit);
+
                 setTimeout(() => tryCloseResultPopup(), 1200);
                 resolve();
             } else {
@@ -4100,6 +4129,22 @@
                 waitForInputFieldsAsync(modal, values, attempt + 1, resolve, reject);
             }
         }, 300);
+    }
+
+    function preparePendingMinuses(values) {
+        const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
+        const newPending = values.map(val => ({
+            raw: val,
+            page: currentPage
+        }));
+
+        if (!Array.isArray(pendingSentMinuses)) {
+            pendingSentMinuses = [];
+        }
+
+        pendingSentMinuses.push(...newPending);
+        syncLocalToGlobal();
+        rebuildCampaignMinusList();
     }
 
     function waitForInputFields(modal, values, attempt) {
@@ -4132,24 +4177,27 @@
     }
 
     async function fillFields(inputs, values) {
+        // Очищаем поля перед заполнением
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        const n = Math.min(inputs.length, values.length);
+        const n = values.length; // Используем длину values, так как мы уже сделали Math.min выше
         for (let i = 0; i < n; i++) {
             const el = inputs[i];
             const val = values[i];
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val; else el.textContent = val;
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.value = val;
+            } else {
+                el.textContent = val;
+            }
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
             el.dispatchEvent(new Event('blur', { bubbles: true }));
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
-
-        if (values.length > inputs.length) showYdsqNotification(`Значений больше полей: ${values.length} > ${inputs.length}`, 'warn');
 
         // **КРИТИЧЕСКИ ВАЖНО: Переключаем на "В кампанию" и снимаем "Добавлять в группу"**
         await delay(100);
@@ -4166,7 +4214,7 @@
             });
 
             if (campaignRadio && !campaignRadio.checked) {
-                console.log('[YD-SQ] Переключаем на "В кампанию"');
+                log.modal('Переключаем на "В кампанию"');
                 campaignRadio.click();
                 await delay(50);
             }
@@ -4180,32 +4228,10 @@
             });
 
             if (groupCheckbox && groupCheckbox.checked) {
-                console.log('[YD-SQ] Снимаем галочку "Добавлять в группу"');
+                log.modal('Снимаем галочку "Добавлять в группу"');
                 groupCheckbox.click();
             }
         }
-
-        // Сохраняем отправляемые минусы во временный массив
-        // Они будут добавлены в importedMinuses только после успешного подтверждения в tryCloseResultPopup
-        const currentPage = parseInt(currentPageKey.split(':')[1]) || 1;
-
-        // ВАЖНО: используем push вместо =, чтобы не терять данные предыдущих пакетов
-        const newPending = values.map(val => ({
-            raw: val,
-            page: currentPage
-        }));
-
-        // Если это первый batch, инициализируем массив
-        if (!Array.isArray(pendingSentMinuses)) {
-            pendingSentMinuses = [];
-        }
-
-        pendingSentMinuses.push(...newPending);
-
-        // НЕ добавляем в importedMinuses и sentHistory здесь!
-        // Это будет сделано в tryCloseResultPopup после успешного сохранения
-        syncLocalToGlobal();
-        rebuildCampaignMinusList();
     }
 
     // Время начала текущей операции отправки (для защиты от race condition)
@@ -4293,6 +4319,8 @@
             // Переносим pendingSentMinuses в importedMinuses и sentHistory
             log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
 
+            const pendingSentMinusesBackup = [...pendingSentMinuses];
+
             if (pendingSentMinuses.length > 0) {
                 for (const item of pendingSentMinuses) {
                     // Добавляем в importedMinuses
@@ -4327,18 +4355,38 @@
                 updateHighlights();
             }
 
-            // Если это НЕ пакетная отправка - очищаем selections
+            // Если это НЕ пакетная отправка - очищаем только отправленные слова из selections
             if (batchQueue.length === 0) {
-                const count = selections.size;
-                if (count > 0) {
-                    log.selection(`Обычная отправка: очищаем ${count} selections`);
-                    selections.clear();
-                    pendingSentMinuses = [];
+                const countBefore = selections.size;
+                const sentCount = pendingSentMinusesBackup.length;
+
+                if (sentCount > 0) {
+                    log.selection(`Обычная отправка: удаляем ${sentCount} отправленных слов из selections`);
+
+                    // Удаляем только те, что были в бэкапе (т.е. реально попали в поля)
+                    for (const item of pendingSentMinusesBackup) {
+                        for (const [key, sel] of selections.entries()) {
+                            if (sel.display === item.raw) {
+                                selections.delete(key);
+                                break;
+                            }
+                        }
+                    }
+
+                    const remaining = selections.size;
                     syncLocalToGlobal();
                     resetClearAllButton();
                     updateUI();
-                    showYdsqNotification(`Отправлено ${count} минусов`, 'success');
+                    updateHighlights();
+
+                    if (remaining > 0) {
+                        showYdsqNotification(`Отправлено ${sentCount}. Осталось в списке: ${remaining}`, 'info');
+                    } else {
+                        showYdsqNotification(`Все выбранные слова (${sentCount}) отправлены`, 'success');
+                    }
                 }
+
+                pendingSentMinuses = [];
             }
             // При пакетной отправке selections очищаются в sendBatch
 
@@ -6236,6 +6284,7 @@
     }
 
 })();
+
 
 
 
