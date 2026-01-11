@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.149.1
+// @version 1.149.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2202,90 +2202,96 @@
 
         // Ждём полной загрузки страницы
         let attempts = 0;
-        const maxAttempts = 15; // Уменьшено: быстрее определяем пустую кампанию
+        const maxAttempts = 30;
         let lastCount = 0;
         let stableCount = 0; // Сколько раз подряд количество было стабильным
-        let pageLoadedButEmpty = false; // Флаг: страница загружена, но минусов нет
-
-        // Функция проверки, что страница настроек полностью загружена
-        const isSettingsPageLoaded = () => {
-            // Проверяем наличие ключевых UI элементов страницы настроек
-            const wizardContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]');
-            const dnaContainer = document.querySelector('[data-testid^="ExceptionsEditor"]');
-            const saveButton = document.querySelector('button[data-testid*="Save"], button[type="submit"]');
-            const campaignName = document.querySelector('[data-testid*="CampaignName"], h1, .campaign-name');
-
-            // Страница загружена если есть хотя бы 2 из этих элементов
-            const loadedElements = [wizardContainer, dnaContainer, saveButton, campaignName].filter(Boolean).length;
-            return loadedElements >= 1;
-        };
+        let pageLoadedButEmpty = 0; // Счетчик: страница загружена, но минусов нет
 
         const tryParse = () => {
             attempts++;
             const minuses = parseMinusesFromSettingsPage();
             const currentCount = minuses.length;
-            const pageLoaded = isSettingsPageLoaded();
+
+            // Проверяем, загружена ли страница полностью (есть ключевые элементы UI)
+            const hasMinusContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]') ||
+                document.querySelector('[data-testid^="ExceptionsEditor"]') ||
+                document.querySelector('.minus-keywords-editor') ||
+                document.querySelector('[class*="MinusKeywords"]');
+
+            const hasPageLoaded = document.querySelector('[data-testid]') !== null &&
+                document.readyState === 'complete';
 
             // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
             if (currentCount > 0 && currentCount === lastCount) {
                 stableCount++;
-            } else if (currentCount === 0 && pageLoaded) {
-                // Страница загружена, но минусов 0 — это пустая кампания
-                stableCount++;
-                pageLoadedButEmpty = true;
             } else {
                 stableCount = 0;
-                pageLoadedButEmpty = false;
             }
             lastCount = currentCount;
+
+            // Быстрое завершение: если страница загружена, контейнер есть, но минусов нет
+            if (hasPageLoaded && hasMinusContainer && currentCount === 0) {
+                pageLoadedButEmpty++;
+                if (pageLoadedButEmpty >= 3) {
+                    // Страница загружена, контейнер минусов есть, но он пуст - минусов реально нет
+                    showSyncStatusToast('ℹ️ Минус-фразы не найдены (пустой список). Возврат...');
+                    finishSync(minuses, 0);
+                    return;
+                }
+            } else {
+                pageLoadedButEmpty = 0;
+            }
 
             // Показываем прогресс
             if (currentCount > 0) {
                 showSyncStatusToast(`🔄 Загрузка: ${currentCount} минусов (проверка ${stableCount}/3)...`);
-            } else if (pageLoaded) {
-                showSyncStatusToast(`🔄 Страница загружена, минусов не найдено (${stableCount}/3)...`);
+            } else if (hasMinusContainer) {
+                showSyncStatusToast(`🔄 Контейнер найден, ожидание данных... (${attempts}/${maxAttempts})`);
             } else {
-                showSyncStatusToast(`🔄 Ожидание загрузки данных... (${attempts}/${maxAttempts})`);
+                showSyncStatusToast(`🔄 Ожидание загрузки страницы... (${attempts}/${maxAttempts})`);
             }
 
-            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума ИЛИ пустая кампания подтверждена
-            if ((currentCount > 0 && stableCount >= 3) || (pageLoadedButEmpty && stableCount >= 2) || attempts >= maxAttempts) {
+            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума
+            if ((currentCount > 0 && stableCount >= 3) || attempts >= maxAttempts) {
                 if (currentCount === 0) {
-                    showSyncStatusToast('ℹ️ Минус-фразы отсутствуют в кампании. Возврат...');
+                    showSyncStatusToast('⚠️ Минус-фразы не найдены. Возврат...');
                 } else {
                     showSyncStatusToast(`✅ Синхронизировано: ${currentCount} минусов. Возврат...`);
                 }
-
-                // Сохраняем результат
-                const syncData = {
-                    minuses: minuses,
-                    timestamp: Date.now(),
-                    campaignUrl: window.location.href
-                };
-                localStorage.setItem(SYNC_DATA_KEY, JSON.stringify(syncData));
-
-                // Очищаем флаг
-                sessionStorage.removeItem(SYNC_STORAGE_KEY);
-
-                // Получаем URL для возврата
-                const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
-                sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
-
-                log.success(`Синхронизировано ${currentCount} минусов, возврат...`);
-
-                // Возвращаемся назад с задержкой для показа уведомления
-                setTimeout(() => {
-                    if (returnUrl) {
-                        window.location.href = returnUrl;
-                    } else {
-                        window.history.back();
-                    }
-                }, 1500);
+                finishSync(minuses, currentCount);
                 return;
             }
 
             // Ждём ещё (1 секунда между попытками)
             setTimeout(tryParse, 1000);
+        };
+
+        const finishSync = (minuses, currentCount) => {
+            // Сохраняем результат
+            const syncData = {
+                minuses: minuses,
+                timestamp: Date.now(),
+                campaignUrl: window.location.href
+            };
+            localStorage.setItem(SYNC_DATA_KEY, JSON.stringify(syncData));
+
+            // Очищаем флаг
+            sessionStorage.removeItem(SYNC_STORAGE_KEY);
+
+            // Получаем URL для возврата
+            const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
+            sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
+
+            log.success(`Синхронизировано ${currentCount} минусов, возврат...`);
+
+            // Возвращаемся назад с задержкой для показа уведомления
+            setTimeout(() => {
+                if (returnUrl) {
+                    window.location.href = returnUrl;
+                } else {
+                    window.history.back();
+                }
+            }, 1500);
         };
 
         // Начинаем парсинг через 2 секунды для загрузки страницы
@@ -3825,10 +3831,6 @@
         if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
         if (isSending) return;
         isSending = true;
-
-        // ВАЖНО: Очищаем pending перед новой отправкой, чтобы не накапливались неудачные попытки
-        pendingSentMinuses = [];
-
         log.batch('=== ОТПРАВКА НАЧАТА ===');
         console.log('[YD SQ] === ОТПРАВКА ===');
         await delay(150);
@@ -4406,7 +4408,18 @@
                     updateHighlights();
 
                     if (remaining > 0) {
-                        showYdsqNotification(`Отправлено ${sentCount}. Осталось в списке: ${remaining}`, 'info');
+                        showYdsqNotification(`Отправлено ${sentCount}. Осталось: ${remaining}. Автоотправка...`, 'info');
+
+                        // Автоматическая повторная отправка оставшихся минусов
+                        log.batch(`Осталось ${remaining} минусов - запускаем автоотправку`);
+                        isSending = false; // Сбрасываем флаг перед повторной отправкой
+
+                        setTimeout(() => {
+                            if (selections.size > 0) {
+                                log.batch('=== АВТОПОВТОРНАЯ ОТПРАВКА ===');
+                                sendToMinusPhrases();
+                            }
+                        }, 2000);
                     } else {
                         showYdsqNotification(`Все выбранные слова (${sentCount}) отправлены`, 'success');
                     }
