@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.161.1
+// @version 1.162.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3078,6 +3078,7 @@
                 });
             }
             restoreClearButton(btn);
+            syncLocalToGlobal();
             updateUI();
             showYdsqNotification('Восстановлено', 'success');
             return;
@@ -3107,6 +3108,7 @@
 
         // Очищаем
         selections.clear();
+        syncLocalToGlobal();
         updateUI();
 
         // Меняем кнопку на иконку Undo (стрелка назад)
@@ -6494,6 +6496,7 @@
     }
 
 })();
+
 
 
 
