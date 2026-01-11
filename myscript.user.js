@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.151.1
+// @version 1.152.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -182,6 +182,7 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
+    let pendingSentMinusesBackup = []; // Бэкап отправленных минусов для пакетной обработки
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -797,41 +798,44 @@
         // Не скроллим, если была ручная прокрутка менее 500ms назад
         const timeSinceLastScroll = Date.now() - lastManualScrollTime;
         if (lastManualScrollTime > 0 && timeSinceLastScroll < 500) {
-            console.log('[YD-SQ] Скролл отменен: ручная прокрутка', timeSinceLastScroll, 'ms назад');
-            return;
+            return; // Тихо пропускаем без лога
         }
 
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
         if (!row) {
-            console.log('[YD-SQ] Строка не найдена:', rowId);
             return;
         }
 
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // УМНЫЙ СКРОЛЛ: не скроллим если строка уже видна на экране
-        // Считаем строку видимой, если она полностью в пределах viewport с отступами
-        const topMargin = viewportHeight * 0.1;  // 10% сверху
-        const bottomMargin = viewportHeight * 0.15; // 15% снизу
+        // ========== SMART SMOOTH SCROLL ==========
+        // Порог: 80% высоты экрана
+        const bottomThreshold = viewportHeight * 0.80;
 
-        const isRowVisible = rowRect.top >= topMargin &&
-            rowRect.bottom <= (viewportHeight - bottomMargin);
+        // Условие 1 (Анти-дребезг): Если строка в диапазоне 0px — 80% экрана, НЕ скроллить
+        // Это даёт стабильность для мульти-выделения в одной строке
+        if (rowRect.top >= 0 && rowRect.top < bottomThreshold) {
+            return; // Строка видна и в комфортной зоне - не трогаем
+        }
 
-        if (isRowVisible) {
-            // Строка уже видна - не скроллим
+        // Условие 2 (Помощь): Если строка ниже 80% (пользователь уперся в дно)
+        // Плавно сдвигаем страницу вниз на фиксированное значение (высота 3-4 строк ≈ 150px)
+        if (rowRect.top >= bottomThreshold) {
+            window.scrollBy({
+                top: 150,
+                behavior: 'smooth'
+            });
             return;
         }
 
-        // Позиционируем строку на 15% от верха экрана
-        const targetY = rowRect.top + window.scrollY - viewportHeight * 0.15;
-
-        console.log('[YD-SQ] Скроллим к строке:', rowId, 'targetY:', targetY);
-
-        window.scrollTo({
-            top: targetY,
-            behavior: 'smooth'
-        });
+        // Если строка выше экрана (редкий случай при скролле вверх)
+        if (rowRect.top < 0) {
+            window.scrollBy({
+                top: -150,
+                behavior: 'smooth'
+            });
+        }
     }
 
     function debounceAutoScroll(rowId, delay = 180) {
@@ -4430,7 +4434,7 @@
             // Переносим pendingSentMinuses в importedMinuses и sentHistory
             log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
 
-            const pendingSentMinusesBackup = [...pendingSentMinuses];
+            pendingSentMinusesBackup = [...pendingSentMinuses]; // Сохраняем в глобальную переменную
 
             if (pendingSentMinuses.length > 0) {
                 for (const item of pendingSentMinuses) {
@@ -6406,6 +6410,7 @@
     }
 
 })();
+
 
 
 
