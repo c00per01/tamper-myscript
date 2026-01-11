@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.153.1
+// @version 1.154.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -865,6 +865,7 @@
 
     /**
      * Выполняет плавный скролл к строке на позицию TARGET_POSITION
+     * с Apple-style easing для мягкости
      */
     function executeScrollToRow(rowId) {
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
@@ -875,11 +876,46 @@
 
         // Вычисляем целевую позицию: верхняя граница строки на 30% от верха экрана
         const targetY = rowRect.top + window.scrollY - (viewportHeight * SCROLL_TARGET_POSITION);
+        const finalTargetY = Math.max(0, targetY);
 
-        window.scrollTo({
-            top: Math.max(0, targetY),
-            behavior: 'smooth'
-        });
+        // Apple-style плавный скролл с easing
+        const startY = window.scrollY;
+        const distance = finalTargetY - startY;
+
+        // Если расстояние маленькое - используем обычный smooth scroll
+        if (Math.abs(distance) < 100) {
+            window.scrollTo({
+                top: finalTargetY,
+                behavior: 'smooth'
+            });
+            return;
+        }
+
+        // Для больших расстояний - custom easing для плавности
+        const duration = 600; // 600ms для мягкости (как у Apple)
+        const startTime = performance.now();
+
+        // Easing function: easeInOutCubic для плавного старта и финиша
+        function easeInOutCubic(t) {
+            return t < 0.5
+                ? 4 * t * t * t
+                : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function animateScroll(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeInOutCubic(progress);
+
+            const currentY = startY + (distance * easedProgress);
+            window.scrollTo(0, currentY);
+
+            if (progress < 1) {
+                requestAnimationFrame(animateScroll);
+            }
+        }
+
+        requestAnimationFrame(animateScroll);
     }
 
     // Совместимость со старым API (для debounceAutoScroll)
@@ -6459,6 +6495,7 @@
     }
 
 })();
+
 
 
 
