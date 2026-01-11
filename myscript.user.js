@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.156.1
+// @version 1.156.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -272,18 +272,6 @@
         document.addEventListener('scroll', trackManualScroll, { passive: true });
         document.addEventListener('wheel', trackManualScroll, { passive: true });
         document.addEventListener('touchmove', trackManualScroll, { passive: true });
-
-        // КРИТИЧНО: Сохраняем состояние перед перезагрузкой/закрытием страницы
-        window.addEventListener('beforeunload', () => {
-            syncLocalToGlobal();
-        });
-
-        // Периодическое автосохранение каждые 5 секунд
-        setInterval(() => {
-            if (selections.size > 0) {
-                syncLocalToGlobal();
-            }
-        }, 5000);
     }
 
     function waitForTableAndInit(attempt = 0) {
@@ -331,24 +319,20 @@
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
-
-            // Логируем состояние selections при инициализации
-            console.log(`[YD-SQ] 📊 INIT: selections.size=${selections.size}, currentPageKey=${currentPageKey}`);
-
             restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
             updateHighlights();
             updateUI();
 
             // Отложенное восстановление UI (Яндекс может пересоздавать ячейки и затирать классы при SPA навигации)
-            // Несколько попыток с разными задержками для надежности
-            const restoreDelays = [500, 1500, 3000, 5000];
-            for (const delay of restoreDelays) {
-                setTimeout(() => {
-                    restoreCheckboxes();
-                    updateHighlights();
-                    updateUI();
-                }, delay);
-            }
+            setTimeout(() => {
+                restoreCheckboxes();
+                updateHighlights();
+            }, 1000);
+
+            setTimeout(() => {
+                restoreCheckboxes();
+                updateHighlights();
+            }, 2500);
 
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
@@ -880,8 +864,8 @@
     }
 
     /**
-     * Выполняет плавный скролл к строке на позицию TARGET_POSITION
-     * с Apple-style easing для мягкости
+     * Apple-style плавный скролл с custom easing
+     * Использует ease-out-quint для приятного замедления в конце
      */
     function executeScrollToRow(rowId) {
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
@@ -892,38 +876,27 @@
 
         // Вычисляем целевую позицию: верхняя граница строки на 30% от верха экрана
         const targetY = rowRect.top + window.scrollY - (viewportHeight * SCROLL_TARGET_POSITION);
-        const finalTargetY = Math.max(0, targetY);
-
-        // Apple-style плавный скролл с easing
         const startY = window.scrollY;
-        const distance = finalTargetY - startY;
+        const deltaY = Math.max(0, targetY) - startY;
 
-        // Если расстояние маленькое - используем обычный smooth scroll
-        if (Math.abs(distance) < 100) {
-            window.scrollTo({
-                top: finalTargetY,
-                behavior: 'smooth'
-            });
-            return;
-        }
+        // Если разница слишком маленькая - не скроллим
+        if (Math.abs(deltaY) < 10) return;
 
-        // Для больших расстояний - custom easing для плавности
-        const duration = 600; // 600ms для мягкости (как у Apple)
+        // Apple-style параметры анимации
+        const duration = 600; // 600ms - плавный и не слишком медленный
         const startTime = performance.now();
 
-        // Easing function: easeInOutCubic для плавного старта и финиша
-        function easeInOutCubic(t) {
-            return t < 0.5
-                ? 4 * t * t * t
-                : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        }
+        // Ease-out-quint для Apple-like замедления в конце
+        const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 
         function animateScroll(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            const easedProgress = easeInOutCubic(progress);
 
-            const currentY = startY + (distance * easedProgress);
+            // Применяем easing
+            const eased = easeOutQuint(progress);
+            const currentY = startY + (deltaY * eased);
+
             window.scrollTo(0, currentY);
 
             if (progress < 1) {
@@ -3368,15 +3341,6 @@
     function renderSelectionList() {
         const container = document.getElementById('yd-sq-list');
         const countIndicator = document.getElementById('yd-sq-global-count');
-
-        // Проверяем что панель существует
-        if (!container || !countIndicator) {
-            console.log('[YD-SQ] ⚠️ renderSelectionList: панель не готова');
-            return;
-        }
-
-        // Логируем для диагностики
-        console.log(`[YD-SQ] 📋 RENDER: selections.size=${selections.size}`);
 
         countIndicator.textContent = selections.size;
 
@@ -6520,8 +6484,6 @@
     }
 
 })();
-
-
 
 
 
