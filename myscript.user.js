@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.162.1
+// @version 1.163.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -313,17 +313,13 @@
     function initWithTable(table) {
         try {
             inited = true;
-            console.log('[YD-SQ] 🔧 INIT: wrapTableWords...');
             wrapTableWords(table);
-            console.log('[YD-SQ] 🔧 INIT: wordSpans.length =', wordSpans.length);
             setupTableObserver(table);
             injectStyles();
             createPanel();
             setupResultPopupObserver();
             setupMinusModalObserver();
-            console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes...');
-            restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
-            console.log('[YD-SQ] 🔧 INIT: updateHighlights (selections.size=' + selections.size + ')...');
+            restoreCheckboxes();
             updateHighlights();
             updateUI();
 
@@ -365,8 +361,6 @@
         // Устанавливаем чекбоксы для найденных строк АСИНХРОННО
         // (клик по чекбоксу Яндекса может вызывать побочные эффекты)
         if (rowsWithSelections.size > 0) {
-            console.log('[YD-SQ] 🔧 INIT: Отложенное восстановление', rowsWithSelections.size, 'чекбоксов...');
-
             setTimeout(() => {
                 let restoredCount = 0;
                 for (const rowId of rowsWithSelections) {
@@ -388,11 +382,8 @@
                 if (restoredCount > 0) {
                     log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
                 }
-                console.log('[YD-SQ] 🔧 INIT: Отложенное восстановление чекбоксов завершено');
             }, 100);
         }
-
-        console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes завершен (чекбоксы восстановятся асинхронно)');
     }
 
     function setupTableObserver(table) {
@@ -6496,6 +6487,7 @@
     }
 
 })();
+
 
 
 
