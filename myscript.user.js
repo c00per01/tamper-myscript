@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.156.3
+// @version 1.157.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4671,6 +4671,9 @@
                 panelPosition: panelPosition
             };
 
+            // ОТЛАДКА: логируем что сохраняем
+            console.log(`[YD-SQ] 💾 SAVE: ${Object.keys(selectionsObj).length} sel, ${importedMinuses.length} imp, ${sentHistory.length} hist`);
+
             localStorage.setItem(key, JSON.stringify(data));
         } catch (err) {
             console.error('[YD-SQ] Ошибка сохранения состояния:', err);
@@ -6481,6 +6484,7 @@
     }
 
 })();
+
 
 
 
