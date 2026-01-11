@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.163.1
+// @version 1.164.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -1518,7 +1518,19 @@
     let cachedImportedRules = null;
     let lastImportedMinusesRef = null;
 
+    // Debounce для updateHighlights
+    let updateHighlightsTimer = null;
+
     function updateHighlights() {
+        // Debounce: откладываем выполнение на 30ms
+        // При быстрых кликах выполнится только последний вызов
+        if (updateHighlightsTimer) {
+            clearTimeout(updateHighlightsTimer);
+        }
+        updateHighlightsTimer = setTimeout(updateHighlightsImmediate, 30);
+    }
+
+    function updateHighlightsImmediate() {
         // 1. Clear classes
         // Using a simple loop is fast for clearing.
         for (const sp of wordSpans) {
@@ -3332,7 +3344,8 @@
     }
 
     function updateUI() {
-        updateHighlights();
+        // НЕ вызываем updateHighlights() здесь - это делается отдельно!
+        // updateUI только обновляет панель (список, кнопки)
         renderSelectionList();
         renderImportedMinuses();
         updateUndoRedoButtons();
@@ -6487,6 +6500,7 @@
     }
 
 })();
+
 
 
 
