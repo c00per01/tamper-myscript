@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.143.1
+// @version 1.144.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -321,6 +321,16 @@
             restoreCheckboxes(); // Восстанавливаем чекбоксы после wrap
             updateHighlights();
             updateUI();
+
+            // Отложенное восстановление чекбоксов (Яндекс может пересоздавать строки)
+            setTimeout(() => {
+                restoreCheckboxes();
+            }, 500);
+
+            setTimeout(() => {
+                restoreCheckboxes();
+            }, 1500);
+
             console.log('[YD-SQ] Инициализация завершена');
         } catch (err) {
             console.error('[YD-SQ] Ошибка инициализации:', err);
@@ -337,13 +347,19 @@
             }
         }
 
+        if (rowsWithSelections.size > 0) {
+            log.checkbox(`Восстанавливаем ${rowsWithSelections.size} чекбоксов`);
+        }
+
         // Устанавливаем чекбоксы для найденных строк
         for (const rowId of rowsWithSelections) {
             const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
             if (row) {
                 const checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && !checkbox.checked) {
-                    checkbox.checked = true;
+                    // Используем clickCheckbox для правильной активации Яндекс-обработчиков
+                    clickCheckbox(checkbox, true);
+                    checkbox.dataset.ydAuto = 'true';
                 }
             }
         }
@@ -6193,6 +6209,7 @@
     }
 
 })();
+
 
 
 
