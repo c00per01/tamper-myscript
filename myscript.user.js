@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.164.3
+// @version 1.165.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -6446,6 +6446,748 @@
 
 })();
 
+// ==================== МОДУЛЬ: ПЛОЩАДКИ (stat_type=pages) ====================
+// Автоматическое выделение площадок по правилам
+// Работает только на страницах с stat_type=pages
+(function () {
+    'use strict';
+
+    // === Проверка: панель появляется только если stat_type=pages ===
+    if (!location.href.toLowerCase().includes("stat_type=pages")) {
+        console.log("[YD] Панель площадок не загружена: нет stat_type=pages");
+        return;
+    }
+
+    console.log("[YD-PL] 🚀 Модуль площадок инициализируется...");
+
+    const DOMAIN_DEFAULT = 'com., dsp, puzzle, game, teskin';
+
+    // ---------- Утилита парсинга чисел ----------
+    function parseNumber(text) {
+        if (!text) return NaN;
+        return parseFloat(
+            text.replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, '')
+                .replace(',', '.')
+                .replace(/[^0-9.\-]/g, '')
+        );
+    }
+
+    // ---------- Проверка серости (отключённая площадка) ----------
+    function isGreyElement(el) {
+        if (!el || !window.getComputedStyle) return false;
+        const color = window.getComputedStyle(el).color;
+        const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (!m) return false;
+        const [r, g, b] = m.slice(1).map(Number);
+
+        const diffRG = Math.abs(r - g);
+        const diffGB = Math.abs(g - b);
+        const diffRB = Math.abs(r - b);
+        if (diffRG > 10 || diffGB > 10 || diffRB > 10) return false;
+
+        const brightness = (r + g + b) / 3;
+        return brightness > 80;
+    }
+
+    // ---------- Логика выделения площадок ----------
+    function selectPlacements() {
+        const rows = document.querySelectorAll('tbody tr');
+        if (!rows.length) {
+            showNotification('Строк не найдено', 'error');
+            return;
+        }
+
+        const domainInput = document.getElementById('yd-pl-domain-patterns');
+        const domainPatterns = domainInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+        const minClicks = getValNum('yd-pl-min-clicks');
+        const minCtr = getValNum('yd-pl-min-ctr');
+        const maxCpc = getValNum('yd-pl-max-cpc');
+        const maxSpend = getValNum('yd-pl-max-spend');
+
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
+
+        function getValNum(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const val = el.value;
+            return val ? Number(val.replace(',', '.')) : null;
+        }
+
+        let count = 0;
+
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (!checkbox) return;
+
+            const tds = row.querySelectorAll('td');
+            if (tds.length < 6) return;
+
+            const domainCell = tds[0];
+            const domainEl = domainCell.querySelector('a') || domainCell;
+
+            // Не трогаем отключённые (серые)
+            if (isGreyElement(domainEl)) return;
+
+            const clicks = parseNumber(tds[2].textContent);
+            const ctr = parseNumber(tds[3].textContent);
+            const spend = parseNumber(tds[4].textContent);
+            const cpc = parseNumber(tds[5].textContent);
+
+            const conditions = [];
+
+            // Проверка доменов
+            if (domainPatterns.length > 0) {
+                const domain = domainEl.textContent.trim().toLowerCase();
+
+                const ok = domainPatterns.some(p => {
+                    if (!p) return false;
+                    // Строгое правило для com.
+                    if (p === 'com.') return domain.startsWith('com.');
+                    // Обычная логика
+                    return domain.startsWith(p) || domain.includes(p);
+                });
+
+                conditions.push(ok);
+            }
+
+            if (minClicks !== null) conditions.push(clicks >= minClicks);
+            if (minCtr !== null) conditions.push(ctr >= minCtr);
+            if (maxCpc !== null) conditions.push(cpc <= maxCpc);
+            if (maxSpend !== null) conditions.push(spend <= maxSpend);
+
+            if (conditions.length === 0) return;
+
+            const pass = mode === 'and'
+                ? conditions.every(Boolean)
+                : conditions.some(Boolean);
+
+            if (!pass) return;
+
+            if (!checkbox.checked && !checkbox.disabled) {
+                checkbox.click();
+                count++;
+            }
+        });
+
+        showNotification(`Выделено площадок: ${count}`, 'success');
+        updateStats();
+    }
+
+    // ---------- Снять ВСЕ галочки ----------
+    function clearAllSelections() {
+        let count = 0;
+        document.querySelectorAll('tbody tr').forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                checkbox.click();
+                count++;
+            }
+        });
+        showNotification(`Снято галочек: ${count}`, 'info');
+        updateStats();
+    }
+
+    // ---------- Обновить статистику ----------
+    function updateStats() {
+        const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
+        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+        const statsEl = document.getElementById('yd-pl-stats');
+        if (statsEl) {
+            statsEl.textContent = `${checked} / ${total}`;
+        }
+    }
+
+    // ---------- Показать уведомление ----------
+    function showNotification(message, type = 'info') {
+        const existing = document.getElementById('yd-pl-notification');
+        if (existing) existing.remove();
+
+        const notification = document.createElement('div');
+        notification.id = 'yd-pl-notification';
+        notification.className = `yd-pl-notification yd-pl-notification-${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.add('yd-pl-notification-hide');
+            setTimeout(() => notification.remove(), 300);
+        }, 2500);
+    }
+
+    // ---------- Создание панели ----------
+    function createControlPanel() {
+        if (document.getElementById('yd-pl-panel')) return;
+
+        // Inject styles
+        injectStyles();
+
+        const panel = document.createElement('div');
+        panel.id = 'yd-pl-panel';
+        panel.innerHTML = `
+            <!-- Header -->
+            <div class="yd-pl-header" id="yd-pl-panel-header">
+                <div class="yd-pl-header-left">
+                    <svg class="yd-pl-logo" width="20" height="20" viewBox="0 0 100 100">
+                        <rect x="10" y="20" width="80" height="60" rx="8" fill="none" stroke="#205598" stroke-width="6"/>
+                        <line x1="10" y1="40" x2="90" y2="40" stroke="#205598" stroke-width="4"/>
+                        <circle cx="25" cy="55" r="6" fill="#E46924"/>
+                        <circle cx="50" cy="55" r="6" fill="#E46924"/>
+                        <circle cx="75" cy="55" r="6" fill="#E46924"/>
+                    </svg>
+                    <span class="yd-pl-title">YD Площадки</span>
+                </div>
+                <div class="yd-pl-header-right">
+                    <span id="yd-pl-stats" class="yd-pl-stats">0 / 0</span>
+                    <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div id="yd-pl-panel-body" class="yd-pl-body">
+                <!-- Фильтр доменов -->
+                <div class="yd-pl-section">
+                    <label class="yd-pl-label">Домены (через запятую)</label>
+                    <div class="yd-pl-input-row">
+                        <input id="yd-pl-domain-patterns" class="yd-pl-input" type="text" 
+                            value="${DOMAIN_DEFAULT}" placeholder="com., dsp, puzzle...">
+                        <button id="yd-pl-domain-default" class="yd-pl-btn-sm" title="Сбросить на шаблон">↺</button>
+                    </div>
+                </div>
+
+                <!-- Числовые фильтры (2x2 grid) -->
+                <div class="yd-pl-grid">
+                    <div class="yd-pl-field">
+                        <label class="yd-pl-label-sm">Мин. кликов</label>
+                        <input id="yd-pl-min-clicks" class="yd-pl-input-sm" type="number" min="0" placeholder="—">
+                    </div>
+                    <div class="yd-pl-field">
+                        <label class="yd-pl-label-sm">Мин. CTR %</label>
+                        <input id="yd-pl-min-ctr" class="yd-pl-input-sm" type="number" min="0" step="0.01" placeholder="—">
+                    </div>
+                    <div class="yd-pl-field">
+                        <label class="yd-pl-label-sm">Макс. CPC ₽</label>
+                        <input id="yd-pl-max-cpc" class="yd-pl-input-sm" type="number" min="0" step="0.01" placeholder="—">
+                    </div>
+                    <div class="yd-pl-field">
+                        <label class="yd-pl-label-sm">Макс. расход ₽</label>
+                        <input id="yd-pl-max-spend" class="yd-pl-input-sm" type="number" min="0" step="0.01" placeholder="—">
+                    </div>
+                </div>
+
+                <!-- Режим (И / ИЛИ) -->
+                <div class="yd-pl-mode-section">
+                    <span class="yd-pl-label-sm">Связь условий:</span>
+                    <div class="yd-pl-radio-group">
+                        <label class="yd-pl-radio">
+                            <input type="radio" name="yd-pl-mode" value="and" checked>
+                            <span>И — все</span>
+                        </label>
+                        <label class="yd-pl-radio">
+                            <input type="radio" name="yd-pl-mode" value="or">
+                            <span>ИЛИ — любое</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="yd-pl-footer">
+                <button id="yd-pl-apply" class="yd-pl-btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Выделить
+                </button>
+                <button id="yd-pl-clear" class="yd-pl-btn-secondary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                    Снять всё
+                </button>
+            </div>
+
+            <!-- Hotkey hint -->
+            <div class="yd-pl-hint">
+                <kbd>Alt+Q</kbd> — быстрое выделение
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        // Floating Pill (свёрнутое состояние)
+        const pill = document.createElement('div');
+        pill.id = 'yd-pl-pill';
+        pill.className = 'yd-pl-pill';
+        pill.style.display = 'none';
+        pill.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 100 100">
+                <rect x="10" y="20" width="80" height="60" rx="8" fill="none" stroke="#205598" stroke-width="6"/>
+            </svg>
+            <span>Площадки</span>
+        `;
+        document.body.appendChild(pill);
+
+        // Make draggable
+        makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
+        makeDraggable(pill, pill);
+
+        // Event listeners
+        document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
+            panel.classList.add('yd-pl-panel-minimizing');
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.classList.remove('yd-pl-panel-minimizing');
+                pill.style.display = 'flex';
+                pill.classList.add('yd-pl-pill-appear');
+                setTimeout(() => pill.classList.remove('yd-pl-pill-appear'), 300);
+            }, 200);
+        });
+
+        pill.addEventListener('click', () => {
+            pill.style.display = 'none';
+            panel.style.display = 'flex';
+            panel.classList.add('yd-pl-panel-appearing');
+            setTimeout(() => panel.classList.remove('yd-pl-panel-appearing'), 400);
+        });
+
+        document.getElementById('yd-pl-domain-default').addEventListener('click', () => {
+            document.getElementById('yd-pl-domain-patterns').value = DOMAIN_DEFAULT;
+        });
+
+        document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
+        document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
+
+        // Обновляем статистику при загрузке и при изменениях
+        updateStats();
+        const observer = new MutationObserver(() => updateStats());
+        const tbody = document.querySelector('tbody');
+        if (tbody) {
+            observer.observe(tbody, { childList: true, subtree: true, attributes: true });
+        }
+    }
+
+    // ---------- Make element draggable ----------
+    function makeDraggable(element, handle) {
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        handle.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = element.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            element.style.left = (startLeft + dx) + 'px';
+            element.style.top = (startTop + dy) + 'px';
+            element.style.right = 'auto';
+            element.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.style.userSelect = '';
+        });
+    }
+
+    // ---------- Inject CSS styles ----------
+    function injectStyles() {
+        if (document.getElementById('yd-pl-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'yd-pl-styles';
+        style.textContent = `
+            /* ===== ПАНЕЛЬ ПЛОЩАДОК ===== */
+            #yd-pl-panel {
+                position: fixed;
+                top: 15px;
+                right: 370px;
+                z-index: 9999998;
+                background: #ffffff;
+                border: 1px solid #E1E4E8;
+                border-radius: 12px;
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Roboto', system-ui, sans-serif;
+                font-size: 13px;
+                color: #333;
+                width: 280px;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                transition: transform 0.2s ease, opacity 0.2s ease;
+            }
+
+            #yd-pl-panel.yd-pl-panel-minimizing {
+                transform: scale(0.3) translate(50%, 100%);
+                opacity: 0;
+                transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            }
+
+            #yd-pl-panel.yd-pl-panel-appearing {
+                animation: yd-pl-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            @keyframes yd-pl-appear {
+                from { transform: scale(0.3) translate(50%, 100%); opacity: 0; }
+                to { transform: scale(1) translate(0, 0); opacity: 1; }
+            }
+
+            /* Header */
+            .yd-pl-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 12px;
+                background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+                border-bottom: 1px solid #E1E4E8;
+                cursor: grab;
+            }
+
+            .yd-pl-header:active { cursor: grabbing; }
+
+            .yd-pl-header-left {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .yd-pl-logo { flex-shrink: 0; }
+
+            .yd-pl-title {
+                font-weight: 600;
+                font-size: 14px;
+                color: #205598;
+            }
+
+            .yd-pl-header-right {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .yd-pl-stats {
+                font-size: 12px;
+                color: #6b7280;
+                background: #E3F2FD;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-weight: 500;
+            }
+
+            .yd-pl-icon-btn {
+                background: none;
+                border: none;
+                padding: 4px;
+                cursor: pointer;
+                color: #9CA3AF;
+                border-radius: 4px;
+                transition: all 0.15s ease;
+            }
+
+            .yd-pl-icon-btn:hover {
+                background: #E3E8ED;
+                color: #333;
+            }
+
+            /* Body */
+            .yd-pl-body {
+                padding: 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .yd-pl-section { }
+
+            .yd-pl-label {
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 6px;
+            }
+
+            .yd-pl-label-sm {
+                font-size: 10px;
+                color: #9CA3AF;
+                margin-bottom: 4px;
+                display: block;
+            }
+
+            .yd-pl-input-row {
+                display: flex;
+                gap: 6px;
+            }
+
+            .yd-pl-input {
+                flex: 1;
+                padding: 8px 10px;
+                border: 1px solid #E1E4E8;
+                border-radius: 6px;
+                font-size: 12px;
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+
+            .yd-pl-input:focus {
+                outline: none;
+                border-color: #205598;
+                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+            }
+
+            .yd-pl-btn-sm {
+                padding: 6px 10px;
+                border: 1px solid #E1E4E8;
+                border-radius: 6px;
+                background: #F9FAFB;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.15s ease;
+            }
+
+            .yd-pl-btn-sm:hover {
+                background: #E3E8ED;
+            }
+
+            /* Grid */
+            .yd-pl-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .yd-pl-field { }
+
+            .yd-pl-input-sm {
+                width: 100%;
+                padding: 6px 8px;
+                border: 1px solid #E1E4E8;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+
+            .yd-pl-input-sm:focus {
+                outline: none;
+                border-color: #205598;
+                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+            }
+
+            /* Mode section */
+            .yd-pl-mode-section {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .yd-pl-radio-group {
+                display: flex;
+                gap: 12px;
+            }
+
+            .yd-pl-radio {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 12px;
+                color: #6b7280;
+                cursor: pointer;
+            }
+
+            .yd-pl-radio input {
+                margin: 0;
+                cursor: pointer;
+            }
+
+            /* Footer */
+            .yd-pl-footer {
+                display: flex;
+                gap: 8px;
+                padding: 12px;
+                border-top: 1px solid #E1E4E8;
+                background: #FAFBFC;
+            }
+
+            .yd-pl-btn-primary {
+                flex: 2;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 10px 16px;
+                background: linear-gradient(135deg, #205598, #1a4578);
+                color: #fff;
+                border: none;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .yd-pl-btn-primary:hover {
+                background: linear-gradient(135deg, #1a4578, #153a60);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3);
+            }
+
+            .yd-pl-btn-secondary {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                padding: 10px 12px;
+                background: #F3F4F6;
+                color: #6b7280;
+                border: 1px solid #E1E4E8;
+                border-radius: 8px;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+
+            .yd-pl-btn-secondary:hover {
+                background: #E5E7EB;
+                color: #333;
+            }
+
+            /* Hint */
+            .yd-pl-hint {
+                padding: 8px 12px;
+                font-size: 10px;
+                color: #9CA3AF;
+                text-align: center;
+                border-top: 1px solid #E1E4E8;
+            }
+
+            .yd-pl-hint kbd {
+                background: #E5E7EB;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 10px;
+            }
+
+            /* Floating Pill */
+            .yd-pl-pill {
+                position: fixed;
+                bottom: 80px;
+                right: 20px;
+                z-index: 9999998;
+                background: #ffffff;
+                border: 1px solid #E1E4E8;
+                border-radius: 20px;
+                padding: 8px 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+                color: #205598;
+                transition: all 0.2s ease;
+            }
+
+            .yd-pl-pill:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            }
+
+            .yd-pl-pill-appear {
+                animation: yd-pl-pill-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            @keyframes yd-pl-pill-pop {
+                from { transform: scale(0.5); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+
+            /* Notification */
+            .yd-pl-notification {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 99999999;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+                animation: yd-pl-notify-in 0.3s ease;
+            }
+
+            .yd-pl-notification-success {
+                background: #10B981;
+                color: #fff;
+            }
+
+            .yd-pl-notification-error {
+                background: #EF4444;
+                color: #fff;
+            }
+
+            .yd-pl-notification-info {
+                background: #3B82F6;
+                color: #fff;
+            }
+
+            .yd-pl-notification-hide {
+                animation: yd-pl-notify-out 0.3s ease forwards;
+            }
+
+            @keyframes yd-pl-notify-in {
+                from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+                to { transform: translateX(-50%) translateY(0); opacity: 1; }
+            }
+
+            @keyframes yd-pl-notify-out {
+                from { transform: translateX(-50%) translateY(0); opacity: 1; }
+                to { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    // ---------- Горячая клавиша Alt+Q ----------
+    document.addEventListener('keydown', e => {
+        if (e.altKey && e.key.toLowerCase() === 'q') {
+            e.preventDefault();
+            selectPlacements();
+        }
+    });
+
+    // ---------- Init ----------
+    function init() {
+        if (document.body) {
+            createControlPanel();
+            console.log("[YD-PL] ✅ Модуль площадок загружен");
+        } else {
+            setTimeout(init, 200);
+        }
+    }
+
+    init();
+
+})();
 
 
 
