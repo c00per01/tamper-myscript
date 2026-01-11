@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.155.1
+// @version 1.156.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -3369,6 +3369,15 @@
         const container = document.getElementById('yd-sq-list');
         const countIndicator = document.getElementById('yd-sq-global-count');
 
+        // Проверяем что панель существует
+        if (!container || !countIndicator) {
+            console.log('[YD-SQ] ⚠️ renderSelectionList: панель не готова');
+            return;
+        }
+
+        // Логируем для диагностики
+        console.log(`[YD-SQ] 📋 RENDER: selections.size=${selections.size}`);
+
         countIndicator.textContent = selections.size;
 
         if (selections.size === 0) {
@@ -6511,6 +6520,7 @@
     }
 
 })();
+
 
 
 
