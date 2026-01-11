@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.150.1
+// @version 1.150.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -182,6 +182,8 @@
     let sentHistory = [];
     let importedMinuses = [];
     let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
+    let lastBatchSentMinuses = []; // Тост для передачи списка отправленных минусов между пакетами
+    let lastAutoScrolledRowId = null; // Последняя строка к которой был автоскролл (чтобы не дергать экран при повторных кликах)
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -791,6 +793,7 @@
 
     function trackManualScroll() {
         lastManualScrollTime = Date.now();
+        lastAutoScrolledRowId = null; // Сбрасываем память автоскролла при ручном вмешательстве
     }
 
     function autoScrollToRow(rowId) {
@@ -959,7 +962,12 @@
 
         resetClearAllButton();
         updateUI();
-        debounceAutoScroll(rowId, 180);
+
+        // Smart Scroll: скроллим только если это НОВАЯ строка
+        if (lastAutoScrolledRowId !== rowId) {
+            debounceAutoScroll(rowId, 180);
+            lastAutoScrolledRowId = rowId;
+        }
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
@@ -3699,10 +3707,18 @@
             log.success(`Пакет ${currentBatchIndex + 1} успешно завершён`);
 
             // ВАЖНО: Удаляем ТОЛЬКО реально отправленные минусы (не весь пакет!)
-            const sentCount = pendingSentMinusesBackup.length;
-            let deletedCount = 0;
+            // Используем глобальную переменную, так как локальная pendingSentMinusesBackup недоступна здесь
+            const sentCount = lastBatchSentMinuses.length;
+            const itemsToSend = lastBatchSentMinuses.length > 0 ? lastBatchSentMinuses : batchQueue[currentBatchIndex].map(sel => ({ raw: sel.display }));
 
-            for (const item of pendingSentMinusesBackup) {
+            // Если отправка была реальная - используем lastBatchSentMinuses
+            // Если это был первый пакет и он упал - возможно lastBatchSentMinuses пуст, но мы считаем success?
+            // Логика: waitForMinusModal заполнит lastBatchSentMinuses при успехе.
+
+            let deletedCount = 0;
+            const items = lastBatchSentMinuses.length > 0 ? lastBatchSentMinuses : [];
+
+            for (const item of items) {
                 for (const [key, sel] of selections.entries()) {
                     if (sel.display === item.raw) {
                         selections.delete(key);
@@ -4404,6 +4420,7 @@
             log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
 
             const pendingSentMinusesBackup = [...pendingSentMinuses];
+            lastBatchSentMinuses = [...pendingSentMinuses]; // Сохраняем в глобальную для sendBatch
 
             if (pendingSentMinuses.length > 0) {
                 for (const item of pendingSentMinuses) {
@@ -6379,6 +6396,7 @@
     }
 
 })();
+
 
 
 
