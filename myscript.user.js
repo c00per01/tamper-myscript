@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.159.1
+// @version 1.160.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -370,29 +370,37 @@
             console.log(`[YD-SQ] 🔲 RESTORE: Page=${currentPageKey}, CurrentPageSels=${rowsWithSelections.size}, TotalSels=${allSelectionsCount}`);
         }
 
-        // Устанавливаем чекбоксы для найденных строк
-        let restoredCount = 0;
-        for (const rowId of rowsWithSelections) {
-            try {
-                const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
-                if (row) {
-                    const checkbox = row.querySelector('input[type="checkbox"]');
-                    if (checkbox && !checkbox.checked) {
-                        clickCheckbox(checkbox, true);
-                        checkbox.dataset.ydAuto = 'true';
-                        restoredCount++;
+        // Устанавливаем чекбоксы для найденных строк АСИНХРОННО
+        // (клик по чекбоксу Яндекса может вызывать побочные эффекты)
+        if (rowsWithSelections.size > 0) {
+            console.log('[YD-SQ] 🔧 INIT: Отложенное восстановление', rowsWithSelections.size, 'чекбоксов...');
+
+            setTimeout(() => {
+                let restoredCount = 0;
+                for (const rowId of rowsWithSelections) {
+                    try {
+                        const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
+                        if (row) {
+                            const checkbox = row.querySelector('input[type="checkbox"]');
+                            if (checkbox && !checkbox.checked) {
+                                clickCheckbox(checkbox, true);
+                                checkbox.dataset.ydAuto = 'true';
+                                restoredCount++;
+                            }
+                        }
+                    } catch (err) {
+                        console.error('[YD-SQ] ❌ Ошибка восстановления чекбокса для rowId:', rowId, err);
                     }
                 }
-            } catch (err) {
-                console.error('[YD-SQ] ❌ Ошибка восстановления чекбокса для rowId:', rowId, err);
-            }
+
+                if (restoredCount > 0) {
+                    log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
+                }
+                console.log('[YD-SQ] 🔧 INIT: Отложенное восстановление чекбоксов завершено');
+            }, 100);
         }
 
-        if (restoredCount > 0) {
-            log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
-        }
-
-        console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes завершен');
+        console.log('[YD-SQ] 🔧 INIT: restoreCheckboxes завершен (чекбоксы восстановятся асинхронно)');
     }
 
     function setupTableObserver(table) {
@@ -6494,6 +6502,7 @@
     }
 
 })();
+
 
 
 
