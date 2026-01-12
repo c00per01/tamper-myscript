@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.174.1
+// @version 1.175.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4825,39 +4825,71 @@
         }
     }
 
-    // Форматирование даты для API (YYYY-MM-DD)
-    function formatDateForHistoryUrl(date) {
+    // Форматирование даты для API (ISO формат с временем)
+    function formatDateForHistoryApi(date, isEndDate = false) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+        // dateFrom: T21:00:00 (начало дня в UTC+3)
+        // dateTo: T20:59:59 (конец дня в UTC+3)
+        const time = isEndDate ? 'T20:59:59' : 'T21:00:00';
+        return `${y}-${m}-${d}${time}`;
     }
 
-    // Запрос к API истории изменений (userActionLog)
+    // Получение CSRF токена из cookies
+    function getCsrfToken() {
+        const match = document.cookie.match(/_direct_csrf_token=([^;]+)/);
+        return match ? match[1] : '';
+    }
+
+    // Запрос к API истории изменений (GraphQL userActionLog)
     async function fetchHistoryApi(ulogin, campaignId, dateFrom, dateTo) {
         try {
             const url = `https://direct.yandex.ru/web-api/user-action-log/api?operationName=userActionLog&ulogin=${encodeURIComponent(ulogin)}`;
 
+            const csrfToken = getCsrfToken();
+
+            // GraphQL запрос (упрощённая версия)
+            const graphqlQuery = `query userActionLog($login:String$campaignIds:[Long!]$limit:Int=200$token:String$dateFrom:LocalDateTime$dateTo:LocalDateTime$categories:[CategoryInput!]$order:OrderInput){userActionLog(clientLogin:$login campaignIds:$campaignIds limit:$limit pageToken:$token dateFrom:$dateFrom dateTo:$dateTo categories:$categories order:$order){nextPageToken logRecords{datetime user{login}event{...on CampaignValueChangeEvent{__typename category clientId campaign{id name}}...on CampaignListChangeEvent{__typename category clientId campaign{id name}}}}}}`;
+
             const payload = {
                 operationName: 'userActionLog',
                 variables: {
-                    filter: `campaignIds = ${campaignId}`,
+                    order: 'DESC',
                     dateFrom: dateFrom,
                     dateTo: dateTo,
-                    pagination: { limit: 100, offset: 0 }
-                }
+                    categories: ['CAMPAIGN_MINUS_WORDS'],
+                    campaignIds: [campaignId],
+                    adGroupIds: null,
+                    adIds: null,
+                    logins: null,
+                    changeSources: null,
+                    limit: 50,
+                    token: null,
+                    login: ulogin
+                },
+                query: graphqlQuery
             };
 
             log.sync('API запрос:', url);
-            log.sync('Payload:', JSON.stringify(payload));
+            log.sync('Payload variables:', JSON.stringify(payload.variables));
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': '*/*, application/json',
+                'dna-operation-name': 'userActionLog',
+                'x-direct-api': '1'
+            };
+
+            // Добавляем CSRF токен если есть
+            if (csrfToken) {
+                headers['x-csrf-token'] = csrfToken;
+            }
 
             const response = await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify(payload)
             });
 
@@ -4872,10 +4904,10 @@
             const data = await response.json();
 
             // Детальное логирование для отладки
-            log.sync('API ответ получен, структура:', {
+            log.sync('API ответ получен:', {
                 hasData: !!data.data,
-                keys: data.data ? Object.keys(data.data) : [],
-                rawKeys: Object.keys(data)
+                hasUserActionLog: !!data.data?.userActionLog,
+                recordsCount: data.data?.userActionLog?.logRecords?.length || 0
             });
 
             return data;
@@ -4888,42 +4920,41 @@
     // Поиск даты последней чистки минус-фраз в ответе API
     function findMinusPhraseInApiResponse(data) {
         try {
-            // Пробуем разные варианты структуры ответа
-            let items = data?.data?.userActionLog?.items ||
-                data?.data?.items ||
-                data?.userActionLog?.items ||
-                data?.items ||
-                [];
+            // Структура ответа GraphQL: data.data.userActionLog.logRecords[]
+            const logRecords = data?.data?.userActionLog?.logRecords || [];
 
-            // Детальное логирование для отладки
-            log.sync(`Получено ${items.length} записей из API`);
+            log.sync(`Получено ${logRecords.length} записей из API`);
 
-            if (items.length === 0) {
-                log.sync('Структура данных для отладки:', JSON.stringify(data).slice(0, 500));
+            if (logRecords.length === 0) {
+                log.sync('Нет записей в ответе');
+                return null;
             }
 
-            // Логируем первые 3 элемента для понимания структуры
-            if (items.length > 0) {
-                log.sync('Пример записи:', JSON.stringify(items[0]).slice(0, 300));
+            // Логируем первый элемент для отладки
+            if (logRecords.length > 0) {
+                log.sync('Пример записи:', JSON.stringify(logRecords[0]).slice(0, 400));
             }
 
-            for (const item of items) {
-                // Ищем записи с parameterName или parameter или changeParam содержащим "Минус-фразы"
-                const paramName = item.parameterName || item.parameter || item.changeParam || item.name || '';
+            // Ищем записи о минус-фразах
+            for (const record of logRecords) {
+                // Проверяем категорию события
+                const category = record.event?.category || '';
 
-                if (paramName.includes('Минус-фразы') ||
-                    paramName.includes('минус-фразы') ||
-                    paramName.toLowerCase().includes('negative')) {
+                // Если категория CAMPAIGN_MINUS_WORDS — это то что нам нужно
+                if (category === 'CAMPAIGN_MINUS_WORDS' ||
+                    category.includes('MINUS') ||
+                    category.includes('minus')) {
 
-                    // Дата в формате ISO или timestamp - пробуем разные варианты
-                    const dateStr = item.datetime || item.date || item.createdAt || item.timestamp || item.actionTime;
+                    // Берём дату из datetime
+                    const dateStr = record.datetime;
 
                     if (dateStr) {
                         const parsedDate = new Date(dateStr);
                         if (!Number.isNaN(parsedDate.getTime())) {
                             log.sync('Найдена запись минус-фраз:', {
                                 date: parsedDate.toISOString(),
-                                paramName: paramName
+                                category: category,
+                                campaign: record.event?.campaign?.name || 'N/A'
                             });
                             return parsedDate;
                         }
@@ -4931,12 +4962,14 @@
                 }
             }
 
+            log.sync('Записи о минус-фразах не найдены в ответе');
             return null;
         } catch (error) {
             log.error('Ошибка парсинга API:', error);
             return null;
         }
     }
+
 
     // Умный поиск по периодам через API
     async function smartSyncFromHistory(ulogin, campaignId, onProgress) {
@@ -4966,8 +4999,8 @@
             const apiResponse = await fetchHistoryApi(
                 ulogin,
                 campaignId,
-                formatDateForHistoryUrl(dateFrom),
-                formatDateForHistoryUrl(today)
+                formatDateForHistoryApi(dateFrom, false),
+                formatDateForHistoryApi(today, true)
             );
 
             if (apiResponse) {
@@ -8581,6 +8614,7 @@
     init();
 
 })();
+
 
 
 
