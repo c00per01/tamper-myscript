@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.168.1
+// @version 1.169.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7804,29 +7804,44 @@
             return;
         }
 
-        // Ищем контейнер с действиями: div.dc-Stack с gap_8
-        const actionsContainer = cell.querySelector('.dc-Stack.dc-Stack_type_horizontal.dc-Stack_gap_8');
+        // Ищем ссылки "Перейти" или "Редактировать" и находим их родителя
+        const allLinks = cell.querySelectorAll('.dc-Link');
+        let targetContainer = null;
 
-        if (!actionsContainer) {
-            // Резервный поиск
-            const allStacks = cell.querySelectorAll('.dc-Stack_type_horizontal');
-            for (const stack of allStacks) {
+        for (const link of allLinks) {
+            const text = link.textContent.trim();
+            if (text === 'Перейти' || text === 'Редактировать') {
+                // Нашли ссылку действия — её родитель это контейнер
+                targetContainer = link.parentElement;
+                break;
+            }
+        }
+
+        if (!targetContainer) {
+            // Резервный поиск — ищем любой горизонтальный Stack
+            const stacks = cell.querySelectorAll('[class*="dc-Stack_type_horizontal"]');
+            for (const stack of stacks) {
                 if (stack.textContent.includes('Перейти') || stack.textContent.includes('Редактировать')) {
-                    const trigger = createStatsTrigger(cell);
-                    if (trigger) {
-                        stack.appendChild(trigger);
-                    }
-                    return;
+                    targetContainer = stack;
+                    break;
                 }
             }
+        }
+
+        if (!targetContainer) {
             return;
         }
 
+        // Добавляем триггер
         const trigger = createStatsTrigger(cell);
         if (trigger) {
-            actionsContainer.appendChild(trigger);
+            targetContainer.appendChild(trigger);
+
+            // Добавляем класс для расширения ширины ячейки
+            cell.classList.add('yd-cl-expanded-cell');
         }
     }
+
 
     // ==================== НАБЛЮДАТЕЛЬ ====================
     function scanAndProcess() {
@@ -7939,7 +7954,19 @@
             .yd-cl-popover-item:last-child {
                 border-radius: 0 0 6px 6px;
             }
+
+            /* Расширение ячейки для 3 действий */
+            .yd-cl-expanded-cell {
+                min-width: 280px !important;
+            }
+
+            /* Контейнер действий — nowrap для одной строки */
+            .yd-cl-expanded-cell .dc-Stack_type_horizontal {
+                flex-wrap: nowrap !important;
+                white-space: nowrap;
+            }
         `;
+
 
         document.head.appendChild(style);
     }
@@ -7966,4 +7993,5 @@
     init();
 
 })();
+
 
