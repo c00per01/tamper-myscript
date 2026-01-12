@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.184.2
+// @version 1.184.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -240,6 +240,13 @@
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     function init() {
+        // Проверяем: если мы на странице настроек кампании и идёт синхронизация
+        if (isOnCampaignSettingsPage()) {
+            if (handleSettingsPageSync()) {
+                return; // Обработка синхронизации завершится автоматически
+            }
+        }
+
         if (!window.location.href.includes('stat_type=search_queries')) {
             return;
         }
@@ -250,6 +257,11 @@
         loadGlobalState();
         loadLastSendDate(); // Загружаем дату последней отправки
         setupGlobalListeners();
+
+        // Проверяем есть ли синхронизированные данные для применения
+        setTimeout(() => {
+            checkAndApplySyncedData();
+        }, 1000);
 
         detectPageChange();
         waitForTableAndInit();
@@ -2110,7 +2122,72 @@
     }
 
 
+    // ========================================
+    // СИНХРОНИЗАЦИЯ С НАСТРОЙКАМИ КАМПАНИИ
+    // ========================================
 
+    const SYNC_STORAGE_KEY = 'yd-sq-sync-pending';
+    const SYNC_DATA_KEY = 'yd-sq-synced-minuses';
+    const SYNC_RETURN_URL_KEY = 'yd-sq-sync-return-url';
+
+    // Toast уведомление для страницы настроек (где нет нашей панели)
+    function showSyncStatusToast(message) {
+        let toast = document.getElementById('yd-sync-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'yd-sync-toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                color: #fff;
+                padding: 16px 24px;
+                border-radius: 12px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 999999;
+                border: 1px solid rgba(255,255,255,0.1);
+                backdrop-filter: blur(10px);
+                transition: opacity 0.3s ease, transform 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }
+
+    // Определяем URL настроек кампании из текущего URL статистики
+    function getCampaignSettingsUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const cid = params.get('cid');
+        const ulogin = params.get('ulogin');
+
+        if (!cid || !ulogin) {
+            log.warn('Не удалось определить cid или ulogin');
+            return null;
+        }
+
+        // Пробуем найти ссылку "Изменить параметры" на странице
+        const editLink = Array.from(document.querySelectorAll('a')).find(a =>
+            a.textContent.includes('Изменить параметры') ||
+            a.textContent.includes('Редактировать') ||
+            a.href?.includes('/edit')
+        );
+
+        if (editLink && editLink.href) {
+            log.info('Найдена ссылка на настройки:', editLink.href);
+            return editLink.href;
+        }
+
+        // Формируем URL для wizard кампании (новый интерфейс)
+        // Это работает для большинства кампаний
+        const wizardUrl = `https://direct.yandex.ru/wizard/campaigns/${cid}/edit/?ulogin=${ulogin}`;
+        log.info('Сформирован URL настроек (wizard):', wizardUrl);
+        return wizardUrl;
+    }
 
     // ========================================
     // API ДЛЯ ПОЛУЧЕНИЯ МИНУС-СЛОВ КАМПАНИИ
@@ -2214,10 +2291,12 @@
     // Применение синхронизированных минус-слов
     function applySyncedMinuses(minusKeywords) {
         try {
-            log.sync(`Начинаю синхронизацию. Получено из API: ${minusKeywords.length}, Текущих: ${importedMinuses.length}`);
+            log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
+            log.sync('importedMinuses.length:', importedMinuses.length);
 
+            // Проверяем что это массив
             if (!Array.isArray(minusKeywords)) {
-                log.error('API вернул неверный формат данных (не массив)');
+                log.error('minusKeywords не является массивом!');
                 return { added: 0, existing: 0 };
             }
 
@@ -2225,56 +2304,347 @@
             const existingSet = new Set(
                 importedMinuses.map(item => item.raw.toLowerCase().trim())
             );
+            log.sync('Существующих минусов:', existingSet.size);
 
             // Добавляем новые минусы
             const added = [];
-            let existingCount = 0;
+            const alreadyExists = [];
+
+            log.sync('Начинаю цикл обработки...');
 
             for (let i = 0; i < minusKeywords.length; i++) {
-                const keyword = minusKeywords[i];
+                try {
+                    const keyword = minusKeywords[i];
 
-                if (typeof keyword !== 'string') continue;
+                    // Логируем каждые 100 элементов
+                    if (i % 100 === 0) {
+                        log.sync(`Обработано ${i} из ${minusKeywords.length}`);
+                    }
 
-                const normalized = keyword.trim().toLowerCase();
-                if (!normalized) continue;
+                    if (typeof keyword !== 'string') {
+                        continue;
+                    }
 
-                if (!existingSet.has(normalized)) {
-                    // Добавляем в массив importedMinuses как объект
-                    importedMinuses.push({
-                        id: `api-sync:${Date.now()}_${i}`,
-                        raw: keyword.trim(),
-                        source: 'api-sync',
-                        importedAt: Date.now()
-                    });
-                    existingSet.add(normalized);
-                    added.push(normalized);
-                } else {
-                    existingCount++;
+                    const normalized = keyword.trim().toLowerCase();
+                    if (!normalized) continue;
+
+                    if (!existingSet.has(normalized)) {
+                        // Добавляем в массив importedMinuses как объект
+                        importedMinuses.push({
+                            id: `api-sync:${Date.now()}_${i}`,
+                            raw: keyword.trim(),
+                            source: 'api-sync',
+                            importedAt: Date.now()
+                        });
+                        existingSet.add(normalized);
+                        added.push(normalized);
+                    } else {
+                        alreadyExists.push(normalized);
+                    }
+                } catch (innerError) {
+                    log.error(`Ошибка на элементе ${i}:`, innerError.message);
                 }
             }
 
-            log.sync(`Результат: добавлено ${added.length}, уже было ${existingCount}. Всего теперь: ${importedMinuses.length}`);
+            log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
+            log.sync('Новый размер importedMinuses:', importedMinuses.length);
 
             if (added.length > 0) {
-                saveData();
-                updateHighlights();
-                renderImportedMinuses();
+                try {
+                    log.sync('Сохраняю данные...');
+                    saveData();
+                    log.sync('saveData() успешно');
+                } catch (saveErr) {
+                    log.error('Ошибка в saveData():', saveErr.message);
+                    console.error('[YD-SQ] saveData error:', saveErr);
+                }
+
+                try {
+                    log.sync('Обновляю подсветку...');
+                    updateHighlights();
+                    log.sync('updateHighlights() успешно');
+                } catch (hlErr) {
+                    log.error('Ошибка в updateHighlights():', hlErr.message);
+                    console.error('[YD-SQ] updateHighlights error:', hlErr);
+                }
+
+                try {
+                    log.sync('Обновляю UI...');
+                    renderImportedMinuses();
+                    log.sync('renderImportedMinuses() успешно');
+                } catch (uiErr) {
+                    log.error('Ошибка в renderImportedMinuses():', uiErr.message);
+                    console.error('[YD-SQ] renderImportedMinuses error:', uiErr);
+                }
+
+                log.sync('Готово!');
             }
 
-            return { added: added.length, existing: existingCount };
+            return { added: added.length, existing: alreadyExists.length };
         } catch (error) {
             log.error('Ошибка в applySyncedMinuses:', error.message || error);
-            console.error('[YD-SQ] Ошибка синхронизации:', error);
+            console.error('[YD-SQ] Ошибка в applySyncedMinuses:', error);
             throw error;
         }
     }
 
 
+    // Парсинг минус-фраз на странице настроек (вызывается на странице настроек)
+    function parseMinusesFromSettingsPage() {
+        const minuses = [];
 
+        // Тип 1: Wizard кампании (textarea с contenteditable)
+        // Селектор: [data-testid="MinusKeywords.SingleInput"]
+        const wizardTextarea = document.querySelector('[data-testid="MinusKeywords.SingleInput"]');
+        if (wizardTextarea) {
+            log.info('Найден wizard формат минус-фраз');
+            const html = wizardTextarea.innerHTML;
+            // Минусы разделены <br>, формат: -!слово<br>-слово2<br>
+            const items = html.split(/<br\s*\/?>/i).filter(Boolean);
+            items.forEach(item => {
+                // Убираем HTML теги и пробелы
+                let clean = item.replace(/<[^>]*>/g, '').trim();
+                // Убираем начальный минус если есть
+                if (clean.startsWith('-')) {
+                    clean = clean.substring(1).trim();
+                }
+                if (clean) {
+                    minuses.push(clean);
+                }
+            });
+            log.info(`Распарсено ${minuses.length} минусов из wizard формата`);
+        }
 
+        // Тип 2: DNA кампании (теги)
+        // Селектор: [data-testid^="ExceptionsEditor.Tag_phrase."]
+        const dnaTags = document.querySelectorAll('[data-testid^="ExceptionsEditor.Tag_phrase."]');
+        if (dnaTags.length > 0) {
+            log.info('Найден DNA формат минус-фраз');
+            dnaTags.forEach(tag => {
+                // Ищем текст внутри: span > div или просто textContent
+                const textDiv = tag.querySelector('span.dc-Text__text div');
+                let phrase = textDiv ? textDiv.textContent.trim() : '';
 
+                if (!phrase) {
+                    // Попробуем из data-testid
+                    const testId = tag.getAttribute('data-testid') || '';
+                    const match = testId.match(/ExceptionsEditor\.Tag_phrase\.(.+)$/);
+                    if (match) {
+                        phrase = match[1];
+                    }
+                }
 
+                if (phrase && !phrase.endsWith('.close')) {
+                    minuses.push(phrase);
+                }
+            });
+            log.info(`Распарсено ${minuses.length} минусов из DNA формата`);
+        }
 
+        return minuses;
+    }
+
+    // Проверка: находимся ли мы на странице настроек кампании
+    function isOnCampaignSettingsPage() {
+        const url = window.location.href;
+        return url.includes('/wizard/campaigns/') && url.includes('/edit') ||
+            url.includes('/dna/campaigns-edit');
+    }
+
+    // Обработка страницы настроек (парсинг и возврат)
+    function handleSettingsPageSync() {
+        if (!isOnCampaignSettingsPage()) return false;
+
+        const syncPending = sessionStorage.getItem(SYNC_STORAGE_KEY);
+        if (syncPending !== 'true') return false;
+
+        log.info('Обнаружена страница настроек с pending sync');
+
+        // Показываем уведомление на странице настроек
+        showSyncStatusToast('🔄 Ожидание загрузки страницы...');
+
+        // Ждём полной загрузки страницы
+        let attempts = 0;
+        const maxAttempts = 30;
+        let lastCount = 0;
+        let stableCount = 0; // Сколько раз подряд количество было стабильным
+        let pageLoadedButEmpty = 0; // Счетчик: страница загружена, но минусов нет
+
+        const tryParse = () => {
+            attempts++;
+            const minuses = parseMinusesFromSettingsPage();
+            const currentCount = minuses.length;
+
+            // Проверяем, загружена ли страница полностью (есть ключевые элементы UI)
+            // Расширенные селекторы для разных типов страниц настроек
+            const hasMinusContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]') ||
+                document.querySelector('[data-testid^="ExceptionsEditor"]') ||
+                document.querySelector('.minus-keywords-editor') ||
+                document.querySelector('[class*="MinusKeywords"]') ||
+                // Дополнительные селекторы для определения загрузки формы
+                document.querySelector('[data-testid*="minus"]') ||
+                document.querySelector('[data-testid*="Minus"]');
+
+            // Проверяем что страница настроек загружена (есть форма редактирования)
+            const hasFormLoaded = document.querySelector('button[type="submit"]') ||
+                document.querySelector('[data-testid="submit-button"]') ||
+                document.querySelector('button[class*="Save"]') ||
+                document.querySelector('[class*="CampaignEdit"]') ||
+                document.querySelector('[class*="wizard"]') ||
+                document.querySelector('[data-testid="CampaignEditForm"]');
+
+            const hasPageLoaded = document.querySelector('[data-testid]') !== null &&
+                document.readyState === 'complete';
+
+            // Логируем состояние для отладки (каждые 5 попыток)
+            if (attempts % 5 === 0) {
+                console.log(`[YD-SQ] 🔍 SYNC попытка ${attempts}: minuses=${currentCount}, hasMinusContainer=${!!hasMinusContainer}, hasFormLoaded=${!!hasFormLoaded}, hasPageLoaded=${hasPageLoaded}`);
+            }
+
+            // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
+            if (currentCount > 0 && currentCount === lastCount) {
+                stableCount++;
+            } else {
+                stableCount = 0;
+            }
+            lastCount = currentCount;
+
+            // Быстрое завершение: если форма загружена, но минусов нет
+            // Условие: страница загружена И (есть контейнер минусов ИЛИ есть форма редактирования) И минусов 0
+            if (hasPageLoaded && (hasMinusContainer || hasFormLoaded) && currentCount === 0) {
+                pageLoadedButEmpty++;
+                if (pageLoadedButEmpty >= 3) {
+                    // Страница загружена, но минусов нет
+                    console.log(`[YD-SQ] ✅ SYNC: Форма загружена, минусов нет (попытка ${attempts})`);
+                    showSyncStatusToast('ℹ️ Минус-фразы не найдены (пустой список). Возврат...');
+                    finishSync(minuses, 0);
+                    return;
+                }
+            } else {
+                pageLoadedButEmpty = 0;
+            }
+
+            // Показываем прогресс
+            if (currentCount > 0) {
+                showSyncStatusToast(`🔄 Загрузка: ${currentCount} минусов (проверка ${stableCount}/3)...`);
+            } else if (hasMinusContainer) {
+                showSyncStatusToast(`🔄 Контейнер найден, ожидание данных... (${attempts}/${maxAttempts})`);
+            } else {
+                showSyncStatusToast(`🔄 Ожидание загрузки страницы... (${attempts}/${maxAttempts})`);
+            }
+
+            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума
+            if ((currentCount > 0 && stableCount >= 3) || attempts >= maxAttempts) {
+                if (currentCount === 0) {
+                    showSyncStatusToast('⚠️ Минус-фразы не найдены. Возврат...');
+                } else {
+                    showSyncStatusToast(`✅ Синхронизировано: ${currentCount} минусов. Возврат...`);
+                }
+                finishSync(minuses, currentCount);
+                return;
+            }
+
+            // Ждём ещё (1 секунда между попытками)
+            setTimeout(tryParse, 1000);
+        };
+
+        const finishSync = (minuses, currentCount) => {
+            // Сохраняем результат
+            const syncData = {
+                minuses: minuses,
+                timestamp: Date.now(),
+                campaignUrl: window.location.href
+            };
+            localStorage.setItem(SYNC_DATA_KEY, JSON.stringify(syncData));
+
+            // Очищаем флаг
+            sessionStorage.removeItem(SYNC_STORAGE_KEY);
+
+            // Получаем URL для возврата
+            const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
+            sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
+
+            log.success(`Синхронизировано ${currentCount} минусов, возврат...`);
+
+            // Возвращаемся назад с задержкой для показа уведомления
+            setTimeout(() => {
+                if (returnUrl) {
+                    window.location.href = returnUrl;
+                } else {
+                    window.history.back();
+                }
+            }, 1500);
+        };
+
+        // Начинаем парсинг через 2 секунды для загрузки страницы
+        setTimeout(tryParse, 2000);
+        return true;
+    }
+
+    // Проверка и применение синхронизированных данных (на странице статистики)
+    function checkAndApplySyncedData() {
+        const syncDataStr = localStorage.getItem(SYNC_DATA_KEY);
+        if (!syncDataStr) return false;
+
+        try {
+            const syncData = JSON.parse(syncDataStr);
+
+            // Проверяем что данные свежие (не старше 5 минут)
+            if (Date.now() - syncData.timestamp > 5 * 60 * 1000) {
+                localStorage.removeItem(SYNC_DATA_KEY);
+                return false;
+            }
+
+            const syncedMinuses = syncData.minuses || [];
+            log.info(`Применяем синхронизированные данные: ${syncedMinuses.length} минусов`);
+
+            // ПОЛНАЯ ЗАМЕНА: очищаем текущий список и заполняем из кампании
+            const oldCount = importedMinuses.length;
+            importedMinuses.length = 0; // Очищаем
+
+            // Добавляем все минусы из кампании
+            for (const phrase of syncedMinuses) {
+                importedMinuses.push({
+                    id: `sync:${Date.now()}_${Math.random()}`,
+                    raw: phrase,
+                    source: 'sync',
+                    importedAt: Date.now()
+                });
+            }
+
+            log.success(`Синхронизировано ${importedMinuses.length} минусов (было ${oldCount})`);
+            console.log('[YD-SQ] importedMinuses после синхронизации:', importedMinuses.slice(0, 5));
+
+            // Сохраняем время последней синхронизации
+            localStorage.setItem('yd-sq-last-sync-time', syncData.timestamp.toString());
+
+            // Очищаем данные синхронизации
+            localStorage.removeItem(SYNC_DATA_KEY);
+
+            // Обновляем кэш минусов кампании
+            rebuildCampaignMinusList();
+
+            // Обновляем UI
+            syncLocalToGlobal();
+            renderImportedMinuses();
+            updateHighlights();
+
+            // Показываем результат
+            showYdsqNotification(`✅ В кампании: ${syncedMinuses.length} минусов`, 'success');
+
+            // Убираем анимацию с кнопки
+            const syncBtn = document.getElementById('yd-sq-sync-campaign');
+            if (syncBtn) {
+                syncBtn.classList.remove('syncing');
+            }
+
+            return true;
+        } catch (e) {
+            log.error('Ошибка применения синхронизированных данных:', e);
+            localStorage.removeItem(SYNC_DATA_KEY);
+            return false;
+        }
+    }
 
 
     async function importMinusesFromClipboard() {
