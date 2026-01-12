@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.171.1
+// @version 1.172.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4825,7 +4825,7 @@
         }
     }
 
-    // Форматирование даты для URL истории
+    // Форматирование даты для API (YYYY-MM-DD)
     function formatDateForHistoryUrl(date) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -4833,101 +4833,85 @@
         return `${y}-${m}-${d}`;
     }
 
-    // Построение URL страницы истории изменений
-    function buildHistoryUrl(ulogin, campaignId, dateFrom, dateTo) {
-        const baseUrl = 'https://direct.yandex.ru/dna/log/';
-        const params = new URLSearchParams({
-            ulogin: ulogin,
-            'date-from': dateFrom,
-            'date-to': dateTo,
-            filter: `campaignIds = ${campaignId}`
-        });
-        return `${baseUrl}?${params.toString()}`;
-    }
-
-    // Парсинг даты из строки истории (формат: "09.12.2025 20:17")
-    function parseHistoryDate(dateStr) {
-        const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
-        if (match) {
-            const [_, day, month, year, hour, minute] = match;
-            return new Date(year, month - 1, day, hour, minute);
-        }
-        return null;
-    }
-
-    // Загрузка и парсинг страницы истории
-    async function fetchHistoryPage(url) {
+    // Запрос к API истории изменений (userActionLog)
+    async function fetchHistoryApi(ulogin, campaignId, dateFrom, dateTo) {
         try {
+            const url = `https://direct.yandex.ru/web-api/user-action-log/api?operationName=userActionLog&ulogin=${encodeURIComponent(ulogin)}`;
+
+            const payload = {
+                operationName: 'userActionLog',
+                variables: {
+                    filter: `campaignIds = ${campaignId}`,
+                    dateFrom: dateFrom,
+                    dateTo: dateTo,
+                    pagination: { limit: 100, offset: 0 }
+                }
+            };
+
+            log.sync('API запрос:', url);
+
             const response = await fetch(url, {
+                method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'Accept': 'text/html'
-                }
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            return await response.text();
+            const data = await response.json();
+            return data;
         } catch (error) {
-            log.error('Ошибка загрузки истории:', error);
+            log.error('Ошибка API истории:', error);
             return null;
         }
     }
 
-    // Поиск даты последней чистки минус-фраз в HTML
-    function findMinusPhraseDate(html) {
-        // Ищем строки с "Минус-фразы для кампании"
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+    // Поиск даты последней чистки минус-фраз в ответе API
+    function findMinusPhraseInApiResponse(data) {
+        try {
+            // Структура ответа: data.data.userActionLog.items[]
+            const items = data?.data?.userActionLog?.items || [];
 
-        // Ищем все строки таблицы
-        const rows = doc.querySelectorAll('tr, [class*="row"], [class*="Row"]');
+            log.sync(`Получено ${items.length} записей из API`);
 
-        for (const row of rows) {
-            const text = row.textContent || '';
+            for (const item of items) {
+                // Ищем записи с parameterName содержащим "Минус-фразы"
+                const paramName = item.parameterName || '';
 
-            // Проверяем наличие "Минус-фразы для кампании"
-            if (text.includes('Минус-фразы для кампании') ||
-                text.includes('минус-фразы для кампании') ||
-                text.includes('Минус-фразы')) {
+                if (paramName.includes('Минус-фразы') ||
+                    paramName.includes('минус-фразы') ||
+                    paramName.toLowerCase().includes('negative')) {
 
-                // Ищем дату в этой строке
-                const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2})/);
-                if (dateMatch) {
-                    const parsedDate = parseHistoryDate(dateMatch[1]);
-                    if (parsedDate) {
-                        log.sync('Найдена дата в истории:', dateMatch[1]);
-                        return parsedDate;
-                    }
-                }
-            }
-        }
+                    // Дата в формате ISO или timestamp
+                    const dateStr = item.datetime || item.date || item.createdAt;
 
-        // Резервный поиск через текстовый контент
-        const textContent = doc.body?.textContent || '';
-        const lines = textContent.split('\n');
-
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('Минус-фразы')) {
-                // Ищем дату в окрестности
-                for (let j = Math.max(0, i - 5); j < Math.min(lines.length, i + 5); j++) {
-                    const dateMatch = lines[j].match(/(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2})/);
-                    if (dateMatch) {
-                        const parsedDate = parseHistoryDate(dateMatch[1]);
-                        if (parsedDate) {
+                    if (dateStr) {
+                        const parsedDate = new Date(dateStr);
+                        if (!isNaN(parsedDate.getTime())) {
+                            log.sync('Найдена запись минус-фраз:', {
+                                date: parsedDate.toISOString(),
+                                paramName: paramName
+                            });
                             return parsedDate;
                         }
                     }
                 }
             }
-        }
 
-        return null;
+            return null;
+        } catch (error) {
+            log.error('Ошибка парсинга API:', error);
+            return null;
+        }
     }
 
-    // Умный поиск по периодам
+    // Умный поиск по периодам через API
     async function smartSyncFromHistory(ulogin, campaignId, onProgress) {
         const today = new Date();
 
@@ -4950,19 +4934,17 @@
             const dateFrom = new Date(today);
             dateFrom.setDate(dateFrom.getDate() - period.days);
 
-            const url = buildHistoryUrl(
+            log.sync(`Запрашиваю API за ${period.label}`);
+
+            const apiResponse = await fetchHistoryApi(
                 ulogin,
                 campaignId,
                 formatDateForHistoryUrl(dateFrom),
                 formatDateForHistoryUrl(today)
             );
 
-            log.sync(`Загружаю историю за ${period.label}`, url);
-
-            const html = await fetchHistoryPage(url);
-
-            if (html) {
-                const foundDate = findMinusPhraseDate(html);
+            if (apiResponse) {
+                const foundDate = findMinusPhraseInApiResponse(apiResponse);
 
                 if (foundDate) {
                     if (onProgress) {
@@ -4973,13 +4955,14 @@
             }
 
             // Небольшая задержка между запросами
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
 
         // Не найдено за весь год
         if (onProgress) {
             onProgress(periods.length + 1, periods.length + 1, 'Записей не найдено');
         }
+
 
         return null;
     }
@@ -8571,6 +8554,7 @@
     init();
 
 })();
+
 
 
 
