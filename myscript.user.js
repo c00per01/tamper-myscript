@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.182.1
+// @version 1.183.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2370,11 +2370,11 @@
 
                 try {
                     log.sync('Обновляю UI...');
-                    updateImportedMinusesUI();
-                    log.sync('updateImportedMinusesUI() успешно');
+                    renderImportedMinuses();
+                    log.sync('renderImportedMinuses() успешно');
                 } catch (uiErr) {
-                    log.error('Ошибка в updateImportedMinusesUI():', uiErr.message);
-                    console.error('[YD-SQ] updateImportedMinusesUI error:', uiErr);
+                    log.error('Ошибка в renderImportedMinuses():', uiErr.message);
+                    console.error('[YD-SQ] renderImportedMinuses error:', uiErr);
                 }
 
                 log.sync('Готово!');
@@ -8788,6 +8788,7 @@
     init();
 
 })();
+
 
 
 
