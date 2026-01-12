@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.181.1
+// @version 1.182.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2350,12 +2350,33 @@
             log.sync('Новый размер importedMinuses:', importedMinuses.length);
 
             if (added.length > 0) {
-                log.sync('Сохраняю данные...');
-                saveData();
-                log.sync('Обновляю подсветку...');
-                updateHighlights();
-                log.sync('Обновляю UI...');
-                updateImportedMinusesUI();
+                try {
+                    log.sync('Сохраняю данные...');
+                    saveData();
+                    log.sync('saveData() успешно');
+                } catch (saveErr) {
+                    log.error('Ошибка в saveData():', saveErr.message);
+                    console.error('[YD-SQ] saveData error:', saveErr);
+                }
+
+                try {
+                    log.sync('Обновляю подсветку...');
+                    updateHighlights();
+                    log.sync('updateHighlights() успешно');
+                } catch (hlErr) {
+                    log.error('Ошибка в updateHighlights():', hlErr.message);
+                    console.error('[YD-SQ] updateHighlights error:', hlErr);
+                }
+
+                try {
+                    log.sync('Обновляю UI...');
+                    updateImportedMinusesUI();
+                    log.sync('updateImportedMinusesUI() успешно');
+                } catch (uiErr) {
+                    log.error('Ошибка в updateImportedMinusesUI():', uiErr.message);
+                    console.error('[YD-SQ] updateImportedMinusesUI error:', uiErr);
+                }
+
                 log.sync('Готово!');
             }
 
@@ -8767,6 +8788,7 @@
     init();
 
 })();
+
 
 
 
