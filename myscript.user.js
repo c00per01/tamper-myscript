@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.177.1
+// @version 1.178.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2279,38 +2279,54 @@
             if (syncBtn) {
                 syncBtn.classList.remove('syncing');
             }
-            log.error('Ошибка синхронизации:', error);
+            log.error('Ошибка синхронизации:', error.message || error);
+            console.error('[YD-SQ] Ошибка синхронизации:', error);
             showYdsqNotification('❌ Ошибка синхронизации', 'error');
         }
     }
 
+    // Флаг для защиты от двойного вызова
+    let isSyncingCampaign = false;
+
     // Применение синхронизированных минус-слов
     function applySyncedMinuses(minusKeywords) {
-        // Добавляем в импортированные минусы
-        const added = [];
-        const alreadyExists = [];
+        try {
+            log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
 
-        for (const keyword of minusKeywords) {
-            const normalized = keyword.trim().toLowerCase();
-            if (!normalized) continue;
+            // Добавляем в импортированные минусы
+            const added = [];
+            const alreadyExists = [];
 
-            if (!importedMinuses.has(normalized)) {
-                importedMinuses.add(normalized);
-                added.push(normalized);
-            } else {
-                alreadyExists.push(normalized);
+            for (const keyword of minusKeywords) {
+                const normalized = keyword.trim().toLowerCase();
+                if (!normalized) continue;
+
+                if (!importedMinuses.has(normalized)) {
+                    importedMinuses.add(normalized);
+                    added.push(normalized);
+                } else {
+                    alreadyExists.push(normalized);
+                }
             }
+
+            log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
+
+            if (added.length > 0) {
+                log.sync('Сохраняю данные...');
+                saveData();
+                log.sync('Обновляю подсветку...');
+                updateHighlights();
+                log.sync('Обновляю UI...');
+                updateImportedMinusesUI();
+                log.sync('Готово!');
+            }
+
+            return { added: added.length, existing: alreadyExists.length };
+        } catch (error) {
+            log.error('Ошибка в applySyncedMinuses:', error.message || error);
+            console.error('[YD-SQ] Ошибка в applySyncedMinuses:', error);
+            throw error; // Пробрасываем дальше
         }
-
-        log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
-
-        if (added.length > 0) {
-            saveData();
-            updateHighlights();
-            updateImportedMinusesUI();
-        }
-
-        return { added: added.length, existing: alreadyExists.length };
     }
 
 
@@ -8713,6 +8729,7 @@
     init();
 
 })();
+
 
 
 
