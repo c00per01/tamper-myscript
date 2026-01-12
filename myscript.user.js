@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.167.1
+// @version 1.168.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7617,30 +7617,40 @@
 })();
 
 // ==================== МОДУЛЬ: СПИСОК КАМПАНИЙ ====================
-// Добавляет пункт "Статистика" с hover-меню для быстрого доступа к отчётам
+// Добавляет пункт "Статистика" с popover-меню (эталон Яндекс Директа)
 // Работает на странице списка кампаний
 (function () {
     'use strict';
 
-    // === Проверка: работаем только на странице списка кампаний ===
-    // Страница списка: /registered/main.pl или /expert или просто direct.yandex.ru без stat_type
+    // === Проверка URL: страница списка кампаний ===
     const url = location.href.toLowerCase();
-    if (url.includes('stat_type=') || url.includes('cmd=showcampstat') || url.includes('cmd=showstat')) {
+
+    // Активация: содержит /dna/ или /wizard/
+    if (!url.includes('/dna/') && !url.includes('/wizard/') && !url.includes('direct.yandex.ru')) {
         return;
     }
 
-    // Проверяем, что это страница Директа
-    if (!url.includes('direct.yandex.ru')) {
+    // Исключения: страницы редактирования
+    if (url.includes('/edit') || url.includes('/groups') || url.includes('/ads')) {
+        return;
+    }
+
+    // Исключения: страницы статистики
+    if (url.includes('stat_type=') || url.includes('cmd=showcampstat') || url.includes('cmd=showstat')) {
         return;
     }
 
     console.log("[YD-CL] 🚀 Модуль списка кампаний инициализируется...");
 
+    // ==================== СОСТОЯНИЕ ====================
+    let activePopover = null;
+    let activeTriggerId = null;
+
     // ==================== УТИЛИТЫ ДЛЯ ДАТ ====================
     function getDateRange() {
         const today = new Date();
         const fromDate = new Date();
-        fromDate.setDate(today.getDate() - 30); // Последние 30 дней
+        fromDate.setDate(today.getDate() - 30);
 
         return {
             d1: fromDate.getDate(),
@@ -7657,16 +7667,14 @@
         const baseUrl = 'https://direct.yandex.ru/registered/main.pl';
 
         if (statType === 'pages') {
-            // Отчёт по площадкам
             return `${baseUrl}?cmd=showCampStat&stat_type=pages&group=none&with_nds=0&cid=${cid}&ulogin=${ulogin}&y1=${dates.y1}&m1=${dates.m1}&d1=${dates.d1}&y2=${dates.y2}&m2=${dates.m2}&d2=${dates.d2}&isStat=1`;
         } else {
-            // Отчёт по поисковым запросам
             return `${baseUrl}?cmd=showStat&stat_type=search_queries&cid=${cid}&ulogin=${ulogin}&date_from=${dates.y1}-${String(dates.m1).padStart(2, '0')}-${String(dates.d1).padStart(2, '0')}&date_to=${dates.y2}-${String(dates.m2).padStart(2, '0')}-${String(dates.d2).padStart(2, '0')}&group_by=day&goal_id=0&attribution=LAC&page_size=100`;
         }
     }
 
+    // ==================== ИЗВЛЕЧЕНИЕ ДАННЫХ КАМПАНИИ ====================
     function extractCampaignInfo(cell) {
-        // Ищем ссылку на кампанию для извлечения cid
         const links = cell.querySelectorAll('a[href]');
         let cid = null;
         let ulogin = null;
@@ -7674,181 +7682,172 @@
         for (const link of links) {
             const href = link.getAttribute('href') || '';
 
-            // Ищем cid в href
             const cidMatch = href.match(/cid=(\d+)/i) || href.match(/\/(\d+)\/?$/);
-            if (cidMatch) {
-                cid = cidMatch[1];
-            }
+            if (cidMatch) cid = cidMatch[1];
 
-            // Ищем ulogin
             const uloginMatch = href.match(/ulogin=([^&]+)/i);
-            if (uloginMatch) {
-                ulogin = uloginMatch[1];
-            }
+            if (uloginMatch) ulogin = uloginMatch[1];
         }
 
-        // Если ulogin не найден в ссылках, берём из URL страницы
         if (!ulogin) {
-            const pageUlogin = new URLSearchParams(location.search).get('ulogin');
-            if (pageUlogin) {
-                ulogin = pageUlogin;
-            }
+            ulogin = new URLSearchParams(location.search).get('ulogin') || '';
         }
 
-        // Если cid не найден, пробуем из data-атрибутов
         if (!cid) {
             const testId = cell.getAttribute('data-testid') || '';
             const cidFromTestId = testId.match(/(\d+)_name-with-links/);
-            if (cidFromTestId) {
-                cid = cidFromTestId[1];
-            }
+            if (cidFromTestId) cid = cidFromTestId[1];
         }
 
         return { cid, ulogin };
     }
 
-    // ==================== СОЗДАНИЕ ЭЛЕМЕНТОВ ====================
-    function createStatsLink(cell) {
-        const { cid, ulogin } = extractCampaignInfo(cell);
-
-        if (!cid) {
-            console.log('[YD-CL] Не удалось извлечь cid для ячейки');
-            return null;
+    // ==================== POPOVER ====================
+    function closePopover() {
+        if (activePopover) {
+            activePopover.remove();
+            activePopover = null;
+            activeTriggerId = null;
         }
+    }
 
-        // Создаём контейнер для "Статистика" с меню
-        const container = document.createElement('span');
-        container.className = 'yd-cl-stats-container';
-        container.setAttribute('data-yd-stats', 'true');
-
-        // Создаём текст "Статистика"
-        const statsLink = document.createElement('span');
-        statsLink.className = 'dc-Link dc-Link_color_supplementary';
-        statsLink.textContent = 'Статистика';
-        statsLink.style.cursor = 'pointer';
-
-        // Создаём кастомное меню
-        const menu = document.createElement('div');
-        menu.className = 'yd-cl-stats-menu';
-        menu.innerHTML = `
-            <a href="${buildStatsUrl(cid, ulogin || '', 'pages')}" target="_blank" class="yd-cl-menu-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <line x1="3" y1="9" x2="21" y2="9"/>
-                    <line x1="9" y1="21" x2="9" y2="9"/>
-                </svg>
+    function createPopover(trigger, cid, ulogin) {
+        const popover = document.createElement('div');
+        popover.className = 'yd-cl-popover';
+        popover.innerHTML = `
+            <a href="${buildStatsUrl(cid, ulogin, 'pages')}" target="_blank" class="yd-cl-popover-item">
                 По площадкам
             </a>
-            <a href="${buildStatsUrl(cid, ulogin || '', 'queries')}" target="_blank" class="yd-cl-menu-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
+            <a href="${buildStatsUrl(cid, ulogin, 'queries')}" target="_blank" class="yd-cl-popover-item">
                 Поисковые запросы
             </a>
         `;
 
-        container.appendChild(statsLink);
-        container.appendChild(menu);
+        document.body.appendChild(popover);
 
-        // Показ/скрытие меню при hover
-        container.addEventListener('mouseenter', () => {
-            menu.classList.add('yd-cl-stats-menu-visible');
+        // Позиционирование относительно триггера
+        const rect = trigger.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
+
+        let top = rect.bottom + window.scrollY + 4;
+        let left = rect.left + window.scrollX;
+
+        // Проверка выхода за правый край
+        if (left + popoverRect.width > window.innerWidth) {
+            left = window.innerWidth - popoverRect.width - 8;
+        }
+
+        popover.style.top = top + 'px';
+        popover.style.left = left + 'px';
+
+        // Анимация появления
+        requestAnimationFrame(() => {
+            popover.classList.add('yd-cl-popover-visible');
         });
 
-        container.addEventListener('mouseleave', () => {
-            menu.classList.remove('yd-cl-stats-menu-visible');
-        });
-
-        return container;
+        return popover;
     }
 
-    function processCell(cell) {
-        // Проверяем, не добавили ли мы уже
-        if (cell.querySelector('[data-yd-stats]')) {
+    function handleTriggerClick(e, trigger, cid, ulogin) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const triggerId = `${cid}_trigger`;
+
+        // Если этот же popover открыт — закрываем
+        if (activeTriggerId === triggerId) {
+            closePopover();
             return;
         }
 
-        // Ищем контейнер с действиями (где "Перейти / Редактировать")
-        const actionsContainer = cell.querySelector('.b-campaign-actions__buttons, [class*="actions"], [class*="links"]');
+        // Закрываем предыдущий
+        closePopover();
+
+        // Открываем новый
+        activePopover = createPopover(trigger, cid, ulogin);
+        activeTriggerId = triggerId;
+    }
+
+    // ==================== СОЗДАНИЕ ТРИГГЕРА ====================
+    function createStatsTrigger(cell) {
+        const { cid, ulogin } = extractCampaignInfo(cell);
+
+        if (!cid) {
+            return null;
+        }
+
+        // Триггер — только текст, как у Яндекса
+        const trigger = document.createElement('span');
+        trigger.className = 'dc-Link dc-Link_color_supplementary';
+        trigger.setAttribute('role', 'link');
+        trigger.setAttribute('data-yd-cl-stats-trigger', 'true');
+        trigger.setAttribute('data-cid', cid);
+        trigger.textContent = 'Статистика';
+        trigger.style.cursor = 'pointer';
+
+        trigger.addEventListener('click', (e) => {
+            handleTriggerClick(e, trigger, cid, ulogin);
+        });
+
+        return trigger;
+    }
+
+    // ==================== ОБРАБОТКА ЯЧЕЕК ====================
+    function processCell(cell) {
+        // Уже добавлен кастомный триггер
+        if (cell.querySelector('[data-yd-cl-stats-trigger]')) {
+            return;
+        }
+
+        // Есть нативный триггер Яндекса
+        if (cell.querySelector('[data-testid="CampaignStatisticsTrigger"]')) {
+            return;
+        }
+
+        // Ищем контейнер с действиями: div.dc-Stack с gap_8
+        const actionsContainer = cell.querySelector('.dc-Stack.dc-Stack_type_horizontal.dc-Stack_gap_8');
 
         if (!actionsContainer) {
-            // Если специфичный контейнер не найден, ищем место после названия кампании
-            const nameContainer = cell.querySelector('[class*="name"]') || cell;
-
-            // Проверяем, есть ли уже "Статистика" (нативная)
-            if (cell.textContent.includes('Статистика')) {
-                return;
-            }
-
-            const statsElement = createStatsLink(cell);
-            if (statsElement) {
-                // Добавляем разделитель и элемент
-                const separator = document.createElement('span');
-                separator.textContent = ' / ';
-                separator.className = 'yd-cl-separator';
-                separator.style.cssText = 'color: #999; margin: 0 2px;';
-
-                // Ищем последний элемент в строке действий
-                const existingLinks = cell.querySelectorAll('.dc-Link, a[class*="Link"]');
-                if (existingLinks.length > 0) {
-                    const lastLink = existingLinks[existingLinks.length - 1];
-                    if (lastLink.parentNode) {
-                        lastLink.parentNode.insertBefore(separator, lastLink.nextSibling);
-                        lastLink.parentNode.insertBefore(statsElement, separator.nextSibling);
+            // Резервный поиск
+            const allStacks = cell.querySelectorAll('.dc-Stack_type_horizontal');
+            for (const stack of allStacks) {
+                if (stack.textContent.includes('Перейти') || stack.textContent.includes('Редактировать')) {
+                    const trigger = createStatsTrigger(cell);
+                    if (trigger) {
+                        stack.appendChild(trigger);
                     }
+                    return;
                 }
             }
-        } else {
-            // Есть контейнер действий
-            if (actionsContainer.textContent.includes('Статистика')) {
-                return;
-            }
+            return;
+        }
 
-            const statsElement = createStatsLink(cell);
-            if (statsElement) {
-                const separator = document.createElement('span');
-                separator.textContent = ' / ';
-                separator.style.cssText = 'color: #999; margin: 0 2px;';
-
-                actionsContainer.appendChild(separator);
-                actionsContainer.appendChild(statsElement);
-            }
+        const trigger = createStatsTrigger(cell);
+        if (trigger) {
+            actionsContainer.appendChild(trigger);
         }
     }
 
     // ==================== НАБЛЮДАТЕЛЬ ====================
     function scanAndProcess() {
-        // Ищем все ячейки с названиями кампаний
-        const cells = document.querySelectorAll('[data-testid*="_name-with-links"], [data-testid*="name-with-links"]');
+        // Проверяем наличие Grid.Row — признак страницы списка
+        const rows = document.querySelectorAll('[data-testid^="Grid.Row-"]');
+        if (rows.length === 0) {
+            return;
+        }
+
+        // Ищем ячейки с названиями кампаний
+        const cells = document.querySelectorAll('[data-testid$="_name-with-links"]');
 
         cells.forEach(cell => {
-            processCell(cell);
-        });
-
-        // Также ищем по классам (резервный вариант)
-        const fallbackCells = document.querySelectorAll('.b-campaign-name, [class*="campaign-name"], [class*="CampaignName"]');
-        fallbackCells.forEach(cell => {
             processCell(cell);
         });
     }
 
     function setupObserver() {
-        const observer = new MutationObserver((mutations) => {
-            let shouldScan = false;
-
-            for (const mutation of mutations) {
-                if (mutation.addedNodes.length > 0) {
-                    shouldScan = true;
-                    break;
-                }
-            }
-
-            if (shouldScan) {
-                // Debounce
-                clearTimeout(setupObserver._timeout);
-                setupObserver._timeout = setTimeout(scanAndProcess, 300);
-            }
+        const observer = new MutationObserver(() => {
+            clearTimeout(setupObserver._timeout);
+            setupObserver._timeout = setTimeout(scanAndProcess, 300);
         });
 
         observer.observe(document.body, {
@@ -7859,6 +7858,36 @@
         return observer;
     }
 
+    // ==================== ГЛОБАЛЬНЫЕ СОБЫТИЯ ====================
+    function setupGlobalEvents() {
+        // Закрытие popover по клику вне
+        document.addEventListener('click', (e) => {
+            if (!activePopover) return;
+
+            // Клик внутри popover — не закрываем (ссылки сами откроются)
+            if (activePopover.contains(e.target)) {
+                return;
+            }
+
+            // Клик по триггеру обрабатывается отдельно
+            if (e.target.hasAttribute('data-yd-cl-stats-trigger')) {
+                return;
+            }
+
+            closePopover();
+        });
+
+        // Закрытие по Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePopover();
+            }
+        });
+
+        // Закрытие при скролле
+        window.addEventListener('scroll', closePopover, { passive: true });
+    }
+
     // ==================== СТИЛИ ====================
     function injectStyles() {
         if (document.getElementById('yd-cl-styles')) return;
@@ -7866,67 +7895,49 @@
         const style = document.createElement('style');
         style.id = 'yd-cl-styles';
         style.textContent = `
-            /* Контейнер для Статистика + меню */
-            .yd-cl-stats-container {
-                position: relative;
-                display: inline-block;
-            }
-
-            /* Кастомное меню */
-            .yd-cl-stats-menu {
+            /* Popover — рендерится в body */
+            .yd-cl-popover {
                 position: absolute;
-                top: 100%;
-                left: 0;
                 z-index: 10000;
                 background: #fff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                border: 1px solid #e5e5e5;
+                border-radius: 8px;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
                 padding: 4px 0;
                 min-width: 180px;
                 opacity: 0;
-                visibility: hidden;
                 transform: translateY(-4px);
-                transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+                transition: opacity 0.15s ease, transform 0.15s ease;
             }
 
-            .yd-cl-stats-menu-visible {
+            .yd-cl-popover-visible {
                 opacity: 1;
-                visibility: visible;
                 transform: translateY(0);
             }
 
-            /* Пункты меню */
-            .yd-cl-menu-item {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 12px;
-                color: #333;
-                text-decoration: none;
-                font-size: 13px;
-                white-space: nowrap;
-                transition: background-color 0.15s ease;
-            }
-
-            .yd-cl-menu-item:hover {
-                background-color: #f5f5f5;
+            /* Пункты popover */
+            .yd-cl-popover-item {
+                display: block;
+                padding: 10px 16px;
                 color: #000;
                 text-decoration: none;
+                font-size: 13px;
+                line-height: 18px;
+                white-space: nowrap;
+                transition: background-color 0.1s ease;
             }
 
-            .yd-cl-menu-item svg {
-                flex-shrink: 0;
-                color: #666;
+            .yd-cl-popover-item:hover {
+                background-color: #f5f5f5;
+                text-decoration: none;
             }
 
-            .yd-cl-menu-item:hover svg {
-                color: #333;
+            .yd-cl-popover-item:first-child {
+                border-radius: 6px 6px 0 0;
             }
 
-            /* Разделитель */
-            .yd-cl-separator {
-                color: #ccc !important;
+            .yd-cl-popover-item:last-child {
+                border-radius: 0 0 6px 6px;
             }
         `;
 
@@ -7941,18 +7952,18 @@
         }
 
         injectStyles();
+        setupGlobalEvents();
         setupObserver();
 
-        // Первичное сканирование с задержкой (дождаться загрузки React-компонентов)
+        // Сканирование с задержками для React
         setTimeout(scanAndProcess, 500);
         setTimeout(scanAndProcess, 1500);
         setTimeout(scanAndProcess, 3000);
 
-        console.log("[YD-CL] ✅ Модуль списка кампаний загружен");
+        console.log("[YD-CL] ✅ Модуль списка кампаний загружен (v2.0 — эталон)");
     }
 
     init();
 
 })();
-
 
