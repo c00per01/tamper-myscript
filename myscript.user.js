@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.178.1
+// @version 1.179.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2292,12 +2292,33 @@
     function applySyncedMinuses(minusKeywords) {
         try {
             log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
+            log.sync('Тип minusKeywords:', typeof minusKeywords, Array.isArray(minusKeywords));
+
+            // Проверяем что это массив
+            if (!Array.isArray(minusKeywords)) {
+                log.error('minusKeywords не является массивом!');
+                return { added: 0, existing: 0 };
+            }
 
             // Добавляем в импортированные минусы
             const added = [];
             const alreadyExists = [];
 
-            for (const keyword of minusKeywords) {
+            log.sync('Начинаю цикл обработки...');
+
+            for (let i = 0; i < minusKeywords.length; i++) {
+                const keyword = minusKeywords[i];
+
+                // Логируем каждые 100 элементов
+                if (i % 100 === 0) {
+                    log.sync(`Обработано ${i} из ${minusKeywords.length}`);
+                }
+
+                if (typeof keyword !== 'string') {
+                    log.warn(`Элемент ${i} не строка:`, typeof keyword, keyword);
+                    continue;
+                }
+
                 const normalized = keyword.trim().toLowerCase();
                 if (!normalized) continue;
 
@@ -8729,6 +8750,7 @@
     init();
 
 })();
+
 
 
 
