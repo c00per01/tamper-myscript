@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.172.1
+// @version 1.173.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4865,6 +4865,14 @@
             }
 
             const data = await response.json();
+
+            // Детальное логирование для отладки
+            log.sync('API ответ получен, структура:', {
+                hasData: !!data.data,
+                keys: data.data ? Object.keys(data.data) : [],
+                rawKeys: Object.keys(data)
+            });
+
             return data;
         } catch (error) {
             log.error('Ошибка API истории:', error);
@@ -4875,25 +4883,39 @@
     // Поиск даты последней чистки минус-фраз в ответе API
     function findMinusPhraseInApiResponse(data) {
         try {
-            // Структура ответа: data.data.userActionLog.items[]
-            const items = data?.data?.userActionLog?.items || [];
+            // Пробуем разные варианты структуры ответа
+            let items = data?.data?.userActionLog?.items ||
+                data?.data?.items ||
+                data?.userActionLog?.items ||
+                data?.items ||
+                [];
 
+            // Детальное логирование для отладки
             log.sync(`Получено ${items.length} записей из API`);
 
+            if (items.length === 0) {
+                log.sync('Структура данных для отладки:', JSON.stringify(data).slice(0, 500));
+            }
+
+            // Логируем первые 3 элемента для понимания структуры
+            if (items.length > 0) {
+                log.sync('Пример записи:', JSON.stringify(items[0]).slice(0, 300));
+            }
+
             for (const item of items) {
-                // Ищем записи с parameterName содержащим "Минус-фразы"
-                const paramName = item.parameterName || '';
+                // Ищем записи с parameterName или parameter или changeParam содержащим "Минус-фразы"
+                const paramName = item.parameterName || item.parameter || item.changeParam || item.name || '';
 
                 if (paramName.includes('Минус-фразы') ||
                     paramName.includes('минус-фразы') ||
                     paramName.toLowerCase().includes('negative')) {
 
-                    // Дата в формате ISO или timestamp
-                    const dateStr = item.datetime || item.date || item.createdAt;
+                    // Дата в формате ISO или timestamp - пробуем разные варианты
+                    const dateStr = item.datetime || item.date || item.createdAt || item.timestamp || item.actionTime;
 
                     if (dateStr) {
                         const parsedDate = new Date(dateStr);
-                        if (!isNaN(parsedDate.getTime())) {
+                        if (!Number.isNaN(parsedDate.getTime())) {
                             log.sync('Найдена запись минус-фраз:', {
                                 date: parsedDate.toISOString(),
                                 paramName: paramName
@@ -8554,6 +8576,7 @@
     init();
 
 })();
+
 
 
 
