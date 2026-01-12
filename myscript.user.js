@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.180.1
+// @version 1.181.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2292,10 +2292,7 @@
     function applySyncedMinuses(minusKeywords) {
         try {
             log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
-            log.sync('Array.isArray:', Array.isArray(minusKeywords));
-            log.sync('importedMinuses существует:', !!importedMinuses);
-            log.sync('importedMinuses тип:', importedMinuses ? importedMinuses.constructor.name : 'null');
-            log.sync('importedMinuses.size:', importedMinuses ? importedMinuses.size : 'null');
+            log.sync('importedMinuses.length:', importedMinuses.length);
 
             // Проверяем что это массив
             if (!Array.isArray(minusKeywords)) {
@@ -2303,13 +2300,13 @@
                 return { added: 0, existing: 0 };
             }
 
-            // Проверяем importedMinuses
-            if (!importedMinuses || typeof importedMinuses.has !== 'function') {
-                log.error('importedMinuses не инициализирован или не является Set!');
-                return { added: 0, existing: 0 };
-            }
+            // Создаём Set существующих минусов для быстрой проверки
+            const existingSet = new Set(
+                importedMinuses.map(item => item.raw.toLowerCase().trim())
+            );
+            log.sync('Существующих минусов:', existingSet.size);
 
-            // Добавляем в импортированные минусы
+            // Добавляем новые минусы
             const added = [];
             const alreadyExists = [];
 
@@ -2325,26 +2322,32 @@
                     }
 
                     if (typeof keyword !== 'string') {
-                        log.warn(`Элемент ${i} не строка:`, typeof keyword);
                         continue;
                     }
 
                     const normalized = keyword.trim().toLowerCase();
                     if (!normalized) continue;
 
-                    if (!importedMinuses.has(normalized)) {
-                        importedMinuses.add(normalized);
+                    if (!existingSet.has(normalized)) {
+                        // Добавляем в массив importedMinuses как объект
+                        importedMinuses.push({
+                            id: `api-sync:${Date.now()}_${i}`,
+                            raw: keyword.trim(),
+                            source: 'api-sync',
+                            importedAt: Date.now()
+                        });
+                        existingSet.add(normalized);
                         added.push(normalized);
                     } else {
                         alreadyExists.push(normalized);
                     }
                 } catch (innerError) {
                     log.error(`Ошибка на элементе ${i}:`, innerError.message);
-                    console.error(`[YD-SQ] Ошибка на элементе ${i}:`, innerError);
                 }
             }
 
             log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
+            log.sync('Новый размер importedMinuses:', importedMinuses.length);
 
             if (added.length > 0) {
                 log.sync('Сохраняю данные...');
@@ -2360,7 +2363,7 @@
         } catch (error) {
             log.error('Ошибка в applySyncedMinuses:', error.message || error);
             console.error('[YD-SQ] Ошибка в applySyncedMinuses:', error);
-            throw error; // Пробрасываем дальше
+            throw error;
         }
     }
 
@@ -8764,6 +8767,7 @@
     init();
 
 })();
+
 
 
 
