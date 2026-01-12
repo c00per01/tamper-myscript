@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.184.1
+// @version 1.184.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -240,13 +240,6 @@
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     function init() {
-        // Проверяем: если мы на странице настроек кампании и идёт синхронизация
-        if (isOnCampaignSettingsPage()) {
-            if (handleSettingsPageSync()) {
-                return; // Обработка синхронизации завершится автоматически
-            }
-        }
-
         if (!window.location.href.includes('stat_type=search_queries')) {
             return;
         }
@@ -257,11 +250,6 @@
         loadGlobalState();
         loadLastSendDate(); // Загружаем дату последней отправки
         setupGlobalListeners();
-
-        // Проверяем есть ли синхронизированные данные для применения
-        setTimeout(() => {
-            checkAndApplySyncedData();
-        }, 1000);
 
         detectPageChange();
         waitForTableAndInit();
@@ -2121,8 +2109,11 @@
         return true;
     }
 
+
+
+
     // ========================================
-    // СИНХРОНИЗАЦИЯ МИНУС-СЛОВ КАМПАНИИ (API)
+    // API ДЛЯ ПОЛУЧЕНИЯ МИНУС-СЛОВ КАМПАНИИ
     // ========================================
 
     // Получение минус-слов кампании через API
@@ -2223,12 +2214,10 @@
     // Применение синхронизированных минус-слов
     function applySyncedMinuses(minusKeywords) {
         try {
-            log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
-            log.sync('importedMinuses.length:', importedMinuses.length);
+            log.sync(`Начинаю синхронизацию. Получено из API: ${minusKeywords.length}, Текущих: ${importedMinuses.length}`);
 
-            // Проверяем что это массив
             if (!Array.isArray(minusKeywords)) {
-                log.error('minusKeywords не является массивом!');
+                log.error('API вернул неверный формат данных (не массив)');
                 return { added: 0, existing: 0 };
             }
 
@@ -2236,89 +2225,56 @@
             const existingSet = new Set(
                 importedMinuses.map(item => item.raw.toLowerCase().trim())
             );
-            log.sync('Существующих минусов:', existingSet.size);
 
             // Добавляем новые минусы
             const added = [];
-            const alreadyExists = [];
-
-            log.sync('Начинаю цикл обработки...');
+            let existingCount = 0;
 
             for (let i = 0; i < minusKeywords.length; i++) {
-                try {
-                    const keyword = minusKeywords[i];
+                const keyword = minusKeywords[i];
 
-                    // Логируем каждые 100 элементов
-                    if (i % 100 === 0) {
-                        log.sync(`Обработано ${i} из ${minusKeywords.length}`);
-                    }
+                if (typeof keyword !== 'string') continue;
 
-                    if (typeof keyword !== 'string') {
-                        continue;
-                    }
+                const normalized = keyword.trim().toLowerCase();
+                if (!normalized) continue;
 
-                    const normalized = keyword.trim().toLowerCase();
-                    if (!normalized) continue;
-
-                    if (!existingSet.has(normalized)) {
-                        // Добавляем в массив importedMinuses как объект
-                        importedMinuses.push({
-                            id: `api-sync:${Date.now()}_${i}`,
-                            raw: keyword.trim(),
-                            source: 'api-sync',
-                            importedAt: Date.now()
-                        });
-                        existingSet.add(normalized);
-                        added.push(normalized);
-                    } else {
-                        alreadyExists.push(normalized);
-                    }
-                } catch (innerError) {
-                    log.error(`Ошибка на элементе ${i}:`, innerError.message);
+                if (!existingSet.has(normalized)) {
+                    // Добавляем в массив importedMinuses как объект
+                    importedMinuses.push({
+                        id: `api-sync:${Date.now()}_${i}`,
+                        raw: keyword.trim(),
+                        source: 'api-sync',
+                        importedAt: Date.now()
+                    });
+                    existingSet.add(normalized);
+                    added.push(normalized);
+                } else {
+                    existingCount++;
                 }
             }
 
-            log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
-            log.sync('Новый размер importedMinuses:', importedMinuses.length);
+            log.sync(`Результат: добавлено ${added.length}, уже было ${existingCount}. Всего теперь: ${importedMinuses.length}`);
 
             if (added.length > 0) {
-                try {
-                    log.sync('Сохраняю данные...');
-                    saveData();
-                    log.sync('saveData() успешно');
-                } catch (saveErr) {
-                    log.error('Ошибка в saveData():', saveErr.message);
-                    console.error('[YD-SQ] saveData error:', saveErr);
-                }
-
-                try {
-                    log.sync('Обновляю подсветку...');
-                    updateHighlights();
-                    log.sync('updateHighlights() успешно');
-                } catch (hlErr) {
-                    log.error('Ошибка в updateHighlights():', hlErr.message);
-                    console.error('[YD-SQ] updateHighlights error:', hlErr);
-                }
-
-                try {
-                    log.sync('Обновляю UI...');
-                    renderImportedMinuses();
-                    log.sync('renderImportedMinuses() успешно');
-                } catch (uiErr) {
-                    log.error('Ошибка в renderImportedMinuses():', uiErr.message);
-                    console.error('[YD-SQ] renderImportedMinuses error:', uiErr);
-                }
-
-                log.sync('Готово!');
+                saveData();
+                updateHighlights();
+                renderImportedMinuses();
             }
 
-            return { added: added.length, existing: alreadyExists.length };
+            return { added: added.length, existing: existingCount };
         } catch (error) {
             log.error('Ошибка в applySyncedMinuses:', error.message || error);
-            console.error('[YD-SQ] Ошибка в applySyncedMinuses:', error);
+            console.error('[YD-SQ] Ошибка синхронизации:', error);
             throw error;
         }
     }
+
+
+
+
+
+
+
 
 
     async function importMinusesFromClipboard() {
