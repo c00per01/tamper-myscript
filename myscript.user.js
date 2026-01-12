@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.169.1
+// @version 1.170.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7784,6 +7784,7 @@
         trigger.setAttribute('data-cid', cid);
         trigger.textContent = 'Статистика';
         trigger.style.cursor = 'pointer';
+        trigger.style.marginLeft = '8px'; // Отступ от предыдущего элемента
 
         trigger.addEventListener('click', (e) => {
             handleTriggerClick(e, trigger, cid, ulogin);
@@ -7804,43 +7805,36 @@
             return;
         }
 
-        // Ищем ссылки "Перейти" или "Редактировать" и находим их родителя
+        // Ищем ссылки "Перейти" и "Редактировать"
         const allLinks = cell.querySelectorAll('.dc-Link');
-        let targetContainer = null;
+        let lastActionLink = null;
 
         for (const link of allLinks) {
             const text = link.textContent.trim();
             if (text === 'Перейти' || text === 'Редактировать') {
-                // Нашли ссылку действия — её родитель это контейнер
-                targetContainer = link.parentElement;
-                break;
+                lastActionLink = link; // Запоминаем последнюю
             }
         }
 
-        if (!targetContainer) {
-            // Резервный поиск — ищем любой горизонтальный Stack
-            const stacks = cell.querySelectorAll('[class*="dc-Stack_type_horizontal"]');
-            for (const stack of stacks) {
-                if (stack.textContent.includes('Перейти') || stack.textContent.includes('Редактировать')) {
-                    targetContainer = stack;
-                    break;
-                }
-            }
-        }
-
-        if (!targetContainer) {
+        if (!lastActionLink) {
             return;
         }
 
-        // Добавляем триггер
+        // Добавляем триггер ПОСЛЕ последней ссылки действия
         const trigger = createStatsTrigger(cell);
         if (trigger) {
-            targetContainer.appendChild(trigger);
+            // Вставляем после lastActionLink
+            if (lastActionLink.nextSibling) {
+                lastActionLink.parentNode.insertBefore(trigger, lastActionLink.nextSibling);
+            } else {
+                lastActionLink.parentNode.appendChild(trigger);
+            }
 
             // Добавляем класс для расширения ширины ячейки
             cell.classList.add('yd-cl-expanded-cell');
         }
     }
+
 
 
     // ==================== НАБЛЮДАТЕЛЬ ====================
@@ -7993,5 +7987,6 @@
     init();
 
 })();
+
 
 
