@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.170.1
+// @version 1.171.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2716,7 +2716,17 @@
                     </svg>
                     <span>Отправить в Директ</span>
                 </button>
-                <div id="yd-sq-last-send-info" class="yd-sq-status-text"></div>
+                <div class="yd-sq-last-send-row">
+                    <div id="yd-sq-last-send-info" class="yd-sq-status-text"></div>
+                    <button id="yd-sq-sync-date-btn" class="yd-sq-sync-date-btn" title="Синхронизировать дату с историей изменений">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                            <path d="M3 21v-5h5"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Help Tooltip -->
@@ -2985,6 +2995,24 @@
 
         // Отображаем дату последней отправки
         updateLastSendDateUI();
+
+        // Инъекция стилей синхронизации
+        injectSyncStyles();
+
+        // Обработчик кнопки синхронизации даты
+        const syncDateBtn = document.getElementById('yd-sq-sync-date-btn');
+        if (syncDateBtn) {
+            syncDateBtn.addEventListener('click', async () => {
+                syncDateBtn.classList.add('syncing');
+                await syncLastSendDate(true);
+                syncDateBtn.classList.remove('syncing');
+            });
+        }
+
+        // Автосинхронизация при первом запуске (с задержкой)
+        setTimeout(() => {
+            checkAndAutoSync();
+        }, 2000);
     }
 
     // Обновление счётчика на pill
@@ -4701,6 +4729,562 @@
             `;
             container.style.display = 'flex';
         }
+    }
+
+    // ==================== СИНХРОНИЗАЦИЯ С ИСТОРИЕЙ ИЗМЕНЕНИЙ ====================
+
+    const SYNC_HISTORY_KEY_PREFIX = 'yd-sq-synced:';
+    const SYNC_IN_PROGRESS_KEY = 'yd-sq-sync-in-progress';
+
+    // Проверяем, была ли уже синхронизация для этой кампании
+    function isCampaignSynced(campaignId) {
+        return localStorage.getItem(`${SYNC_HISTORY_KEY_PREFIX}${campaignId}`) === 'true';
+    }
+
+    function markCampaignSynced(campaignId) {
+        localStorage.setItem(`${SYNC_HISTORY_KEY_PREFIX}${campaignId}`, 'true');
+    }
+
+    // Apple-стиль уведомления (toast)
+    function showSyncToast(message, type = 'info', duration = 3000) {
+        // Удаляем предыдущий toast
+        const existing = document.getElementById('yd-sq-sync-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'yd-sq-sync-toast';
+        toast.className = `yd-sq-sync-toast yd-sq-sync-toast-${type}`;
+
+        const icons = {
+            info: '🔄',
+            success: '✅',
+            warning: '⚠️',
+            error: '❌'
+        };
+
+        toast.innerHTML = `
+            <span class="yd-sq-sync-toast-icon">${icons[type]}</span>
+            <span class="yd-sq-sync-toast-text">${message}</span>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Анимация появления
+        requestAnimationFrame(() => {
+            toast.classList.add('yd-sq-sync-toast-visible');
+        });
+
+        // Автоскрытие
+        if (duration > 0) {
+            setTimeout(() => {
+                toast.classList.remove('yd-sq-sync-toast-visible');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        return toast;
+    }
+
+    // Показать прогресс синхронизации
+    function showSyncProgress(step, total, message) {
+        let progressEl = document.getElementById('yd-sq-sync-progress');
+
+        if (!progressEl) {
+            progressEl = document.createElement('div');
+            progressEl.id = 'yd-sq-sync-progress';
+            progressEl.className = 'yd-sq-sync-progress';
+            document.body.appendChild(progressEl);
+
+            requestAnimationFrame(() => {
+                progressEl.classList.add('yd-sq-sync-progress-visible');
+            });
+        }
+
+        const percent = Math.round((step / total) * 100);
+
+        progressEl.innerHTML = `
+            <div class="yd-sq-sync-progress-header">
+                <span class="yd-sq-sync-progress-icon">🔄</span>
+                <span class="yd-sq-sync-progress-title">Синхронизация</span>
+            </div>
+            <div class="yd-sq-sync-progress-message">${message}</div>
+            <div class="yd-sq-sync-progress-bar-container">
+                <div class="yd-sq-sync-progress-bar" style="width: ${percent}%"></div>
+            </div>
+            <div class="yd-sq-sync-progress-percent">${percent}%</div>
+        `;
+
+        return progressEl;
+    }
+
+    function hideSyncProgress() {
+        const progressEl = document.getElementById('yd-sq-sync-progress');
+        if (progressEl) {
+            progressEl.classList.remove('yd-sq-sync-progress-visible');
+            setTimeout(() => progressEl.remove(), 300);
+        }
+    }
+
+    // Форматирование даты для URL истории
+    function formatDateForHistoryUrl(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    // Построение URL страницы истории изменений
+    function buildHistoryUrl(ulogin, campaignId, dateFrom, dateTo) {
+        const baseUrl = 'https://direct.yandex.ru/dna/log/';
+        const params = new URLSearchParams({
+            ulogin: ulogin,
+            'date-from': dateFrom,
+            'date-to': dateTo,
+            filter: `campaignIds = ${campaignId}`
+        });
+        return `${baseUrl}?${params.toString()}`;
+    }
+
+    // Парсинг даты из строки истории (формат: "09.12.2025 20:17")
+    function parseHistoryDate(dateStr) {
+        const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+        if (match) {
+            const [_, day, month, year, hour, minute] = match;
+            return new Date(year, month - 1, day, hour, minute);
+        }
+        return null;
+    }
+
+    // Загрузка и парсинг страницы истории
+    async function fetchHistoryPage(url) {
+        try {
+            const response = await fetch(url, {
+                credentials: 'include',
+                headers: {
+                    'Accept': 'text/html'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            return await response.text();
+        } catch (error) {
+            log.error('Ошибка загрузки истории:', error);
+            return null;
+        }
+    }
+
+    // Поиск даты последней чистки минус-фраз в HTML
+    function findMinusPhraseDate(html) {
+        // Ищем строки с "Минус-фразы для кампании"
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Ищем все строки таблицы
+        const rows = doc.querySelectorAll('tr, [class*="row"], [class*="Row"]');
+
+        for (const row of rows) {
+            const text = row.textContent || '';
+
+            // Проверяем наличие "Минус-фразы для кампании"
+            if (text.includes('Минус-фразы для кампании') ||
+                text.includes('минус-фразы для кампании') ||
+                text.includes('Минус-фразы')) {
+
+                // Ищем дату в этой строке
+                const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2})/);
+                if (dateMatch) {
+                    const parsedDate = parseHistoryDate(dateMatch[1]);
+                    if (parsedDate) {
+                        log.sync('Найдена дата в истории:', dateMatch[1]);
+                        return parsedDate;
+                    }
+                }
+            }
+        }
+
+        // Резервный поиск через текстовый контент
+        const textContent = doc.body?.textContent || '';
+        const lines = textContent.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes('Минус-фразы')) {
+                // Ищем дату в окрестности
+                for (let j = Math.max(0, i - 5); j < Math.min(lines.length, i + 5); j++) {
+                    const dateMatch = lines[j].match(/(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2})/);
+                    if (dateMatch) {
+                        const parsedDate = parseHistoryDate(dateMatch[1]);
+                        if (parsedDate) {
+                            return parsedDate;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // Умный поиск по периодам
+    async function smartSyncFromHistory(ulogin, campaignId, onProgress) {
+        const today = new Date();
+
+        // Периоды для поиска (от короткого к длинному)
+        const periods = [
+            { days: 30, label: 'последний месяц' },
+            { days: 90, label: 'последние 3 месяца' },
+            { days: 365, label: 'последний год' }
+        ];
+
+        for (let i = 0; i < periods.length; i++) {
+            const period = periods[i];
+            const step = i + 1;
+            const total = periods.length;
+
+            if (onProgress) {
+                onProgress(step, total + 1, `Проверяю ${period.label}...`);
+            }
+
+            const dateFrom = new Date(today);
+            dateFrom.setDate(dateFrom.getDate() - period.days);
+
+            const url = buildHistoryUrl(
+                ulogin,
+                campaignId,
+                formatDateForHistoryUrl(dateFrom),
+                formatDateForHistoryUrl(today)
+            );
+
+            log.sync(`Загружаю историю за ${period.label}`, url);
+
+            const html = await fetchHistoryPage(url);
+
+            if (html) {
+                const foundDate = findMinusPhraseDate(html);
+
+                if (foundDate) {
+                    if (onProgress) {
+                        onProgress(total + 1, total + 1, 'Дата найдена!');
+                    }
+                    return foundDate;
+                }
+            }
+
+            // Небольшая задержка между запросами
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Не найдено за весь год
+        if (onProgress) {
+            onProgress(periods.length + 1, periods.length + 1, 'Записей не найдено');
+        }
+
+        return null;
+    }
+
+    // Основная функция синхронизации
+    async function syncLastSendDate(showUI = true) {
+        const campaignId = getCampaignId();
+        const ulogin = getUlogin();
+
+        if (!campaignId || !ulogin) {
+            if (showUI) {
+                showSyncToast('Не удалось определить кампанию', 'error');
+            }
+            return false;
+        }
+
+        // Проверяем, не идёт ли уже синхронизация
+        if (sessionStorage.getItem(SYNC_IN_PROGRESS_KEY) === 'true') {
+            if (showUI) {
+                showSyncToast('Синхронизация уже выполняется...', 'warning');
+            }
+            return false;
+        }
+
+        sessionStorage.setItem(SYNC_IN_PROGRESS_KEY, 'true');
+
+        try {
+            // Показываем прогресс
+            const onProgress = showUI ? showSyncProgress : null;
+
+            if (showUI) {
+                showSyncProgress(0, 4, 'Подключаюсь к истории изменений...');
+            }
+
+            // Умный поиск
+            const foundDate = await smartSyncFromHistory(ulogin, campaignId, onProgress);
+
+            if (foundDate) {
+                // Нашли дату!
+                lastSendDate = foundDate.getTime();
+                saveLastSendDate();
+                updateLastSendDateUI();
+                markCampaignSynced(campaignId);
+
+                if (showUI) {
+                    hideSyncProgress();
+                    const dateStr = foundDate.toLocaleDateString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    });
+                    showSyncToast(`Дата синхронизирована: ${dateStr}`, 'success', 4000);
+                }
+
+                log.sync('Дата синхронизирована из истории', foundDate.toISOString());
+                return true;
+
+            } else {
+                // Не нашли
+                markCampaignSynced(campaignId);
+
+                if (showUI) {
+                    hideSyncProgress();
+                    showSyncToast('Записей о минус-фразах не найдено', 'info', 4000);
+                }
+
+                log.sync('Минус-фразы в истории не найдены');
+                return false;
+            }
+
+        } catch (error) {
+            log.error('Ошибка синхронизации:', error);
+
+            if (showUI) {
+                hideSyncProgress();
+                showSyncToast('Ошибка синхронизации', 'error');
+            }
+
+            return false;
+
+        } finally {
+            sessionStorage.removeItem(SYNC_IN_PROGRESS_KEY);
+        }
+    }
+
+    // Получение ulogin из URL
+    function getUlogin() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('ulogin') || '';
+    }
+
+    // Автосинхронизация при первом запуске в кампании
+    function checkAndAutoSync() {
+        const campaignId = getCampaignId();
+
+        if (!campaignId) return;
+
+        // Если кампания уже синхронизирована — пропускаем
+        if (isCampaignSynced(campaignId)) {
+            log.sync('Кампания уже синхронизирована');
+            return;
+        }
+
+        // Если уже есть lastSendDate (записано расширением ранее) — не синхронизируем автоматически
+        loadLastSendDate();
+        if (lastSendDate) {
+            log.sync('Есть сохранённая дата, автосинхронизация не требуется');
+            markCampaignSynced(campaignId);
+            return;
+        }
+
+        // Показываем приветственное сообщение и запускаем синхронизацию
+        log.sync('Первый запуск в кампании — автосинхронизация');
+
+        // Небольшая задержка для загрузки UI
+        setTimeout(() => {
+            showSyncToast('Первый запуск — определяю дату последней чистки...', 'info', 3000);
+
+            setTimeout(() => {
+                syncLastSendDate(true);
+            }, 1000);
+        }, 1500);
+    }
+
+    // Инъекция стилей для синхронизации
+    function injectSyncStyles() {
+        if (document.getElementById('yd-sq-sync-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'yd-sq-sync-styles';
+        style.textContent = `
+            /* Кнопка синхронизации даты */
+            .yd-sq-last-send-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+            }
+
+            .yd-sq-sync-date-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 20px;
+                height: 20px;
+                padding: 0;
+                border: none;
+                background: transparent;
+                color: #9ca3af;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: all 0.15s ease;
+                flex-shrink: 0;
+            }
+
+            .yd-sq-sync-date-btn:hover {
+                background: rgba(32, 85, 152, 0.1);
+                color: #205598;
+            }
+
+            .yd-sq-sync-date-btn:active {
+                transform: scale(0.95);
+            }
+
+            .yd-sq-sync-date-btn.syncing svg {
+                animation: yd-sq-spin 1s linear infinite;
+            }
+
+            @keyframes yd-sq-spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+
+            /* Toast уведомления (Apple-стиль) */
+            .yd-sq-sync-toast {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%) translateY(-20px);
+                z-index: 999999999;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px 20px;
+                background: rgba(0, 0, 0, 0.85);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                opacity: 0;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+                pointer-events: none;
+            }
+
+            .yd-sq-sync-toast-visible {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            .yd-sq-sync-toast-icon {
+                font-size: 18px;
+            }
+
+            .yd-sq-sync-toast-text {
+                color: #fff;
+                font-size: 14px;
+                font-weight: 500;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            .yd-sq-sync-toast-success {
+                background: rgba(16, 185, 129, 0.95);
+            }
+
+            .yd-sq-sync-toast-error {
+                background: rgba(239, 68, 68, 0.95);
+            }
+
+            .yd-sq-sync-toast-warning {
+                background: rgba(245, 158, 11, 0.95);
+            }
+
+            /* Прогресс синхронизации */
+            .yd-sq-sync-progress {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.9);
+                z-index: 999999999;
+                width: 320px;
+                padding: 24px;
+                background: #fff;
+                border-radius: 16px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+                opacity: 0;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+            }
+
+            .yd-sq-sync-progress-visible {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+
+            .yd-sq-sync-progress-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 12px;
+            }
+
+            .yd-sq-sync-progress-icon {
+                font-size: 24px;
+                animation: yd-sq-spin 2s linear infinite;
+            }
+
+            .yd-sq-sync-progress-title {
+                font-size: 18px;
+                font-weight: 600;
+                color: #1f2937;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            .yd-sq-sync-progress-message {
+                font-size: 14px;
+                color: #6b7280;
+                margin-bottom: 16px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            .yd-sq-sync-progress-bar-container {
+                height: 6px;
+                background: #e5e7eb;
+                border-radius: 3px;
+                overflow: hidden;
+                margin-bottom: 8px;
+            }
+
+            .yd-sq-sync-progress-bar {
+                height: 100%;
+                background: linear-gradient(90deg, #205598, #2F6FDB);
+                border-radius: 3px;
+                transition: width 0.3s ease;
+            }
+
+            .yd-sq-sync-progress-percent {
+                font-size: 12px;
+                color: #9ca3af;
+                text-align: right;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            /* Overlay для прогресса */
+            .yd-sq-sync-progress::before {
+                content: '';
+                position: fixed;
+                top: -100vh;
+                left: -100vw;
+                width: 300vw;
+                height: 300vh;
+                background: rgba(0, 0, 0, 0.3);
+                z-index: -1;
+            }
+        `;
+
+        document.head.appendChild(style);
     }
 
     // ==================== АВТОРЕДИРЕКТ НА ПРАВИЛЬНЫЙ URL ====================
@@ -7987,6 +8571,7 @@
     init();
 
 })();
+
 
 
 
