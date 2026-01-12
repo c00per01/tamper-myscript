@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.173.1
+// @version 1.174.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -4849,6 +4849,7 @@
             };
 
             log.sync('API запрос:', url);
+            log.sync('Payload:', JSON.stringify(payload));
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -4860,7 +4861,11 @@
                 body: JSON.stringify(payload)
             });
 
+            log.sync('HTTP статус:', response.status);
+
             if (!response.ok) {
+                const errorText = await response.text();
+                log.error('API вернул ошибку:', { status: response.status, body: errorText.slice(0, 500) });
                 throw new Error(`HTTP ${response.status}`);
             }
 
@@ -4875,7 +4880,7 @@
 
             return data;
         } catch (error) {
-            log.error('Ошибка API истории:', error);
+            log.error('Ошибка API истории:', error.message || error);
             return null;
         }
     }
@@ -8576,6 +8581,7 @@
     init();
 
 })();
+
 
 
 
