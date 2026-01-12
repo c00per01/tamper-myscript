@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.176.1
+// @version 1.177.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2266,10 +2266,14 @@
                 return;
             }
 
-            // Применяем минус-слова
-            applySyncedMinuses(minusKeywords);
+            // Применяем минус-слова и получаем статистику
+            const result = applySyncedMinuses(minusKeywords);
 
-            showYdsqNotification(`✅ Синхронизировано ${minusKeywords.length} минус-слов`, 'success');
+            if (result.added > 0) {
+                showYdsqNotification(`✅ Добавлено ${result.added} новых минус-слов`, 'success');
+            } else {
+                showYdsqNotification(`ℹ️ Все ${minusKeywords.length} минус-слов уже импортированы`, 'info');
+            }
 
         } catch (error) {
             if (syncBtn) {
@@ -2284,23 +2288,29 @@
     function applySyncedMinuses(minusKeywords) {
         // Добавляем в импортированные минусы
         const added = [];
+        const alreadyExists = [];
 
         for (const keyword of minusKeywords) {
             const normalized = keyword.trim().toLowerCase();
-            if (normalized && !importedMinuses.has(normalized)) {
+            if (!normalized) continue;
+
+            if (!importedMinuses.has(normalized)) {
                 importedMinuses.add(normalized);
                 added.push(normalized);
+            } else {
+                alreadyExists.push(normalized);
             }
         }
 
+        log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
+
         if (added.length > 0) {
-            log.sync(`Добавлено ${added.length} новых минус-слов`);
             saveData();
             updateHighlights();
             updateImportedMinusesUI();
-        } else {
-            log.sync('Все минус-слова уже были импортированы');
         }
+
+        return { added: added.length, existing: alreadyExists.length };
     }
 
 
@@ -8703,6 +8713,7 @@
     init();
 
 })();
+
 
 
 
