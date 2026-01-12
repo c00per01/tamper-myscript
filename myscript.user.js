@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.179.1
+// @version 1.180.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2292,11 +2292,20 @@
     function applySyncedMinuses(minusKeywords) {
         try {
             log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
-            log.sync('Тип minusKeywords:', typeof minusKeywords, Array.isArray(minusKeywords));
+            log.sync('Array.isArray:', Array.isArray(minusKeywords));
+            log.sync('importedMinuses существует:', !!importedMinuses);
+            log.sync('importedMinuses тип:', importedMinuses ? importedMinuses.constructor.name : 'null');
+            log.sync('importedMinuses.size:', importedMinuses ? importedMinuses.size : 'null');
 
             // Проверяем что это массив
             if (!Array.isArray(minusKeywords)) {
                 log.error('minusKeywords не является массивом!');
+                return { added: 0, existing: 0 };
+            }
+
+            // Проверяем importedMinuses
+            if (!importedMinuses || typeof importedMinuses.has !== 'function') {
+                log.error('importedMinuses не инициализирован или не является Set!');
                 return { added: 0, existing: 0 };
             }
 
@@ -2307,26 +2316,31 @@
             log.sync('Начинаю цикл обработки...');
 
             for (let i = 0; i < minusKeywords.length; i++) {
-                const keyword = minusKeywords[i];
+                try {
+                    const keyword = minusKeywords[i];
 
-                // Логируем каждые 100 элементов
-                if (i % 100 === 0) {
-                    log.sync(`Обработано ${i} из ${minusKeywords.length}`);
-                }
+                    // Логируем каждые 100 элементов
+                    if (i % 100 === 0) {
+                        log.sync(`Обработано ${i} из ${minusKeywords.length}`);
+                    }
 
-                if (typeof keyword !== 'string') {
-                    log.warn(`Элемент ${i} не строка:`, typeof keyword, keyword);
-                    continue;
-                }
+                    if (typeof keyword !== 'string') {
+                        log.warn(`Элемент ${i} не строка:`, typeof keyword);
+                        continue;
+                    }
 
-                const normalized = keyword.trim().toLowerCase();
-                if (!normalized) continue;
+                    const normalized = keyword.trim().toLowerCase();
+                    if (!normalized) continue;
 
-                if (!importedMinuses.has(normalized)) {
-                    importedMinuses.add(normalized);
-                    added.push(normalized);
-                } else {
-                    alreadyExists.push(normalized);
+                    if (!importedMinuses.has(normalized)) {
+                        importedMinuses.add(normalized);
+                        added.push(normalized);
+                    } else {
+                        alreadyExists.push(normalized);
+                    }
+                } catch (innerError) {
+                    log.error(`Ошибка на элементе ${i}:`, innerError.message);
+                    console.error(`[YD-SQ] Ошибка на элементе ${i}:`, innerError);
                 }
             }
 
@@ -8750,6 +8764,7 @@
     init();
 
 })();
+
 
 
 
