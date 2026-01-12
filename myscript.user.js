@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.175.1
+// @version 1.176.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2189,31 +2189,120 @@
         return wizardUrl;
     }
 
-    // Начать синхронизацию - переход на страницу настроек
-    function startCampaignSync() {
-        const settingsUrl = getCampaignSettingsUrl();
-        if (!settingsUrl) {
-            showYdsqNotification('Не удалось определить URL настроек кампании', 'error');
+    // ========================================
+    // API ДЛЯ ПОЛУЧЕНИЯ МИНУС-СЛОВ КАМПАНИИ
+    // ========================================
+
+    // Получение минус-слов кампании через API
+    async function fetchCampaignMinusKeywords(ulogin, campaignId) {
+        try {
+            const url = `https://direct.yandex.ru/web-api/uac/campaign/${campaignId}?ulogin=${encodeURIComponent(ulogin)}`;
+
+            log.sync('Запрос минус-слов кампании:', url);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'x-direct-api': '1'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.result) {
+                const minusKeywords = data.result.minus_keywords || [];
+                log.sync(`Получено ${minusKeywords.length} минус-слов из API`);
+                return minusKeywords;
+            } else {
+                log.error('API вернул ошибку:', data);
+                return null;
+            }
+        } catch (error) {
+            log.error('Ошибка получения минус-слов:', error.message || error);
+            return null;
+        }
+    }
+
+    // Начать синхронизацию - через API (без перехода на другую страницу)
+    async function startCampaignSync() {
+        const params = new URLSearchParams(window.location.search);
+        const campaignId = params.get('cid');
+        const ulogin = params.get('ulogin');
+
+        if (!campaignId || !ulogin) {
+            showYdsqNotification('Не удалось определить параметры кампании', 'error');
             return;
         }
 
-        // Сохраняем флаг что идёт синхронизация
-        sessionStorage.setItem(SYNC_STORAGE_KEY, 'true');
-        sessionStorage.setItem(SYNC_RETURN_URL_KEY, window.location.href);
-
-        // Показываем анимацию
+        // Показываем анимацию и уведомление
         const syncBtn = document.getElementById('yd-sq-sync-campaign');
         if (syncBtn) {
             syncBtn.classList.add('syncing');
         }
 
-        showYdsqNotification('Переход к настройкам кампании...', 'info');
+        showYdsqNotification('🔄 Загрузка минус-слов кампании...', 'info');
 
-        // Переходим на страницу настроек
-        setTimeout(() => {
-            window.location.href = settingsUrl;
-        }, 500);
+        try {
+            // Получаем минус-слова через API
+            const minusKeywords = await fetchCampaignMinusKeywords(ulogin, campaignId);
+
+            if (syncBtn) {
+                syncBtn.classList.remove('syncing');
+            }
+
+            if (minusKeywords === null) {
+                showYdsqNotification('❌ Ошибка загрузки минус-слов', 'error');
+                return;
+            }
+
+            if (minusKeywords.length === 0) {
+                showYdsqNotification('ℹ️ В кампании нет минус-слов', 'info');
+                return;
+            }
+
+            // Применяем минус-слова
+            applySyncedMinuses(minusKeywords);
+
+            showYdsqNotification(`✅ Синхронизировано ${minusKeywords.length} минус-слов`, 'success');
+
+        } catch (error) {
+            if (syncBtn) {
+                syncBtn.classList.remove('syncing');
+            }
+            log.error('Ошибка синхронизации:', error);
+            showYdsqNotification('❌ Ошибка синхронизации', 'error');
+        }
     }
+
+    // Применение синхронизированных минус-слов
+    function applySyncedMinuses(minusKeywords) {
+        // Добавляем в импортированные минусы
+        const added = [];
+
+        for (const keyword of minusKeywords) {
+            const normalized = keyword.trim().toLowerCase();
+            if (normalized && !importedMinuses.has(normalized)) {
+                importedMinuses.add(normalized);
+                added.push(normalized);
+            }
+        }
+
+        if (added.length > 0) {
+            log.sync(`Добавлено ${added.length} новых минус-слов`);
+            saveData();
+            updateHighlights();
+            updateImportedMinusesUI();
+        } else {
+            log.sync('Все минус-слова уже были импортированы');
+        }
+    }
+
 
     // Парсинг минус-фраз на странице настроек (вызывается на странице настроек)
     function parseMinusesFromSettingsPage() {
@@ -8614,6 +8703,7 @@
     init();
 
 })();
+
 
 
 
