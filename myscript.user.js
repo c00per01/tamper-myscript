@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.188.3
+// @version 1.189.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -2958,14 +2958,13 @@
                         </svg>
                         <span>Отправить в Директ</span>
                     </button>
-                    <button id="yd-sq-sync-all" class="yd-sq-btn-secondary" title="Синхронизировать минус-слова кампании и дату последней чистки">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button id="yd-sq-sync-all" class="yd-sq-btn-icon" title="Синхронизировать минус-слова кампании">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
                             <path d="M21 3v5h-5"/>
                             <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
                             <path d="M3 21v-5h5"/>
                         </svg>
-                        <span>Синхронизировать</span>
                     </button>
                 </div>
                 <div id="yd-sq-last-send-info" class="yd-sq-status-text"></div>
@@ -3174,8 +3173,6 @@
             if (btn.classList.contains('syncing')) return;
 
             btn.classList.add('syncing');
-            const originalText = btn.querySelector('span').textContent;
-            btn.querySelector('span').textContent = 'Синхронизация...';
 
             try {
                 // 1. Синхронизируем минус-слова кампании
@@ -3192,7 +3189,6 @@
                 showYdsqNotification('Ошибка синхронизации', 'error');
             } finally {
                 btn.classList.remove('syncing');
-                btn.querySelector('span').textContent = originalText;
             }
         });
 
@@ -6743,33 +6739,46 @@
             /* ===== FOOTER BUTTONS ===== */
             .yd-sq-footer-buttons {
                 display: flex;
+                align-items: stretch;
                 gap: 8px;
                 margin-bottom: 6px;
             }
 
-            #yd-sq-panel .yd-sq-btn-secondary {
+            /* Главная кнопка занимает всё доступное место */
+            .yd-sq-footer-buttons .yd-sq-btn-primary {
+                flex: 1;
+            }
+
+            /* Кнопка синхронизации — компактная иконка */
+            #yd-sq-panel .yd-sq-btn-icon {
                 flex: 0 0 auto;
-                display: inline-flex;
+                display: flex;
                 align-items: center;
-                gap: 4px;
-                padding: 8px 12px;
-                font-size: 11px;
-                font-weight: 500;
-                color: var(--yd-text);
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                color: var(--yd-text-secondary);
                 background: var(--yd-bg-secondary);
                 border: 1px solid var(--yd-border);
-                border-radius: 6px;
+                border-radius: 8px;
                 cursor: pointer;
                 transition: all 0.2s;
             }
 
-            #yd-sq-panel .yd-sq-btn-secondary:hover {
+            #yd-sq-panel .yd-sq-btn-icon:hover {
                 background: var(--yd-bg);
                 border-color: var(--yd-primary);
                 color: var(--yd-primary);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }
 
-            #yd-sq-panel .yd-sq-btn-secondary.syncing svg {
+            #yd-sq-panel .yd-sq-btn-icon:active {
+                transform: translateY(0);
+            }
+
+            #yd-sq-panel .yd-sq-btn-icon.syncing svg {
                 animation: yd-sq-spin 1s linear infinite;
             }
 
@@ -6784,24 +6793,25 @@
 
             .yd-sq-dropdown-menu {
                 position: absolute;
-                top: 100%;
+                bottom: 100%;
                 right: 0;
-                min-width: 160px;
+                min-width: 170px;
+                margin-bottom: 4px;
                 background: var(--yd-bg);
                 border: 1px solid var(--yd-border);
-                border-radius: 8px;
-                box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+                border-radius: 10px;
+                box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
                 z-index: 1000;
                 opacity: 0;
                 visibility: hidden;
-                transform: translateY(-8px);
-                transition: all 0.2s ease;
+                transform: translateY(8px);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             .yd-sq-dropdown.open .yd-sq-dropdown-menu {
                 opacity: 1;
                 visibility: visible;
-                transform: translateY(4px);
+                transform: translateY(0);
             }
 
             .yd-sq-dropdown-item {
@@ -9038,6 +9048,7 @@
     init();
 
 })();
+
 
 
 
