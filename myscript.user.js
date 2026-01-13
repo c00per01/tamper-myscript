@@ -1,8 +1,8 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.189.1
-// @description  Пример userscript — меняй в Antigravity, нажимай Deploy
+// @version 1.190.1
+// @description  ������ userscript � ����� � Antigravity, ������� Deploy
 // @match        https://*/*
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/c00per01/tamper-myscript/main/myscript.user.js
@@ -12,10 +12,10 @@
 (function () {
     'use strict';
 
-    // ==================== ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ====================
-    const DEBUG_MODE = true; // ВРЕМЕННО: для отладки, потом установим false
+    // ==================== ��������� ����������� ====================
+    const DEBUG_MODE = true; // ��������: ��� �������, ����� ��������� false
 
-    // Глобальный буфер логов для диагностики (последние 200 записей)
+    // ���������� ����� ����� ��� ����������� (��������� 200 �������)
     const LOG_BUFFER = [];
     const LOG_BUFFER_SIZE = 200;
 
@@ -30,126 +30,126 @@
         if (LOG_BUFFER.length > LOG_BUFFER_SIZE) {
             LOG_BUFFER.shift();
         }
-        // Экспортируем в window для доступа из консоли
+        // ������������ � window ��� ������� �� �������
         window.__YD_SQ_LOGS = LOG_BUFFER;
     }
 
     const log = {
-        // Основные события
+        // �������� �������
         info: (msg, data) => {
             addToLogBuffer('info', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] ℹ️ ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? ${msg}`, data !== undefined ? data : '');
         },
 
-        // Критические ошибки (всегда логируем)
+        // ����������� ������ (������ ��������)
         error: (msg, error) => {
             addToLogBuffer('error', msg, error);
-            console.error(`[YD-SQ] ❌ ERROR: ${msg}`, error || '');
+            console.error(`[YD-SQ] ? ERROR: ${msg}`, error || '');
         },
 
-        // Предупреждения
+        // ��������������
         warn: (msg, data) => {
             addToLogBuffer('warn', msg, data);
             if (!DEBUG_MODE) return;
-            console.warn(`[YD-SQ] ⚠️ ${msg}`, data !== undefined ? data : '');
+            console.warn(`[YD-SQ] ?? ${msg}`, data !== undefined ? data : '');
         },
 
-        // Успешные операции
+        // �������� ��������
         success: (msg, data) => {
             addToLogBuffer('success', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] ✅ ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ? ${msg}`, data !== undefined ? data : '');
         },
 
-        // Пакетная отправка
+        // �������� ��������
         batch: (msg, data) => {
             addToLogBuffer('batch', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 📦 BATCH: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? BATCH: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Резервация строк
+        // ���������� �����
         reserve: (msg, data) => {
             addToLogBuffer('reserve', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🔒 RESERVE: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? RESERVE: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Клики и взаимодействия
+        // ����� � ��������������
         click: (msg, data) => {
             addToLogBuffer('click', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 👆 CLICK: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? CLICK: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Состояние selections
+        // ��������� selections
         selection: (msg, data) => {
             addToLogBuffer('selection', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 📝 SELECTION: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? SELECTION: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Модальные окна
+        // ��������� ����
         modal: (msg, data) => {
             addToLogBuffer('modal', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🪟 MODAL: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? MODAL: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Синхронизация данных
+        // ������������� ������
         sync: (msg, data) => {
             addToLogBuffer('sync', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🔄 SYNC: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? SYNC: ${msg}`, data !== undefined ? data : '');
         },
 
-        // UI события (новое)
+        // UI ������� (�����)
         ui: (msg, data) => {
             addToLogBuffer('ui', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🎨 UI: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? UI: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Resize события (новое)
+        // Resize ������� (�����)
         resize: (msg, data) => {
             addToLogBuffer('resize', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] ↔️ RESIZE: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] -? RESIZE: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Подсветка (новое)
+        // ��������� (�����)
         highlight: (msg, data) => {
             addToLogBuffer('highlight', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🔆 HIGHLIGHT: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? HIGHLIGHT: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Storage операции (новое)
+        // Storage �������� (�����)
         storage: (msg, data) => {
             addToLogBuffer('storage', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 💾 STORAGE: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? STORAGE: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Инициализация (новое)
+        // ������������� (�����)
         init: (msg, data) => {
             addToLogBuffer('init', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🚀 INIT: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? INIT: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Редирект (новое)
+        // �������� (�����)
         redirect: (msg, data) => {
             addToLogBuffer('redirect', msg, data);
             if (!DEBUG_MODE) return;
-            console.log(`[YD-SQ] 🔀 REDIRECT: ${msg}`, data !== undefined ? data : '');
+            console.log(`[YD-SQ] ?? REDIRECT: ${msg}`, data !== undefined ? data : '');
         },
 
-        // Детальный дамп состояния
+        // ��������� ���� ���������
         state: (label) => {
             if (!DEBUG_MODE) return;
-            console.group(`[YD-SQ] 📊 STATE: ${label}`);
+            console.group(`[YD-SQ] ?? STATE: ${label}`);
             console.log('selections.size:', selections.size);
             console.log('selections:', Array.from(selections.entries()));
             console.log('batchQueue.length:', batchQueue.length);
@@ -161,12 +161,12 @@
             console.groupEnd();
         },
 
-        // Получить все логи (для диагностики)
+        // �������� ��� ���� (��� �����������)
         getLogs: () => LOG_BUFFER,
 
-        // Вывести все логи в консоль
+        // ������� ��� ���� � �������
         dumpLogs: () => {
-            console.group('[YD-SQ] 📋 FULL LOG DUMP');
+            console.group('[YD-SQ] ?? FULL LOG DUMP');
             LOG_BUFFER.forEach(entry => {
                 console.log(`${entry.ts} [${entry.level}] ${entry.msg}`, entry.data || '');
             });
@@ -181,8 +181,8 @@
     let phraseInProgress = null;
     let sentHistory = [];
     let importedMinuses = [];
-    let pendingSentMinuses = []; // Минусы, ожидающие подтверждения отправки
-    let pendingSentMinusesBackup = []; // Бэкап отправленных минусов для пакетной обработки
+    let pendingSentMinuses = []; // ������, ��������� ������������� ��������
+    let pendingSentMinusesBackup = []; // ����� ������������ ������� ��� �������� ���������
     let panelPosition = { left: 'auto', right: '15px', top: '15px' };
     let isSending = false;
     let isWrapping = false;
@@ -190,14 +190,14 @@
     let campaignMinusList = new Set(); // Cache for "In Campaign" phrases
 
     // Batch sending
-    let batchQueue = []; // Очередь пакетов для отправки
+    let batchQueue = []; // ������� ������� ��� ��������
     let currentBatchIndex = 0;
 
-    // Дата последней отправки минусов в Директ (timestamp)
+    // ���� ��������� �������� ������� � ������ (timestamp)
     let lastSendDate = null;
 
-    // Флаг: был ли уже выполнен редирект для текущей кампании
-    // Храним в sessionStorage чтобы сохранялся при перезагрузках страницы
+    // ����: ��� �� ��� �������� �������� ��� ������� ��������
+    // ������ � sessionStorage ����� ���������� ��� ������������� ��������
     let lastCheckedCampaignId = sessionStorage.getItem('yd-sq-last-checked-cid') || null;
 
     // Undo/Redo
@@ -214,9 +214,9 @@
     let lastManualScrollTime = 0;
     const autoScrollDebounceMap = new Map();
 
-    // ==================== УТИЛИТЫ ====================
+    // ==================== ������� ====================
 
-    // Debounce функция для оптимизации производительности
+    // Debounce ������� ��� ����������� ������������������
     function debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -229,70 +229,70 @@
         };
     }
 
-    // Валидация и очистка минус-слова
+    // ��������� � ������� �����-�����
     function sanitizeMinusKeyword(str) {
         if (typeof str !== 'string') return null;
 
-        // Убираем лишние пробелы
+        // ������� ������ �������
         let clean = str.trim();
 
-        // Пустая строка
+        // ������ ������
         if (!clean) return null;
 
-        // Слишком длинная строка (ограничение Директа ~35 символов на слово)
+        // ������� ������� ������ (����������� ������� ~35 �������� �� �����)
         if (clean.length > 100) {
             clean = clean.substring(0, 100);
         }
 
-        // Убираем начальный минус если есть (мы добавим его сами)
+        // ������� ��������� ����� ���� ���� (�� ������� ��� ����)
         if (clean.startsWith('-')) {
             clean = clean.substring(1).trim();
         }
 
-        // Убираем множественные пробелы
+        // ������� ������������� �������
         clean = clean.replace(/\s+/g, ' ');
 
-        // Проверяем на невалидные символы (оставляем буквы, цифры, пробелы, !, ", [])
-        // Эти символы используются в Direct для операторов
-        const validPattern = /^[а-яёa-z0-9\s!"\[\]]+$/i;
+        // ��������� �� ���������� ������� (��������� �����, �����, �������, !, ", [])
+        // ��� ������� ������������ � Direct ��� ����������
+        const validPattern = /^[�-��a-z0-9\s!"\[\]]+$/i;
         if (!validPattern.test(clean)) {
-            // Убираем невалидные символы
-            clean = clean.replace(/[^а-яёa-z0-9\s!"\[\]]/gi, '');
+            // ������� ���������� �������
+            clean = clean.replace(/[^�-��a-z0-9\s!"\[\]]/gi, '');
         }
 
         return clean || null;
     }
 
-    // Стоп-слова для строгого режима фраз
-    // Стоп-слова для строгого режима фраз и автоматического переключения в strict
+    // ����-����� ��� �������� ������ ����
+    // ����-����� ��� �������� ������ ���� � ��������������� ������������ � strict
     const STOPWORDS = new Set([
-        'в', 'на', 'с', 'и', 'а', 'по', 'для', 'от', 'к', 'у', 'о', 'из', 'за', 'до', 'под', 'при', 'про',
-        'как', 'так', 'или', 'но', 'да', 'ни', 'то', 'что', 'чтобы', 'без', 'об', 'над', 'перед', 'между',
-        'ли', 'же', 'бы', 'было', 'будет', 'если', 'где', 'когда', 'кто', 'что', 'чем', 'тем', 'все', 'всё',
-        'весь', 'вся', 'они', 'мы', 'вы', 'он', 'она', 'оно', 'это', 'эта', 'этот', 'те', 'тот', 'та'
+        '�', '��', '�', '�', '�', '��', '���', '��', '�', '�', '�', '��', '��', '��', '���', '���', '���',
+        '���', '���', '���', '��', '��', '��', '��', '���', '�����', '���', '��', '���', '�����', '�����',
+        '��', '��', '��', '����', '�����', '����', '���', '�����', '���', '���', '���', '���', '���', '��',
+        '����', '���', '���', '��', '��', '��', '���', '���', '���', '���', '����', '��', '���', '��'
     ]);
 
     // Regex patterns for Porter Stemmer
-    const RE_PERFECTIVEGERUND = /((ив|ивши|ившись|ыв|ывши|ывшись)|((?<=[ая])(в|вши|вшись)))$/;
-    const RE_REFLEXIVE = /(с[яь])$/;
-    const RE_ADJECTIVE = /((ее|ие|ые|ое|ими|ыми|ей|ий|ый|ой|ем|им|ым|ом|его|ого|ему|ому|их|ых|ую|юю|ая|яя|ою|ею)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
-    const RE_PARTICIPLE = /((ивш|ывш|ующ)|((?<=[ая])(ем|нн|н|ш|щ)))$/;
-    const RE_VERB = /((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|ишь|ую|ю)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$/;
-    const RE_NOUN = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/;
-    const RE_RVRE = /^(.*?[аеиоуыэюя])(.*)$/;
-    const RE_DERIVATIONAL_SIMPLE = /ость?$/;
-    const RE_SUPERLATIVE = /(ейше|ейш)$/;
-    const RE_I = /и$/;
-    const RE_P = /ь$/;
-    const RE_NN = /нн$/;
+    const RE_PERFECTIVEGERUND = /((��|����|������|��|����|������)|((?<=[��])(�|���|�����)))$/;
+    const RE_REFLEXIVE = /(�[��])$/;
+    const RE_ADJECTIVE = /((��|��|��|��|���|���|��|��|��|��|��|��|��|��|���|���|���|���|��|��|��|��|��|��|��|��)|((?<=[��])(��|��|�|�|�)))$/;
+    const RE_PARTICIPLE = /((���|���|���)|((?<=[��])(��|��|�|�|�)))$/;
+    const RE_VERB = /((���|���|���|����|����|���|���|���|��|��|��|��|��|��|��|���|���|���|��|���|���|��|��|���|���|���|���|��|�)|((?<=[��])(��|��|���|���|��|�|�|��|�|��|��|��|��|��|��|���|���)))$/;
+    const RE_NOUN = /(�|��|��|��|��|�|����|���|���|��|��|�|���|��|��|��|�|���|��|���|��|��|��|�|�|��|���|��|�|�|��|��|�|��|��|�)$/;
+    const RE_RVRE = /^(.*?[���������])(.*)$/;
+    const RE_DERIVATIONAL_SIMPLE = /����?$/;
+    const RE_SUPERLATIVE = /(����|���)$/;
+    const RE_I = /�$/;
+    const RE_P = /�$/;
+    const RE_NN = /��$/;
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    // ==================== ������������� ====================
 
     function init() {
-        // Проверяем: если мы на странице настроек кампании и идёт синхронизация
+        // ���������: ���� �� �� �������� �������� �������� � ��� �������������
         if (isOnCampaignSettingsPage()) {
             if (handleSettingsPageSync()) {
-                return; // Обработка синхронизации завершится автоматически
+                return; // ��������� ������������� ���������� �������������
             }
         }
 
@@ -300,14 +300,14 @@
             return;
         }
 
-        // Проверяем и редиректим на правильный URL если нужно
+        // ��������� � ���������� �� ���������� URL ���� �����
         checkAndRedirectUrl();
 
         loadGlobalState();
-        loadLastSendDate(); // Загружаем дату последней отправки
+        loadLastSendDate(); // ��������� ���� ��������� ��������
         setupGlobalListeners();
 
-        // Проверяем есть ли синхронизированные данные для применения
+        // ��������� ���� �� ������������������ ������ ��� ����������
         setTimeout(() => {
             checkAndApplySyncedData();
         }, 1000);
@@ -317,7 +317,7 @@
     }
 
     function setupGlobalListeners() {
-        // Отслеживаем ручную прокрутку для автоскролла
+        // ����������� ������ ��������� ��� �����������
         document.addEventListener('scroll', trackManualScroll, { passive: true });
         document.addEventListener('wheel', trackManualScroll, { passive: true });
         document.addEventListener('touchmove', trackManualScroll, { passive: true });
@@ -325,13 +325,13 @@
 
     function waitForTableAndInit(attempt = 0) {
         if (attempt >= 100) {
-            console.log('[YD-SQ] Таблица не найдена после 100 попыток');
+            console.log('[YD-SQ] ������� �� ������� ����� 100 �������');
             return;
         }
 
         const table = findSearchQueryTable();
         if (table && !inited) {
-            console.log('[YD-SQ] Таблица найдена, инициализация...');
+            console.log('[YD-SQ] ������� �������, �������������...');
             initWithTable(table);
         } else {
             setTimeout(() => waitForTableAndInit(attempt + 1), 250);
@@ -339,20 +339,20 @@
     }
 
     function findSearchQueryTable() {
-        // Ищем конкретную ячейку заголовка, чтобы найти именно таблицу данных, а не обертку
+        // ���� ���������� ������ ���������, ����� ����� ������ ������� ������, � �� �������
         const headers = document.querySelectorAll('th, [role="columnheader"]');
         for (const h of headers) {
-            if ((h.textContent || '').toLowerCase().includes('поисковый запрос')) {
+            if ((h.textContent || '').toLowerCase().includes('��������� ������')) {
                 return h.closest('table, [role="table"]');
             }
         }
 
-        // Fallback: ищем в td, если заголовки сделаны через них
+        // Fallback: ���� � td, ���� ��������� ������� ����� ���
         const cells = document.querySelectorAll('td, [role="cell"]');
         for (const c of cells) {
             const txt = (c.textContent || '').toLowerCase();
-            // Проверяем длину, чтобы не сработать на ячейку-обертку, содержащую таблицу
-            if (txt.length < 100 && txt.includes('поисковый запрос')) {
+            // ��������� �����, ����� �� ��������� �� ������-�������, ���������� �������
+            if (txt.length < 100 && txt.includes('��������� ������')) {
                 return c.closest('table, [role="table"]');
             }
         }
@@ -372,52 +372,52 @@
             updateHighlights();
             updateUI();
 
-            // MutationObserver (setupTableObserver) отслеживает изменения DOM
-            // и вызывает restoreCheckboxes/updateHighlights при необходимости
+            // MutationObserver (setupTableObserver) ����������� ��������� DOM
+            // � �������� restoreCheckboxes/updateHighlights ��� �������������
 
-            console.log('[YD-SQ] Инициализация завершена');
+            console.log('[YD-SQ] ������������� ���������');
 
-            // Автосинхронизация при первой установке
+            // ����������������� ��� ������ ���������
             const firstRunKey = 'yd-sq-first-run-completed';
             if (!localStorage.getItem(firstRunKey)) {
-                console.log('[YD-SQ] Первый запуск — автоматическая синхронизация...');
+                console.log('[YD-SQ] ������ ������ � �������������� �������������...');
                 localStorage.setItem(firstRunKey, Date.now().toString());
 
-                // Запускаем синхронизацию с небольшой задержкой после инициализации
+                // ��������� ������������� � ��������� ��������� ����� �������������
                 setTimeout(async () => {
                     try {
-                        showYdsqNotification('Первый запуск: синхронизация данных...', 'info');
+                        showYdsqNotification('������ ������: ������������� ������...', 'info');
                         await startCampaignSync();
                         if (typeof syncLatestDateFromHistory === 'function') {
                             await syncLatestDateFromHistory();
                         }
-                        showYdsqNotification('Синхронизация завершена!', 'success');
+                        showYdsqNotification('������������� ���������!', 'success');
                     } catch (err) {
-                        console.error('[YD-SQ] Ошибка автосинхронизации:', err);
+                        console.error('[YD-SQ] ������ �����������������:', err);
                     }
                 }, 2000);
             }
         } catch (err) {
-            console.error('[YD-SQ] Ошибка инициализации:', err);
+            console.error('[YD-SQ] ������ �������������:', err);
         }
     }
 
     function restoreCheckboxes() {
-        // Восстанавливаем чекбоксы для строк, которые есть в selections на текущей странице
+        // ��������������� �������� ��� �����, ������� ���� � selections �� ������� ��������
         const rowsWithSelections = new Set();
         const allSelectionsCount = selections.size;
 
         for (const [selKey, sel] of selections.entries()) {
-            // Пытаемся сопоставить по pageKey ИЛИ если ключ в Map совпадает с текущим pageKey
+            // �������� ����������� �� pageKey ��� ���� ���� � Map ��������� � ������� pageKey
             if (sel.pageKey === currentPageKey) {
                 rowsWithSelections.add(sel.rowId);
             } else {
-                // FALLBACK: если в ключе записи есть хеш, который присутствует на текущей странице
-                // Это помогает, если страница определилась как page:1 вместо page:3
+                // FALLBACK: ���� � ����� ������ ���� ���, ������� ������������ �� ������� ��������
+                // ��� ��������, ���� �������� ������������ ��� page:1 ������ page:3
                 const parts = selKey.split(':');
-                const hash = parts[parts.length - 1]; // Последняя часть - всегда хеш
+                const hash = parts[parts.length - 1]; // ��������� ����� - ������ ���
                 const potentialRowId = `${currentPageKey}:${hash}`;
-                // Если в текущем DOM есть строка с таким хешем - восстановим её
+                // ���� � ������� DOM ���� ������ � ����� ����� - ����������� �
                 if (document.querySelector(`[data-yd-row-id="${potentialRowId}"]`)) {
                     rowsWithSelections.add(potentialRowId);
                 }
@@ -425,11 +425,11 @@
         }
 
         if (rowsWithSelections.size > 0 || allSelectionsCount > 0) {
-            console.log(`[YD-SQ] 🔲 RESTORE: Page=${currentPageKey}, CurrentPageSels=${rowsWithSelections.size}, TotalSels=${allSelectionsCount}`);
+            console.log(`[YD-SQ] ?? RESTORE: Page=${currentPageKey}, CurrentPageSels=${rowsWithSelections.size}, TotalSels=${allSelectionsCount}`);
         }
 
-        // Устанавливаем чекбоксы для найденных строк АСИНХРОННО
-        // (клик по чекбоксу Яндекса может вызывать побочные эффекты)
+        // ������������� �������� ��� ��������� ����� ����������
+        // (���� �� �������� ������� ����� �������� �������� �������)
         if (rowsWithSelections.size > 0) {
             setTimeout(() => {
                 let restoredCount = 0;
@@ -445,12 +445,12 @@
                             }
                         }
                     } catch (err) {
-                        console.error('[YD-SQ] ❌ Ошибка восстановления чекбокса для rowId:', rowId, err);
+                        console.error('[YD-SQ] ? ������ �������������� �������� ��� rowId:', rowId, err);
                     }
                 }
 
                 if (restoredCount > 0) {
-                    log.checkbox(`Восстановлено ${restoredCount} чекбоксов`);
+                    log.checkbox(`������������� ${restoredCount} ���������`);
                 }
             }, 100);
         }
@@ -473,7 +473,7 @@
                 setTimeout(() => {
                     cleanWordSpans();
                     wrapTableWords(table);
-                    restoreCheckboxes(); // Восстанавливаем чекбоксы после перерисовки таблицы
+                    restoreCheckboxes(); // ��������������� �������� ����� ����������� �������
                     updateHighlights();
                     isWrapping = false;
                 }, 50);
@@ -489,14 +489,14 @@
     }
 
     function cleanupPageState() {
-        // Прерываем пакетную отправку если она идет
+        // ��������� �������� �������� ���� ��� ����
         if (batchQueue.length > 0) {
-            console.log('[YD-SQ] Прерывание пакетной отправки из-за смены страницы');
-            showYdsqNotification('Пакетная отправка прервана при смене страницы', 'warn');
+            console.log('[YD-SQ] ���������� �������� �������� ��-�� ����� ��������');
+            showYdsqNotification('�������� �������� �������� ��� ����� ��������', 'warn');
             batchQueue = [];
             currentBatchIndex = 0;
             isSending = false;
-            pendingSentMinuses = []; // Очищаем pending, т.к. отправка не завершена
+            pendingSentMinuses = []; // ������� pending, �.�. �������� �� ���������
         }
 
         // Cancel phrase mode if active
@@ -540,14 +540,14 @@
 
         resetClearAllButton();
 
-        console.log('[YD-SQ] Состояние страницы очищено');
+        console.log('[YD-SQ] ��������� �������� �������');
     }
 
     function detectPageChange() {
         setInterval(() => {
             const newPageKey = getCurrentPageKey();
             if (newPageKey !== currentPageKey) {
-                console.log('[YD-SQ] Смена страницы:', currentPageKey, '→', newPageKey);
+                console.log('[YD-SQ] ����� ��������:', currentPageKey, '>', newPageKey);
                 currentPageKey = newPageKey;
 
                 // Full cleanup before reinitializing
@@ -559,7 +559,7 @@
         }, 500);
     }
 
-    // ==================== УТИЛИТЫ ====================
+    // ==================== ������� ====================
 
     function getCurrentPageKey() {
         const params = new URLSearchParams(window.location.search);
@@ -590,59 +590,59 @@
     }
 
     /**
-     * Упрощённый стеммер для Яндекс Директ
+     * ���������� ������� ��� ������ ������
      * 
-     * Логика Яндекс Директ: минус-слово без оператора ! исключает ВСЕ СЛОВОФОРМЫ,
-     * но НЕ однокоренные слова другой части речи.
+     * ������ ������ ������: �����-����� ��� ��������� ! ��������� ��� ����������,
+     * �� �� ������������ ����� ������ ����� ����.
      * 
-     * Примеры:
-     * - "шина" исключает: шины, шине, шиной, шину (словоформы существительного)
-     * - "шина" НЕ исключает: шинный, шинная (прилагательные - другое слово)
-     * - "купить" исключает: купил, купила, куплю (формы глагола)
+     * �������:
+     * - "����" ���������: ����, ����, �����, ���� (���������� ����������������)
+     * - "����" �� ���������: ������, ������ (�������������� - ������ �����)
+     * - "������" ���������: �����, ������, ����� (����� �������)
      * 
-     * Решение: 
-     * 1. Прилагательные НЕ трогаем (это другие слова)
-     * 2. Существительные - убираем падежные окончания
-     * 3. Глаголы - приводим к основе
+     * �������: 
+     * 1. �������������� �� ������� (��� ������ �����)
+     * 2. ��������������� - ������� �������� ���������
+     * 3. ������� - �������� � ������
      */
     function stemWord(word) {
-        word = word.toLowerCase().replace(/ё/g, 'е');
+        word = word.toLowerCase().replace(/�/g, '�');
 
-        // Минимальная длина для стемминга
+        // ����������� ����� ��� ���������
         if (word.length < 4) return word;
 
-        // === ПРИЛАГАТЕЛЬНЫЕ: НЕ УБИРАЕМ (это другие слова) ===
-        const adjEndings = /(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ого|его|ому|ему|ым|им|ой|ей|ую|юю|ых|их|ыми|ими)$/;
+        // === ��������������: �� ������� (��� ������ �����) ===
+        const adjEndings = /(?:��|��|��|��|��|��|��|��|��|���|���|���|���|��|��|��|��|��|��|��|��|���|���)$/;
         if (adjEndings.test(word)) {
             return word;
         }
 
-        // === ГЛАГОЛЫ: приводим к основе ===
-        // Инфинитив (-ть, -ти, -чь)
-        const verbInfEndings = ['ться', 'тись', 'ить', 'ать', 'ять', 'еть', 'уть', 'оть', 'ыть', 'ти', 'чь'];
+        // === �������: �������� � ������ ===
+        // ��������� (-��, -��, -��)
+        const verbInfEndings = ['����', '����', '���', '���', '���', '���', '���', '���', '���', '��', '��'];
         for (const ending of verbInfEndings) {
             if (word.endsWith(ending) && word.length - ending.length >= 2) {
                 return word.slice(0, -ending.length);
             }
         }
 
-        // Прошедшее время (-л, -ла, -ло, -ли)
-        const verbPastEndings = ['лась', 'лось', 'лись', 'ла', 'ло', 'ли', 'л'];
+        // ��������� ����� (-�, -��, -��, -��)
+        const verbPastEndings = ['����', '����', '����', '��', '��', '��', '�'];
         for (const ending of verbPastEndings) {
             if (word.endsWith(ending) && word.length - ending.length >= 2) {
                 return word.slice(0, -ending.length);
             }
         }
 
-        // === СУЩЕСТВИТЕЛЬНЫЕ: падежи и числа ===
-        // Порядок важен: сначала длинные, потом короткие
+        // === ���������������: ������ � ����� ===
+        // ������� �����: ������� �������, ����� ��������
         const nounEndings = [
-            // Множественное число + падежи
-            'ами', 'ями', 'ах', 'ях', 'ам', 'ям', 'ов', 'ев', 'ей',
-            // Единственное число падежи
-            'ой', 'ей', 'ом', 'ем', 'ою', 'ею', 'ий',
-            // Простые окончания
-            'а', 'я', 'о', 'е', 'у', 'ю', 'ы', 'и', 'ь'
+            // ������������� ����� + ������
+            '���', '���', '��', '��', '��', '��', '��', '��', '��',
+            // ������������ ����� ������
+            '��', '��', '��', '��', '��', '��', '��',
+            // ������� ���������
+            '�', '�', '�', '�', '�', '�', '�', '�', '�'
         ];
 
         for (const ending of nounEndings) {
@@ -675,23 +675,23 @@
             .replace(/'/g, '&#39;');
     }
 
-    // ==================== ОБЕРТЫВАНИЕ СЛОВ ====================
+    // ==================== ����������� ���� ====================
 
     function wrapTableWords(table) {
         let rows;
-        // Используем .rows для стандартных таблиц, чтобы избежать захвата строк вложенных таблиц
+        // ���������� .rows ��� ����������� ������, ����� �������� ������� ����� ��������� ������
         if (table.rows) {
             rows = Array.from(table.rows);
         } else {
             rows = Array.from(table.querySelectorAll('tr, [role="row"]'));
         }
 
-        // Фильтруем шапку: исключаем thead, строки с th и строки с текстом заголовка
+        // ��������� �����: ��������� thead, ������ � th � ������ � ������� ���������
         rows = rows.filter(row => {
             if (row.closest('thead')) return false;
             if (row.querySelector('th')) return false;
-            // Дополнительная проверка: если текст строки содержит "Поисковый запрос", считаем её шапкой
-            if ((row.textContent || '').toLowerCase().includes('поисковый запрос')) return false;
+            // �������������� ��������: ���� ����� ������ �������� "��������� ������", ������� � ������
+            if ((row.textContent || '').toLowerCase().includes('��������� ������')) return false;
             return true;
         });
 
@@ -703,7 +703,7 @@
 
             let queryCell = null;
 
-            // Найти ячейку с запросом
+            // ����� ������ � ��������
             const cellWithCheckbox = checkbox.closest('td, [role="cell"]');
             if (cellWithCheckbox) {
                 queryCell = cellWithCheckbox;
@@ -722,7 +722,7 @@
                 // Check if already wrapped to avoid double processing
                 if (queryCell.querySelector('.yd-word')) continue;
 
-                // Используем текст запроса для создания стабильного rowId
+                // ���������� ����� ������� ��� �������� ����������� rowId
                 const queryText = getTextContent(queryCell).trim();
                 const queryHash = simpleHash(queryText);
                 const rowId = `${currentPageKey}:${queryHash}`;
@@ -734,7 +734,7 @@
         }
     }
 
-    // Простая хеш-функция для создания уникального ID из текста
+    // ������� ���-������� ��� �������� ����������� ID �� ������
     function simpleHash(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -762,9 +762,9 @@
                 if (/^\s+$/.test(token)) {
                     fragment.appendChild(document.createTextNode(token));
                 } else {
-                    const words = token.match(/[A-Za-zА-Яа-яЁё0-9]+|[^A-Za-zА-Яа-яЁё0-9]+/g) || [];
+                    const words = token.match(/[A-Za-z�-��-���0-9]+|[^A-Za-z�-��-���0-9]+/g) || [];
                     for (const word of words) {
-                        if (/[A-Za-zА-Яа-яЁё0-9]+/.test(word)) {
+                        if (/[A-Za-z�-��-���0-9]+/.test(word)) {
                             const span = document.createElement('span');
                             span.className = 'yd-word';
                             span.textContent = word;
@@ -799,18 +799,18 @@
     function addCopyButtonToRow(row, queryCell) {
         if (queryCell.querySelector('.yd-copy-query-btn')) return;
 
-        // Контейнер для кнопок
+        // ��������� ��� ������
         const btnContainer = document.createElement('span');
         btnContainer.className = 'yd-query-actions';
 
-        // Кнопка копирования
+        // ������ �����������
         const copyBtn = document.createElement('button');
         copyBtn.className = 'yd-copy-query-btn';
         copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>`;
-        copyBtn.title = 'Скопировать запрос';
+        copyBtn.title = '����������� ������';
 
         copyBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -831,18 +831,18 @@
                     copyBtn.classList.remove('yd-copy-success');
                 }, 1500);
             } catch (err) {
-                console.error('[YD-SQ] Ошибка копирования:', err);
+                console.error('[YD-SQ] ������ �����������:', err);
             }
         });
 
-        // Кнопка открытия в Яндекс
+        // ������ �������� � ������
         const searchBtn = document.createElement('button');
         searchBtn.className = 'yd-search-query-btn';
         searchBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
             <path d="M21 21l-4.35-4.35"></path>
         </svg>`;
-        searchBtn.title = 'Открыть в Яндекс';
+        searchBtn.title = '������� � ������';
 
         searchBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -860,26 +860,26 @@
     }
 
     // ==================== SMART SCROLL (DEFERRED) ====================
-    // Константы скролла
-    const SCROLL_BOTTOM_TRIGGER_ZONE = 0.4; // Нижние 40% экрана - зона требующая скролла
-    const SCROLL_TARGET_POSITION = 0.3;     // Целевая позиция строки - 30% от верха
+    // ��������� �������
+    const SCROLL_BOTTOM_TRIGGER_ZONE = 0.4; // ������ 40% ������ - ���� ��������� �������
+    const SCROLL_TARGET_POSITION = 0.3;     // ������� ������� ������ - 30% �� �����
 
-    // Состояние отложенного скролла
+    // ��������� ����������� �������
     let pendingScrollRowId = null;
     let pendingScrollNeedsScroll = false;
 
     function trackManualScroll() {
         lastManualScrollTime = Date.now();
-        // При ручном скролле сбрасываем отложенный скролл
+        // ��� ������ ������� ���������� ���������� ������
         pendingScrollNeedsScroll = false;
     }
 
     /**
-     * Проверяет нужен ли скролл для строки и устанавливает флаг.
-     * Скролл НЕ выполняется сразу - только при mouseleave.
+     * ��������� ����� �� ������ ��� ������ � ������������� ����.
+     * ������ �� ����������� ����� - ������ ��� mouseleave.
      */
     function checkScrollNeeded(rowId) {
-        // Не скроллим, если была ручная прокрутка менее 500ms назад
+        // �� ��������, ���� ���� ������ ��������� ����� 500ms �����
         const timeSinceLastScroll = Date.now() - lastManualScrollTime;
         if (lastManualScrollTime > 0 && timeSinceLastScroll < 500) {
             return;
@@ -891,42 +891,42 @@
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // Граница нижней зоны (верхние 60% экрана - безопасная зона)
+        // ������� ������ ���� (������� 60% ������ - ���������� ����)
         const bottomZoneStart = viewportHeight * (1 - SCROLL_BOTTOM_TRIGGER_ZONE);
 
-        // Если row.bottom выше чем нижняя зона - скролл не нужен
+        // ���� row.bottom ���� ��� ������ ���� - ������ �� �����
         if (rowRect.bottom < bottomZoneStart) {
             pendingScrollNeedsScroll = false;
             pendingScrollRowId = null;
             return;
         }
 
-        // Строка в нижней зоне - нужен скролл, но откладываем
+        // ������ � ������ ���� - ����� ������, �� �����������
         pendingScrollNeedsScroll = true;
         pendingScrollRowId = rowId;
 
-        // Устанавливаем обработчик mouseleave на строку
+        // ������������� ���������� mouseleave �� ������
         setupRowMouseLeaveHandler(row);
     }
 
     /**
-     * Устанавливает обработчик mouseleave для отложенного скролла
+     * ������������� ���������� mouseleave ��� ����������� �������
      */
     function setupRowMouseLeaveHandler(row) {
-        // Удаляем старый обработчик если есть
+        // ������� ������ ���������� ���� ����
         if (row._scrollMouseLeaveHandler) {
             row.removeEventListener('mouseleave', row._scrollMouseLeaveHandler);
         }
 
-        // Создаем новый обработчик
+        // ������� ����� ����������
         row._scrollMouseLeaveHandler = function onRowMouseLeave() {
             if (pendingScrollNeedsScroll && pendingScrollRowId) {
                 executeScrollToRow(pendingScrollRowId);
             }
-            // Сбрасываем состояние
+            // ���������� ���������
             pendingScrollNeedsScroll = false;
             pendingScrollRowId = null;
-            // Удаляем обработчик после срабатывания
+            // ������� ���������� ����� ������������
             row.removeEventListener('mouseleave', row._scrollMouseLeaveHandler);
             row._scrollMouseLeaveHandler = null;
         };
@@ -935,7 +935,7 @@
     }
 
     /**
-     * Выполняет плавный скролл к строке на позицию TARGET_POSITION
+     * ��������� ������� ������ � ������ �� ������� TARGET_POSITION
      */
     function executeScrollToRow(rowId) {
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
@@ -944,7 +944,7 @@
         const rowRect = row.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
 
-        // Вычисляем целевую позицию: верхняя граница строки на 30% от верха экрана
+        // ��������� ������� �������: ������� ������� ������ �� 30% �� ����� ������
         const targetY = rowRect.top + window.scrollY - (viewportHeight * SCROLL_TARGET_POSITION);
 
         // Apple-like smooth scroll
@@ -975,7 +975,7 @@
         requestAnimationFrame(step);
     }
 
-    // Совместимость со старым API (для debounceAutoScroll)
+    // ������������� �� ������ API (��� debounceAutoScroll)
     function autoScrollToRow(rowId) {
         checkScrollNeeded(rowId);
     }
@@ -995,32 +995,32 @@
         autoScrollDebounceMap.set(rowId, timeoutId);
     }
 
-    // ==================== ВЗАИМОДЕЙСТВИЕ С СЛОВАМИ ====================
+    // ==================== �������������� � ������� ====================
 
     function onWordClick(e, targetSpan) {
         e.stopPropagation();
 
-        log.click('onWordClick вызван', {
+        log.click('onWordClick ������', {
             word: targetSpan.dataset.word,
             rowId: targetSpan.dataset.rowId,
             altKey: e.altKey,
             shiftKey: e.shiftKey
         });
 
-        // Блокируем клики во время отправки
+        // ��������� ����� �� ����� ��������
         if (isSending) {
-            log.warn('Клик заблокирован: идет отправка');
-            showYdsqNotification('Идет пакетная отправка, подождите...', 'warn');
+            log.warn('���� ������������: ���� ��������');
+            showYdsqNotification('���� �������� ��������, ���������...', 'warn');
             return;
         }
 
         const span = targetSpan;
 
-        // 🛑 ISOLATION LOCKDOWN: Блокируем клики по импортированным словам
+        // ?? ISOLATION LOCKDOWN: ��������� ����� �� ��������������� ������
         if (span.classList.contains('yd-imported-minus')) {
-            log.click('Клик по импортированному минусу - игнорируем');
+            log.click('���� �� ���������������� ������ - ����������');
             e.stopPropagation();
-            return; // Немедленный выход, никакой логики не выполняется
+            return; // ����������� �����, ������� ������ �� �����������
         }
 
         const stem = span.dataset.stem;
@@ -1092,7 +1092,7 @@
             for (const [key, sel] of selections) {
                 if (sel.kind === 'phrase' && sel.rowId === rowId && sel.pageKey === currentPageKey) {
                     removeSelectionById(key);
-                    showYdsqNotification('Фраза удалена', 'info');
+                    showYdsqNotification('����� �������', 'info');
                     updateUI();
                     return;
                 }
@@ -1110,10 +1110,10 @@
 
         if (e.altKey) {
             toggleStrictWord(span, wordLower, word, rowId);
-            pushUndo('add_selection', `Добавлено строгое слово "${word}"`);
+            pushUndo('add_selection', `��������� ������� ����� "${word}"`);
         } else {
             toggleSoftWord(span, stem, word, rowId);
-            pushUndo('add_selection', `Добавлено мягкое слово "${word}"`);
+            pushUndo('add_selection', `��������� ������ ����� "${word}"`);
         }
 
         resetClearAllButton();
@@ -1136,7 +1136,7 @@
             matchType: 'broad'
         });
 
-        log.selection(`Selection добавлен`, selections.get(key));
+        log.selection(`Selection ��������`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
         clearUndoModeOnNewSelection();
@@ -1157,7 +1157,7 @@
             matchType: 'strict'
         });
 
-        log.selection(`Selection добавлен (strict)`, selections.get(key));
+        log.selection(`Selection �������� (strict)`, selections.get(key));
         ensureRowChecked(rowId);
         syncLocalToGlobal();
         clearUndoModeOnNewSelection();
@@ -1168,10 +1168,10 @@
 
         const span = targetSpan;
 
-        // 🛑 ISOLATION LOCKDOWN: Блокируем двойные клики по импортированным словам
+        // ?? ISOLATION LOCKDOWN: ��������� ������� ����� �� ��������������� ������
         if (span.classList.contains('yd-imported-minus')) {
             e.stopPropagation();
-            return; // Немедленный выход
+            return; // ����������� �����
         }
 
         const word = span.dataset.word;
@@ -1215,8 +1215,8 @@
             });
 
             ensureRowChecked(rowId);
-            pushUndo('add_selection', `Построена фраза: "${words.join(' ')}"`);
-            showYdsqNotification('Фраза добавлена (2 слова)', 'success');
+            pushUndo('add_selection', `��������� �����: "${words.join(' ')}"`);
+            showYdsqNotification('����� ��������� (2 �����)', 'success');
             syncLocalToGlobal();
             updateUI();
             return;
@@ -1252,7 +1252,7 @@
         injectPhraseButtons(rowId);
 
         // Show notification
-        showYdsqNotification('Режим фразы', 'info');
+        showYdsqNotification('����� �����', 'info');
 
         ensureRowChecked(rowId);
         updateUI();
@@ -1271,7 +1271,7 @@
             // If less than 2 words, we can't finalize unless it's a cancel
             // But if user pressed "Done" with 1 word, we should show warning
             if (!isCancel && sel && sel.words.length === 1) {
-                showYdsqNotification('Завершите фразу (минимум 2 слова)', 'warn');
+                showYdsqNotification('��������� ����� (������� 2 �����)', 'warn');
                 // Re-inject buttons because we are not done
                 injectPhraseButtons(rowId);
                 return;
@@ -1282,8 +1282,8 @@
             sel._building = false;
             sel.matchType = 'quote';
             ensureRowChecked(phraseInProgress.rowId);
-            pushUndo('add_selection', `Построена фраза: "${sel.raw}"`);
-            showYdsqNotification('Фраза добавлена', 'success');
+            pushUndo('add_selection', `��������� �����: "${sel.raw}"`);
+            showYdsqNotification('����� ���������', 'success');
         }
 
         // Remove phrase-building classes
@@ -1327,7 +1327,7 @@
         }
 
         phraseInProgress = null;
-        showYdsqNotification('Фраза отменена', 'info');
+        showYdsqNotification('����� ��������', 'info');
         syncLocalToGlobal();
         updateUI();
     }
@@ -1345,8 +1345,8 @@
         const container = document.createElement('span');
         container.className = 'yd-phrase-actions';
         container.innerHTML = `
-            <button class="yd-phrase-btn yd-phrase-btn-done" title="Завершить фразу">Готово</button>
-            <button class="yd-phrase-btn yd-phrase-btn-cancel" title="Отменить">Отмена</button>
+            <button class="yd-phrase-btn yd-phrase-btn-done" title="��������� �����">������</button>
+            <button class="yd-phrase-btn yd-phrase-btn-cancel" title="��������">������</button>
         `;
 
         container.querySelector('.yd-phrase-btn-done').addEventListener('click', (e) => {
@@ -1390,9 +1390,9 @@
         // console.log('[YD-SQ] ensureRowChecked:', { rowId, found: !!cb, checked: cb?.checked });
 
         if (cb && !cb.checked) {
-            clickCheckbox(cb, true);  // Явно включаем чекбокс
+            clickCheckbox(cb, true);  // ���� �������� �������
             cb.dataset.ydAuto = 'true';
-            // console.log('[YD-SQ] Чекбокс включен автоматически для rowId:', rowId);
+            // console.log('[YD-SQ] ������� ������� ������������� ��� rowId:', rowId);
         }
 
         // Double check after a delay to fix race conditions with Yandex handlers
@@ -1406,7 +1406,7 @@
     }
 
     function toggleSoftWord(span, stem, word, rowId) {
-        // Если слово является стоп-словом, принудительно используем строгий режим
+        // ���� ����� �������� ����-������, ������������� ���������� ������� �����
         const wordLower = word.toLowerCase();
         if (STOPWORDS.has(wordLower)) {
             toggleStrictWord(span, wordLower, word, rowId);
@@ -1488,11 +1488,11 @@
         if (!otherSelsOnRow && pageKey === currentPageKey) {
             const cb = getRowCheckbox(rowId);
             if (cb && cb.checked && cb.dataset.ydAuto === 'true') {
-                clickCheckbox(cb, false);  // Явно выключаем чекбокс
+                clickCheckbox(cb, false);  // ���� ��������� �������
                 delete cb.dataset.ydAuto;
             }
         } else if (otherSelsOnRow && pageKey === currentPageKey) {
-            // Если остались другие выделенные слова, гарантируем, что чекбокс включен
+            // ���� �������� ������ ���������� �����, �����������, ��� ������� �������
             ensureRowChecked(rowId);
         }
         syncLocalToGlobal();
@@ -1503,9 +1503,9 @@
     function onWordHover(e, targetSpan) {
         const span = targetSpan;
 
-        // 🛑 ISOLATION LOCKDOWN: Блокируем тултипы для импортированных слов
+        // ?? ISOLATION LOCKDOWN: ��������� ������� ��� ��������������� ����
         if (span.classList.contains('yd-imported-minus')) {
-            return; // Никаких тултипов
+            return; // ������� ��������
         }
 
         tooltipTimeout = setTimeout(() => {
@@ -1532,12 +1532,12 @@
 
         if (span.classList.contains('yd-sent-history')) {
             const sentAt = span.dataset.sentAt ? new Date(parseInt(span.dataset.sentAt)) : null;
-            const dateStr = sentAt ? sentAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
+            const dateStr = sentAt ? sentAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '�������';
 
             tooltip.innerHTML = `
-                <div class="yd-tooltip-layer">Присутствует в истории</div>
+                <div class="yd-tooltip-layer">������������ � �������</div>
                 <div class="yd-tooltip-content">
-                    ✓ Отправлено ${dateStr}
+                    ? ���������� ${dateStr}
                 </div>
             `;
             return tooltip;
@@ -1545,13 +1545,13 @@
 
         if (span.classList.contains('yd-imported-minus')) {
             const importedAt = span.dataset.importedAt ? new Date(parseInt(span.dataset.importedAt)) : null;
-            const dateStr = importedAt ? importedAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'недавно';
+            const dateStr = importedAt ? importedAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '�������';
 
             tooltip.innerHTML = `
-                <div class="yd-tooltip-layer">Минус в кампании</div>
+                <div class="yd-tooltip-layer">����� � ��������</div>
                 <div class="yd-tooltip-content">
-                    📥 В кампании<br>
-                    загружено ${dateStr}
+                    ?? � ��������<br>
+                    ��������� ${dateStr}
                 </div>
             `;
             return tooltip;
@@ -1562,10 +1562,10 @@
             const count = wordSpans.filter(s => s.dataset.stem === stem).length;
 
             tooltip.innerHTML = `
-                <div class="yd-tooltip-layer">Мягкое выделение (soft)</div>
+                <div class="yd-tooltip-layer">������ ��������� (soft)</div>
                 <div class="yd-tooltip-content">
-                    Похоже на "${span.dataset.word}"<br>
-                    найдено ещё ${count - 1} похожих
+                    ������ �� "${span.dataset.word}"<br>
+                    ������� ��� ${count - 1} �������
                 </div>
             `;
             return tooltip;
@@ -1573,8 +1573,8 @@
 
         if (span.classList.contains('yd-selected-strict')) {
             tooltip.innerHTML = `
-                <div class="yd-tooltip-layer">Строгое выделение (strict)</div>
-                <div class="yd-tooltip-content">Точное совпадение</div>
+                <div class="yd-tooltip-layer">������� ��������� (strict)</div>
+                <div class="yd-tooltip-content">������ ����������</div>
             `;
             return tooltip;
         }
@@ -1605,11 +1605,11 @@
             delete sp.dataset.phraseId;
             delete sp.dataset.sentAt;
             delete sp.dataset.importedAt;
-            delete sp.dataset.tooltip; // Очищаем кастомный tooltip
+            delete sp.dataset.tooltip; // ������� ��������� tooltip
         }
 
         // 2. Prepare Rules
-        // Пересчитываем кэш, если изменился массив или количество элементов
+        // ������������� ���, ���� ��������� ������ ��� ���������� ���������
         const shouldRebuild = lastImportedMinusesRef !== importedMinuses ||
             !cachedImportedRules ||
             cachedImportedRules.length !== importedMinuses.length;
@@ -1632,16 +1632,16 @@
                 const r = parseMinusRule(sel.display);
                 r.source = 'selection';
 
-                // Логика подсветки для одиночных слов:
-                // - БЕЗ кавычек (matchType === null): broad - подсвечиваем везде где есть это слово
-                // - С кавычками (matchType === 'quote'): quote - только там где слово ОДНО в строке
-                // Это соответствует логике Яндекс.Директа для минус-фраз
+                // ������ ��������� ��� ��������� ����:
+                // - ��� ������� (matchType === null): broad - ������������ ����� ��� ���� ��� �����
+                // - � ��������� (matchType === 'quote'): quote - ������ ��� ��� ����� ���� � ������
+                // ��� ������������� ������ ������.������� ��� �����-����
                 if ((sel.kind === 'soft-word' || sel.kind === 'strict-word') && r.words.length === 1) {
                     if (sel.matchType === 'quote') {
-                        // Кавычки = точное соответствие = только строки с одним словом
+                        // ������� = ������ ������������ = ������ ������ � ����� ������
                         r.type = 'quote';
                     } else {
-                        // Без кавычек = широкое соответствие = везде где есть слово
+                        // ��� ������� = ������� ������������ = ����� ��� ���� �����
                         r.type = 'broad';
                     }
                 }
@@ -1651,7 +1651,7 @@
         }
 
         if (rules.length > 0 || sentHistory.length > 0) {
-            console.log(`[YD-SQ] 🎨 UPDATE HIGHLIGHTS: Spans: ${wordSpans.length}, Rules: ${rules.length} (sel: ${rules.length - initialRulesCount}, imp: ${initialRulesCount}), history: ${sentHistory.length}`);
+            console.log(`[YD-SQ] ?? UPDATE HIGHLIGHTS: Spans: ${wordSpans.length}, Rules: ${rules.length} (sel: ${rules.length - initialRulesCount}, imp: ${initialRulesCount}), history: ${sentHistory.length}`);
         }
 
         if (rules.length === 0 && sentHistory.length === 0) return;
@@ -1693,19 +1693,19 @@
 
                 if (rule.type === 'quote') {
                     // Quote: Exact Set of words (no extra words in row)
-                    // DEBUG закомментирован - слишком спамит
+                    // DEBUG ��������������� - ������� ������
                     // if (rule.source === 'selection') {
                     //     log.info(`QUOTE CHECK: rowId=${rowId}, rowLen=${rowLen}, ruleWords=${rule.words.length}, words=[${rowWordsData.map(d => d.text).join(', ')}]`);
                     // }
 
-                    // СПЕЦИАЛЬНАЯ ЛОГИКА для одного слова в кавычках:
-                    // Проверяем что ВСЕ слова в строке являются формами искомого слова
-                    // (Яндекс может показывать [склад, склад] как 2 слова)
+                    // ����������� ������ ��� ������ ����� � ��������:
+                    // ��������� ��� ��� ����� � ������ �������� ������� �������� �����
+                    // (������ ����� ���������� [�����, �����] ��� 2 �����)
                     if (rule.words.length === 1) {
                         const rWord = rule.words[0];
                         const rWordStem = stemWord(rWord.text);
 
-                        // Проверяем что ВСЕ слова в строке совпадают с искомым
+                        // ��������� ��� ��� ����� � ������ ��������� � �������
                         const allWordsMatch = rowWordsData.every(d => {
                             if (rWord.isStrict) {
                                 return d.lower === rWord.text;
@@ -1718,10 +1718,10 @@
                             isMatch = true;
                             for (let i = 0; i < rowLen; i++) matchedIndices.add(i);
                             baseClass = 'yd-selected-phrase';
-                            log.info(`QUOTE MATCH: rowId=${rowId} - все слова совпадают с "${rWord.text}"`);
+                            log.info(`QUOTE MATCH: rowId=${rowId} - ��� ����� ��������� � "${rWord.text}"`);
                         }
                     } else if (rowLen === rule.words.length) {
-                        // Стандартная логика для фраз из нескольких слов
+                        // ����������� ������ ��� ���� �� ���������� ����
                         const rowIndicesUsed = new Set();
                         let allRuleWordsFound = true;
 
@@ -1816,9 +1816,9 @@
                         } else {
                             span.classList.add(baseClass);
                         }
-                        // Добавляем tooltip для imported минусов
+                        // ��������� tooltip ��� imported �������
                         if (rule.source === 'imported') {
-                            span.dataset.tooltip = 'Уже добавлено';
+                            span.dataset.tooltip = '��� ���������';
                         }
                     }
                 }
@@ -1873,17 +1873,17 @@
         }
     }
 
-    // Debounced версия updateHighlights для оптимизации производительности
+    // Debounced ������ updateHighlights ��� ����������� ������������������
     const updateHighlights = debounce(updateHighlightsCore, 150);
 
-    // Синхронная версия для критических мест где нужен мгновенный отклик
+    // ���������� ������ ��� ����������� ���� ��� ����� ���������� ������
     const updateHighlightsImmediate = updateHighlightsCore;
 
-    // Парсер минус-правил
+    // ������ �����-������
     function parseMinusRule(raw) {
         raw = raw.trim();
 
-        // Удаляем начальный минус (минус-фразы часто хранятся как "-слово")
+        // ������� ��������� ����� (�����-����� ����� �������� ��� "-�����")
         if (raw.startsWith('-')) {
             raw = raw.substring(1).trim();
         }
@@ -1899,7 +1899,7 @@
             content = raw.slice(1, -1);
         }
 
-        // Разбиваем на слова
+        // ��������� �� �����
         const rawWords = content.split(/[\s+]+/).filter(w => w);
         const words = rawWords.map(w => {
             let text = w.toLowerCase();
@@ -1918,7 +1918,7 @@
     function restoreVisualMarkers() {
         updateHighlights();
 
-        // Восстановить чекбоксы для сохраненных выделений
+        // ������������ �������� ��� ����������� ���������
         for (const sel of selections.values()) {
             if (sel.pageKey === currentPageKey && sel.rowId) {
                 ensureRowChecked(sel.rowId);
@@ -1988,7 +1988,7 @@
         if (redoBtn) redoBtn.disabled = (undoStack.currentIndex >= undoStack.stack.length - 1);
     }
 
-    // ==================== CHECKBOX УПРАВЛЕНИЕ ====================
+    // ==================== CHECKBOX ���������� ====================
 
     function getRowCheckbox(rowId) {
         const row = document.querySelector(`[data-yd-row-id="${rowId}"]`);
@@ -1996,16 +1996,16 @@
     }
 
     function clickCheckbox(cb, newState) {
-        // console.log('[YD-SQ] clickCheckbox вызван:', { currentState: cb.checked, targetState: newState });
+        // console.log('[YD-SQ] clickCheckbox ������:', { currentState: cb.checked, targetState: newState });
 
         if (cb.checked !== newState) {
             cb.click();
-            // console.log('[YD-SQ] Выполнен клик по чекбоксу');
+            // console.log('[YD-SQ] �������� ���� �� ��������');
 
-            // Проверка и fallback
+            // �������� � fallback
             setTimeout(() => {
                 if (cb.checked !== newState) {
-                    // console.warn('[YD-SQ] Клик не сработал, пробуем fallback');
+                    // console.warn('[YD-SQ] ���� �� ��������, ������� fallback');
                     cb.checked = newState;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -2054,7 +2054,7 @@
     }
 
 
-    // ==================== ИСТОРИЯ И ИМПОРТ ====================
+    // ==================== ������� � ������ ====================
 
     function addToSentHistory(display, matchType, pageNumbers = []) {
         const existing = sentHistory.find(s => s.raw === display);
@@ -2084,11 +2084,11 @@
     function normalizeMinusInput(rawInput) {
         let rawString = Array.isArray(rawInput) ? rawInput.join('\n') : String(rawInput);
 
-        // Поддержка формата "-слово1 -слово2" (пробел-дефис как разделитель)
-        // Заменяем " -" на "\n-" (если после дефиса не пробел)
+        // ��������� ������� "-�����1 -�����2" (������-����� ��� �����������)
+        // �������� " -" �� "\n-" (���� ����� ������ �� ������)
         rawString = rawString.replace(/\s-(?=[^\s])/g, '\n-');
 
-        // Разделители: новая строка, табуляция, запятая, точка с запятой
+        // �����������: ����� ������, ���������, �������, ����� � �������
         const parts = rawString.split(/[\n\t,;]+/);
         const normalized = new Set();
 
@@ -2096,8 +2096,8 @@
             part = part.trim();
             if (!part) continue;
 
-            // Удаляем ведущий дефис, если он есть (формат Яндекса: -слово)
-            // Но сохраняем структуру фразы
+            // ������� ������� �����, ���� �� ���� (������ �������: -�����)
+            // �� ��������� ��������� �����
             if (part.startsWith('-')) {
                 part = part.substring(1);
             }
@@ -2118,7 +2118,7 @@
             clipboardCopyNeeded: false
         };
 
-        // 1. Дубликаты
+        // 1. ���������
         for (const item of newSet) {
             if (!existingSet.has(item)) {
                 result.filteredSet.add(item);
@@ -2129,29 +2129,29 @@
             return result;
         }
 
-        // 2. Лимит длины (4000 символов)
+        // 2. ����� ����� (4000 ��������)
         const currentContent = Array.from(existingSet).join('\n');
         const newContent = Array.from(result.filteredSet).join('\n');
 
         if ((currentContent.length + newContent.length + 10) > 4000) {
             result.valid = false;
             result.clipboardCopyNeeded = true;
-            result.warnings.push('Превышен лимит поля (4000 симв).');
+            result.warnings.push('�������� ����� ���� (4000 ����).');
             return result;
         }
 
-        // 3. Вложенность
+        // 3. �����������
         const allItems = new Set([...existingSet, ...result.filteredSet]);
 
         for (const phrase of result.filteredSet) {
-            // Разбиваем фразу на слова
+            // ��������� ����� �� �����
             const words = phrase.split(/[\s+]+/);
             if (words.length > 1) {
                 for (const word of words) {
                     const cleanWord = word.replace(/[!\[\]""]/g, '').toLowerCase();
-                    // Проверяем, есть ли это слово как отдельный минус
+                    // ���������, ���� �� ��� ����� ��� ��������� �����
                     if (allItems.has(cleanWord) || allItems.has('!' + cleanWord)) {
-                        result.warnings.push(`Конфликт: фраза "${phrase}" содержит минус "${cleanWord}"`);
+                        result.warnings.push(`��������: ����� "${phrase}" �������� ����� "${cleanWord}"`);
                     }
                 }
             }
@@ -2170,26 +2170,26 @@
             if (validation.clipboardCopyNeeded) {
                 const textToCopy = Array.from(validation.filteredSet).join('\n');
                 await navigator.clipboard.writeText(textToCopy);
-                showYdsqNotification(validation.warnings.join('\n') + '\nСкопировано в буфер!', 'warn');
+                showYdsqNotification(validation.warnings.join('\n') + '\n����������� � �����!', 'warn');
             }
             return false;
         }
 
         if (validation.warnings.length > 0) {
-            const proceed = confirm(`Обнаружены предупреждения:\n${validation.warnings.join('\n')}\n\nВсё равно добавить?`);
+            const proceed = confirm(`���������� ��������������:\n${validation.warnings.join('\n')}\n\n�� ����� ��������?`);
             if (!proceed) return false;
         }
 
         if (validation.filteredSet.size === 0) {
-            return true; // Уже есть
+            return true; // ��� ����
         }
 
-        // Слияние
+        // �������
         const finalSet = new Set([...existingSet, ...validation.filteredSet]);
         const separator = input.tagName === 'TEXTAREA' ? '\n' : ', ';
         input.value = Array.from(finalSet).join(separator);
 
-        // События
+        // �������
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         input.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -2199,14 +2199,14 @@
 
 
     // ========================================
-    // СИНХРОНИЗАЦИЯ С НАСТРОЙКАМИ КАМПАНИИ
+    // ������������� � ����������� ��������
     // ========================================
 
     const SYNC_STORAGE_KEY = 'yd-sq-sync-pending';
     const SYNC_DATA_KEY = 'yd-sq-synced-minuses';
     const SYNC_RETURN_URL_KEY = 'yd-sq-sync-return-url';
 
-    // Toast уведомление для страницы настроек (где нет нашей панели)
+    // Toast ����������� ��� �������� �������� (��� ��� ����� ������)
     function showSyncStatusToast(message) {
         let toast = document.getElementById('yd-sync-toast');
         if (!toast) {
@@ -2235,46 +2235,46 @@
         toast.style.transform = 'translateY(0)';
     }
 
-    // Определяем URL настроек кампании из текущего URL статистики
+    // ���������� URL �������� �������� �� �������� URL ����������
     function getCampaignSettingsUrl() {
         const params = new URLSearchParams(window.location.search);
         const cid = params.get('cid');
         const ulogin = params.get('ulogin');
 
         if (!cid || !ulogin) {
-            log.warn('Не удалось определить cid или ulogin');
+            log.warn('�� ������� ���������� cid ��� ulogin');
             return null;
         }
 
-        // Пробуем найти ссылку "Изменить параметры" на странице
+        // ������� ����� ������ "�������� ���������" �� ��������
         const editLink = Array.from(document.querySelectorAll('a')).find(a =>
-            a.textContent.includes('Изменить параметры') ||
-            a.textContent.includes('Редактировать') ||
+            a.textContent.includes('�������� ���������') ||
+            a.textContent.includes('�������������') ||
             a.href?.includes('/edit')
         );
 
         if (editLink && editLink.href) {
-            log.info('Найдена ссылка на настройки:', editLink.href);
+            log.info('������� ������ �� ���������:', editLink.href);
             return editLink.href;
         }
 
-        // Формируем URL для wizard кампании (новый интерфейс)
-        // Это работает для большинства кампаний
+        // ��������� URL ��� wizard �������� (����� ���������)
+        // ��� �������� ��� ����������� ��������
         const wizardUrl = `https://direct.yandex.ru/wizard/campaigns/${cid}/edit/?ulogin=${ulogin}`;
-        log.info('Сформирован URL настроек (wizard):', wizardUrl);
+        log.info('����������� URL �������� (wizard):', wizardUrl);
         return wizardUrl;
     }
 
     // ========================================
-    // API ДЛЯ ПОЛУЧЕНИЯ МИНУС-СЛОВ КАМПАНИИ
+    // API ��� ��������� �����-���� ��������
     // ========================================
 
-    // Получение минус-слов кампании через API
+    // ��������� �����-���� �������� ����� API
     async function fetchCampaignMinusKeywords(ulogin, campaignId) {
         try {
             const url = `https://direct.yandex.ru/web-api/uac/campaign/${campaignId}?ulogin=${encodeURIComponent(ulogin)}`;
 
-            log.sync('Запрос минус-слов кампании:', url);
+            log.sync('������ �����-���� ��������:', url);
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -2293,39 +2293,39 @@
 
             if (data.success && data.result) {
                 const minusKeywords = data.result.minus_keywords || [];
-                log.sync(`Получено ${minusKeywords.length} минус-слов из API`);
+                log.sync(`�������� ${minusKeywords.length} �����-���� �� API`);
                 return minusKeywords;
             } else {
-                log.error('API вернул ошибку:', data);
+                log.error('API ������ ������:', data);
                 return null;
             }
         } catch (error) {
-            log.error('Ошибка получения минус-слов:', error.message || error);
+            log.error('������ ��������� �����-����:', error.message || error);
             return null;
         }
     }
 
-    // Начать синхронизацию - через API (без перехода на другую страницу)
+    // ������ ������������� - ����� API (��� �������� �� ������ ��������)
     async function startCampaignSync() {
         const params = new URLSearchParams(window.location.search);
         const campaignId = params.get('cid');
         const ulogin = params.get('ulogin');
 
         if (!campaignId || !ulogin) {
-            showYdsqNotification('Не удалось определить параметры кампании', 'error');
+            showYdsqNotification('�� ������� ���������� ��������� ��������', 'error');
             return;
         }
 
-        // Показываем анимацию и уведомление
+        // ���������� �������� � �����������
         const syncBtn = document.getElementById('yd-sq-sync-campaign');
         if (syncBtn) {
             syncBtn.classList.add('syncing');
         }
 
-        showYdsqNotification('🔄 Загрузка минус-слов кампании...', 'info');
+        showYdsqNotification('?? �������� �����-���� ��������...', 'info');
 
         try {
-            // Получаем минус-слова через API
+            // �������� �����-����� ����� API
             const minusKeywords = await fetchCampaignMinusKeywords(ulogin, campaignId);
 
             if (syncBtn) {
@@ -2333,68 +2333,68 @@
             }
 
             if (minusKeywords === null) {
-                showYdsqNotification('❌ Ошибка загрузки минус-слов', 'error');
+                showYdsqNotification('? ������ �������� �����-����', 'error');
                 return;
             }
 
             if (minusKeywords.length === 0) {
-                showYdsqNotification('ℹ️ В кампании нет минус-слов', 'info');
+                showYdsqNotification('?? � �������� ��� �����-����', 'info');
                 return;
             }
 
-            // Применяем минус-слова и получаем статистику
+            // ��������� �����-����� � �������� ����������
             const result = applySyncedMinuses(minusKeywords);
 
             if (result.added > 0) {
-                showYdsqNotification(`✅ Добавлено ${result.added} новых минус-слов`, 'success');
+                showYdsqNotification(`? ��������� ${result.added} ����� �����-����`, 'success');
             } else {
-                showYdsqNotification(`ℹ️ Все ${minusKeywords.length} минус-слов уже импортированы`, 'info');
+                showYdsqNotification(`?? ��� ${minusKeywords.length} �����-���� ��� �������������`, 'info');
             }
 
         } catch (error) {
             if (syncBtn) {
                 syncBtn.classList.remove('syncing');
             }
-            log.error('Ошибка синхронизации:', error.message || error);
-            console.error('[YD-SQ] Ошибка синхронизации:', error);
-            showYdsqNotification('❌ Ошибка синхронизации', 'error');
+            log.error('������ �������������:', error.message || error);
+            console.error('[YD-SQ] ������ �������������:', error);
+            showYdsqNotification('? ������ �������������', 'error');
         }
     }
 
-    // Флаг для защиты от двойного вызова
+    // ���� ��� ������ �� �������� ������
     let isSyncingCampaign = false;
 
-    // Применение синхронизированных минус-слов
+    // ���������� ������������������ �����-����
     function applySyncedMinuses(minusKeywords) {
         try {
-            log.sync('Начало применения минус-слов, количество:', minusKeywords.length);
+            log.sync('������ ���������� �����-����, ����������:', minusKeywords.length);
             log.sync('importedMinuses.length:', importedMinuses.length);
 
-            // Проверяем что это массив
+            // ��������� ��� ��� ������
             if (!Array.isArray(minusKeywords)) {
-                log.error('minusKeywords не является массивом!');
+                log.error('minusKeywords �� �������� ��������!');
                 return { added: 0, existing: 0 };
             }
 
-            // Создаём Set существующих минусов для быстрой проверки
+            // ������ Set ������������ ������� ��� ������� ��������
             const existingSet = new Set(
                 importedMinuses.map(item => item.raw.toLowerCase().trim())
             );
-            log.sync('Существующих минусов:', existingSet.size);
+            log.sync('������������ �������:', existingSet.size);
 
-            // Добавляем новые минусы
+            // ��������� ����� ������
             const added = [];
             const alreadyExists = [];
 
-            log.sync('Начинаю цикл обработки...');
+            log.sync('������� ���� ���������...');
 
             for (let i = 0; i < minusKeywords.length; i++) {
                 try {
                     const keyword = minusKeywords[i];
 
-                    // Логируем каждые 100 элементов
+                    // �������� ������ 100 ���������
                     if (i % 100 === 0) {
-                        log.sync(`Обработано ${i} из ${minusKeywords.length}`);
+                        log.sync(`���������� ${i} �� ${minusKeywords.length}`);
                     }
 
                     if (typeof keyword !== 'string') {
@@ -2405,7 +2405,7 @@
                     if (!normalized) continue;
 
                     if (!existingSet.has(normalized)) {
-                        // Добавляем в массив importedMinuses как объект
+                        // ��������� � ������ importedMinuses ��� ������
                         importedMinuses.push({
                             id: `api-sync:${Date.now()}_${i}`,
                             raw: keyword.trim(),
@@ -2418,69 +2418,69 @@
                         alreadyExists.push(normalized);
                     }
                 } catch (innerError) {
-                    log.error(`Ошибка на элементе ${i}:`, innerError.message);
+                    log.error(`������ �� �������� ${i}:`, innerError.message);
                 }
             }
 
-            log.sync(`Синхронизация: добавлено ${added.length}, уже было ${alreadyExists.length}`);
-            log.sync('Новый размер importedMinuses:', importedMinuses.length);
+            log.sync(`�������������: ��������� ${added.length}, ��� ���� ${alreadyExists.length}`);
+            log.sync('����� ������ importedMinuses:', importedMinuses.length);
 
             if (added.length > 0) {
                 try {
-                    log.sync('Сохраняю данные...');
+                    log.sync('�������� ������...');
                     saveData();
-                    log.sync('saveData() успешно');
+                    log.sync('saveData() �������');
                 } catch (saveErr) {
-                    log.error('Ошибка в saveData():', saveErr.message);
+                    log.error('������ � saveData():', saveErr.message);
                     console.error('[YD-SQ] saveData error:', saveErr);
                 }
 
                 try {
-                    log.sync('Обновляю подсветку...');
+                    log.sync('�������� ���������...');
                     updateHighlights();
-                    log.sync('updateHighlights() успешно');
+                    log.sync('updateHighlights() �������');
                 } catch (hlErr) {
-                    log.error('Ошибка в updateHighlights():', hlErr.message);
+                    log.error('������ � updateHighlights():', hlErr.message);
                     console.error('[YD-SQ] updateHighlights error:', hlErr);
                 }
 
                 try {
-                    log.sync('Обновляю UI...');
+                    log.sync('�������� UI...');
                     renderImportedMinuses();
-                    log.sync('renderImportedMinuses() успешно');
+                    log.sync('renderImportedMinuses() �������');
                 } catch (uiErr) {
-                    log.error('Ошибка в renderImportedMinuses():', uiErr.message);
+                    log.error('������ � renderImportedMinuses():', uiErr.message);
                     console.error('[YD-SQ] renderImportedMinuses error:', uiErr);
                 }
 
-                log.sync('Готово!');
+                log.sync('������!');
             }
 
             return { added: added.length, existing: alreadyExists.length };
         } catch (error) {
-            log.error('Ошибка в applySyncedMinuses:', error.message || error);
-            console.error('[YD-SQ] Ошибка в applySyncedMinuses:', error);
+            log.error('������ � applySyncedMinuses:', error.message || error);
+            console.error('[YD-SQ] ������ � applySyncedMinuses:', error);
             throw error;
         }
     }
 
 
-    // Парсинг минус-фраз на странице настроек (вызывается на странице настроек)
+    // ������� �����-���� �� �������� �������� (���������� �� �������� ��������)
     function parseMinusesFromSettingsPage() {
         const minuses = [];
 
-        // Тип 1: Wizard кампании (textarea с contenteditable)
-        // Селектор: [data-testid="MinusKeywords.SingleInput"]
+        // ��� 1: Wizard �������� (textarea � contenteditable)
+        // ��������: [data-testid="MinusKeywords.SingleInput"]
         const wizardTextarea = document.querySelector('[data-testid="MinusKeywords.SingleInput"]');
         if (wizardTextarea) {
-            log.info('Найден wizard формат минус-фраз');
+            log.info('������ wizard ������ �����-����');
             const html = wizardTextarea.innerHTML;
-            // Минусы разделены <br>, формат: -!слово<br>-слово2<br>
+            // ������ ��������� <br>, ������: -!�����<br>-�����2<br>
             const items = html.split(/<br\s*\/?>/i).filter(Boolean);
             items.forEach(item => {
-                // Убираем HTML теги и пробелы
+                // ������� HTML ���� � �������
                 let clean = item.replace(/<[^>]*>/g, '').trim();
-                // Убираем начальный минус если есть
+                // ������� ��������� ����� ���� ����
                 if (clean.startsWith('-')) {
                     clean = clean.substring(1).trim();
                 }
@@ -2488,21 +2488,21 @@
                     minuses.push(clean);
                 }
             });
-            log.info(`Распарсено ${minuses.length} минусов из wizard формата`);
+            log.info(`���������� ${minuses.length} ������� �� wizard �������`);
         }
 
-        // Тип 2: DNA кампании (теги)
-        // Селектор: [data-testid^="ExceptionsEditor.Tag_phrase."]
+        // ��� 2: DNA �������� (����)
+        // ��������: [data-testid^="ExceptionsEditor.Tag_phrase."]
         const dnaTags = document.querySelectorAll('[data-testid^="ExceptionsEditor.Tag_phrase."]');
         if (dnaTags.length > 0) {
-            log.info('Найден DNA формат минус-фраз');
+            log.info('������ DNA ������ �����-����');
             dnaTags.forEach(tag => {
-                // Ищем текст внутри: span > div или просто textContent
+                // ���� ����� ������: span > div ��� ������ textContent
                 const textDiv = tag.querySelector('span.dc-Text__text div');
                 let phrase = textDiv ? textDiv.textContent.trim() : '';
 
                 if (!phrase) {
-                    // Попробуем из data-testid
+                    // ��������� �� data-testid
                     const testId = tag.getAttribute('data-testid') || '';
                     const match = testId.match(/ExceptionsEditor\.Tag_phrase\.(.+)$/);
                     if (match) {
@@ -2514,54 +2514,54 @@
                     minuses.push(phrase);
                 }
             });
-            log.info(`Распарсено ${minuses.length} минусов из DNA формата`);
+            log.info(`���������� ${minuses.length} ������� �� DNA �������`);
         }
 
         return minuses;
     }
 
-    // Проверка: находимся ли мы на странице настроек кампании
+    // ��������: ��������� �� �� �� �������� �������� ��������
     function isOnCampaignSettingsPage() {
         const url = window.location.href;
         return url.includes('/wizard/campaigns/') && url.includes('/edit') ||
             url.includes('/dna/campaigns-edit');
     }
 
-    // Обработка страницы настроек (парсинг и возврат)
+    // ��������� �������� �������� (������� � �������)
     function handleSettingsPageSync() {
         if (!isOnCampaignSettingsPage()) return false;
 
         const syncPending = sessionStorage.getItem(SYNC_STORAGE_KEY);
         if (syncPending !== 'true') return false;
 
-        log.info('Обнаружена страница настроек с pending sync');
+        log.info('���������� �������� �������� � pending sync');
 
-        // Показываем уведомление на странице настроек
-        showSyncStatusToast('🔄 Ожидание загрузки страницы...');
+        // ���������� ����������� �� �������� ��������
+        showSyncStatusToast('?? �������� �������� ��������...');
 
-        // Ждём полной загрузки страницы
+        // ��� ������ �������� ��������
         let attempts = 0;
         const maxAttempts = 30;
         let lastCount = 0;
-        let stableCount = 0; // Сколько раз подряд количество было стабильным
-        let pageLoadedButEmpty = 0; // Счетчик: страница загружена, но минусов нет
+        let stableCount = 0; // ������� ��� ������ ���������� ���� ����������
+        let pageLoadedButEmpty = 0; // �������: �������� ���������, �� ������� ���
 
         const tryParse = () => {
             attempts++;
             const minuses = parseMinusesFromSettingsPage();
             const currentCount = minuses.length;
 
-            // Проверяем, загружена ли страница полностью (есть ключевые элементы UI)
-            // Расширенные селекторы для разных типов страниц настроек
+            // ���������, ��������� �� �������� ��������� (���� �������� �������� UI)
+            // ����������� ��������� ��� ������ ����� ������� ��������
             const hasMinusContainer = document.querySelector('[data-testid="MinusKeywords.SingleInput"]') ||
                 document.querySelector('[data-testid^="ExceptionsEditor"]') ||
                 document.querySelector('.minus-keywords-editor') ||
                 document.querySelector('[class*="MinusKeywords"]') ||
-                // Дополнительные селекторы для определения загрузки формы
+                // �������������� ��������� ��� ����������� �������� �����
                 document.querySelector('[data-testid*="minus"]') ||
                 document.querySelector('[data-testid*="Minus"]');
 
-            // Проверяем что страница настроек загружена (есть форма редактирования)
+            // ��������� ��� �������� �������� ��������� (���� ����� ��������������)
             const hasFormLoaded = document.querySelector('button[type="submit"]') ||
                 document.querySelector('[data-testid="submit-button"]') ||
                 document.querySelector('button[class*="Save"]') ||
@@ -2572,12 +2572,12 @@
             const hasPageLoaded = document.querySelector('[data-testid]') !== null &&
                 document.readyState === 'complete';
 
-            // Логируем состояние для отладки (каждые 5 попыток)
+            // �������� ��������� ��� ������� (������ 5 �������)
             if (attempts % 5 === 0) {
-                console.log(`[YD-SQ] 🔍 SYNC попытка ${attempts}: minuses=${currentCount}, hasMinusContainer=${!!hasMinusContainer}, hasFormLoaded=${!!hasFormLoaded}, hasPageLoaded=${hasPageLoaded}`);
+                console.log(`[YD-SQ] ?? SYNC ������� ${attempts}: minuses=${currentCount}, hasMinusContainer=${!!hasMinusContainer}, hasFormLoaded=${!!hasFormLoaded}, hasPageLoaded=${hasPageLoaded}`);
             }
 
-            // Проверяем стабильность: количество должно быть одинаковым 3 раза подряд
+            // ��������� ������������: ���������� ������ ���� ���������� 3 ���� ������
             if (currentCount > 0 && currentCount === lastCount) {
                 stableCount++;
             } else {
@@ -2585,14 +2585,14 @@
             }
             lastCount = currentCount;
 
-            // Быстрое завершение: если форма загружена, но минусов нет
-            // Условие: страница загружена И (есть контейнер минусов ИЛИ есть форма редактирования) И минусов 0
+            // ������� ����������: ���� ����� ���������, �� ������� ���
+            // �������: �������� ��������� � (���� ��������� ������� ��� ���� ����� ��������������) � ������� 0
             if (hasPageLoaded && (hasMinusContainer || hasFormLoaded) && currentCount === 0) {
                 pageLoadedButEmpty++;
                 if (pageLoadedButEmpty >= 3) {
-                    // Страница загружена, но минусов нет
-                    console.log(`[YD-SQ] ✅ SYNC: Форма загружена, минусов нет (попытка ${attempts})`);
-                    showSyncStatusToast('ℹ️ Минус-фразы не найдены (пустой список). Возврат...');
+                    // �������� ���������, �� ������� ���
+                    console.log(`[YD-SQ] ? SYNC: ����� ���������, ������� ��� (������� ${attempts})`);
+                    showSyncStatusToast('?? �����-����� �� ������� (������ ������). �������...');
                     finishSync(minuses, 0);
                     return;
                 }
@@ -2600,32 +2600,32 @@
                 pageLoadedButEmpty = 0;
             }
 
-            // Показываем прогресс
+            // ���������� ��������
             if (currentCount > 0) {
-                showSyncStatusToast(`🔄 Загрузка: ${currentCount} минусов (проверка ${stableCount}/3)...`);
+                showSyncStatusToast(`?? ��������: ${currentCount} ������� (�������� ${stableCount}/3)...`);
             } else if (hasMinusContainer) {
-                showSyncStatusToast(`🔄 Контейнер найден, ожидание данных... (${attempts}/${maxAttempts})`);
+                showSyncStatusToast(`?? ��������� ������, �������� ������... (${attempts}/${maxAttempts})`);
             } else {
-                showSyncStatusToast(`🔄 Ожидание загрузки страницы... (${attempts}/${maxAttempts})`);
+                showSyncStatusToast(`?? �������� �������� ��������... (${attempts}/${maxAttempts})`);
             }
 
-            // Успех: данные стабильны 3 попытки подряд ИЛИ достигли максимума
+            // �����: ������ ��������� 3 ������� ������ ��� �������� ���������
             if ((currentCount > 0 && stableCount >= 3) || attempts >= maxAttempts) {
                 if (currentCount === 0) {
-                    showSyncStatusToast('⚠️ Минус-фразы не найдены. Возврат...');
+                    showSyncStatusToast('?? �����-����� �� �������. �������...');
                 } else {
-                    showSyncStatusToast(`✅ Синхронизировано: ${currentCount} минусов. Возврат...`);
+                    showSyncStatusToast(`? ����������������: ${currentCount} �������. �������...`);
                 }
                 finishSync(minuses, currentCount);
                 return;
             }
 
-            // Ждём ещё (1 секунда между попытками)
+            // ��� ��� (1 ������� ����� ���������)
             setTimeout(tryParse, 1000);
         };
 
         const finishSync = (minuses, currentCount) => {
-            // Сохраняем результат
+            // ��������� ���������
             const syncData = {
                 minuses: minuses,
                 timestamp: Date.now(),
@@ -2633,16 +2633,16 @@
             };
             localStorage.setItem(SYNC_DATA_KEY, JSON.stringify(syncData));
 
-            // Очищаем флаг
+            // ������� ����
             sessionStorage.removeItem(SYNC_STORAGE_KEY);
 
-            // Получаем URL для возврата
+            // �������� URL ��� ��������
             const returnUrl = sessionStorage.getItem(SYNC_RETURN_URL_KEY);
             sessionStorage.removeItem(SYNC_RETURN_URL_KEY);
 
-            log.success(`Синхронизировано ${currentCount} минусов, возврат...`);
+            log.success(`���������������� ${currentCount} �������, �������...`);
 
-            // Возвращаемся назад с задержкой для показа уведомления
+            // ������������ ����� � ��������� ��� ������ �����������
             setTimeout(() => {
                 if (returnUrl) {
                     window.location.href = returnUrl;
@@ -2652,12 +2652,12 @@
             }, 1500);
         };
 
-        // Начинаем парсинг через 2 секунды для загрузки страницы
+        // �������� ������� ����� 2 ������� ��� �������� ��������
         setTimeout(tryParse, 2000);
         return true;
     }
 
-    // Проверка и применение синхронизированных данных (на странице статистики)
+    // �������� � ���������� ������������������ ������ (�� �������� ����������)
     function checkAndApplySyncedData() {
         const syncDataStr = localStorage.getItem(SYNC_DATA_KEY);
         if (!syncDataStr) return false;
@@ -2665,20 +2665,20 @@
         try {
             const syncData = JSON.parse(syncDataStr);
 
-            // Проверяем что данные свежие (не старше 5 минут)
+            // ��������� ��� ������ ������ (�� ������ 5 �����)
             if (Date.now() - syncData.timestamp > 5 * 60 * 1000) {
                 localStorage.removeItem(SYNC_DATA_KEY);
                 return false;
             }
 
             const syncedMinuses = syncData.minuses || [];
-            log.info(`Применяем синхронизированные данные: ${syncedMinuses.length} минусов`);
+            log.info(`��������� ������������������ ������: ${syncedMinuses.length} �������`);
 
-            // ПОЛНАЯ ЗАМЕНА: очищаем текущий список и заполняем из кампании
+            // ������ ������: ������� ������� ������ � ��������� �� ��������
             const oldCount = importedMinuses.length;
-            importedMinuses.length = 0; // Очищаем
+            importedMinuses.length = 0; // �������
 
-            // Добавляем все минусы из кампании
+            // ��������� ��� ������ �� ��������
             for (const phrase of syncedMinuses) {
                 importedMinuses.push({
                     id: `sync:${Date.now()}_${Math.random()}`,
@@ -2688,27 +2688,27 @@
                 });
             }
 
-            log.success(`Синхронизировано ${importedMinuses.length} минусов (было ${oldCount})`);
-            console.log('[YD-SQ] importedMinuses после синхронизации:', importedMinuses.slice(0, 5));
+            log.success(`���������������� ${importedMinuses.length} ������� (���� ${oldCount})`);
+            console.log('[YD-SQ] importedMinuses ����� �������������:', importedMinuses.slice(0, 5));
 
-            // Сохраняем время последней синхронизации
+            // ��������� ����� ��������� �������������
             localStorage.setItem('yd-sq-last-sync-time', syncData.timestamp.toString());
 
-            // Очищаем данные синхронизации
+            // ������� ������ �������������
             localStorage.removeItem(SYNC_DATA_KEY);
 
-            // Обновляем кэш минусов кампании
+            // ��������� ��� ������� ��������
             rebuildCampaignMinusList();
 
-            // Обновляем UI
+            // ��������� UI
             syncLocalToGlobal();
             renderImportedMinuses();
             updateHighlights();
 
-            // Показываем результат
-            showYdsqNotification(`✅ В кампании: ${syncedMinuses.length} минусов`, 'success');
+            // ���������� ���������
+            showYdsqNotification(`? � ��������: ${syncedMinuses.length} �������`, 'success');
 
-            // Убираем анимацию с кнопки
+            // ������� �������� � ������
             const syncBtn = document.getElementById('yd-sq-sync-campaign');
             if (syncBtn) {
                 syncBtn.classList.remove('syncing');
@@ -2716,7 +2716,7 @@
 
             return true;
         } catch (e) {
-            log.error('Ошибка применения синхронизированных данных:', e);
+            log.error('������ ���������� ������������������ ������:', e);
             localStorage.removeItem(SYNC_DATA_KEY);
             return false;
         }
@@ -2729,11 +2729,11 @@
             const newPhrases = normalizeMinusInput(text);
 
             if (newPhrases.size === 0) {
-                showYdsqNotification('В буфере не найдено минусов', 'warn');
+                showYdsqNotification('� ������ �� ������� �������', 'warn');
                 return { success: false, count: 0 };
             }
 
-            // Собираем существующие для проверки дубликатов
+            // �������� ������������ ��� �������� ����������
             const existingRaw = new Set(importedMinuses.map(imp => imp.raw.toLowerCase().trim()));
 
             const newItems = [];
@@ -2743,10 +2743,10 @@
                     newItems.push({
                         id: `imp:${Date.now()}_${Math.random()}`,
                         raw: phrase,
-                        source: 'clipboard', // Различаем импортированные
+                        source: 'clipboard', // ��������� ���������������
                         importedAt: Date.now()
                     });
-                    existingRaw.add(normalized); // Добавляем чтобы не дублировать в текущем импорте
+                    existingRaw.add(normalized); // ��������� ����� �� ����������� � ������� �������
                 }
             }
 
@@ -2759,51 +2759,51 @@
                 updateUI();
 
                 const duplicates = newPhrases.size - newItems.length;
-                let msg = `Импортировано ${newItems.length} минусов`;
+                let msg = `������������� ${newItems.length} �������`;
                 if (duplicates > 0) {
-                    msg += ` (${duplicates} дубликатов пропущено)`;
+                    msg += ` (${duplicates} ���������� ���������)`;
                 }
                 showYdsqNotification(msg, 'success');
                 return { success: true, count: newItems.length };
             } else {
-                showYdsqNotification('Все минусы уже есть в списке', 'info');
+                showYdsqNotification('��� ������ ��� ���� � ������', 'info');
                 return { success: false, count: 0 };
             }
         } catch (err) {
-            console.error('[YD-SQ] Ошибка импорта:', err);
-            showYdsqNotification('Ошибка чтения буфера обмена', 'error');
+            console.error('[YD-SQ] ������ �������:', err);
+            showYdsqNotification('������ ������ ������ ������', 'error');
             return { success: false, count: 0, error: err };
         }
     }
 
     function clearImportedMinuses() {
         if (importedMinuses.length === 0) {
-            showYdsqNotification('Список импортированных пуст', 'info');
+            showYdsqNotification('������ ��������������� ����', 'info');
             return;
         }
 
-        const confirmed = confirm(`Удалить все импортированные минуса (${importedMinuses.length} шт)?`);
+        const confirmed = confirm(`������� ��� ��������������� ������ (${importedMinuses.length} ��)?`);
         if (!confirmed) return;
 
         importedMinuses = [];
         syncLocalToGlobal();
         updateHighlights();
         updateUI();
-        showYdsqNotification('Список импортированных очищен', 'success');
+        showYdsqNotification('������ ��������������� ������', 'success');
     }
 
     async function copyImportedToClipboard() {
         const activeMinuses = importedMinuses.filter(imp => !imp.deleted);
 
         if (activeMinuses.length === 0) {
-            showYdsqNotification('Нет активных минусов для копирования', 'warn');
+            showYdsqNotification('��� �������� ������� ��� �����������', 'warn');
             return;
         }
 
-        // Конвертируем каждый минус в формат с префиксом "-"
+        // ������������ ������ ����� � ������ � ��������� "-"
         const formatted = activeMinuses.map(imp => {
             const raw = imp.raw;
-            // Сохраняем оригинальный формат
+            // ��������� ������������ ������
             return `-${raw}`;
         });
 
@@ -2811,23 +2811,23 @@
 
         try {
             await navigator.clipboard.writeText(text);
-            showYdsqNotification(`Скопировано ${activeMinuses.length} минусов`, 'success');
+            showYdsqNotification(`����������� ${activeMinuses.length} �������`, 'success');
         } catch (err) {
-            console.error('[YD-SQ] Ошибка копирования:', err);
-            showYdsqNotification('Ошибка копирования в буфер', 'error');
+            console.error('[YD-SQ] ������ �����������:', err);
+            showYdsqNotification('������ ����������� � �����', 'error');
         }
     }
 
-    // ==================== UI ПАНЕЛЬ ====================
+    // ==================== UI ������ ====================
 
     function createPanel() {
         const existingPanel = document.getElementById('yd-sq-panel');
         const existingPill = document.getElementById('yd-sq-pill');
 
-        // Если панель и pill уже существуют - не пересоздаём
+        // ���� ������ � pill ��� ���������� - �� ����������
         if (existingPanel && existingPill) {
-            // Проверяем что хотя бы одно из них видимо
-            // Если оба скрыты - показываем панель
+            // ��������� ��� ���� �� ���� �� ��� ������
+            // ���� ��� ������ - ���������� ������
             const panelVisible = existingPanel.style.display !== 'none';
             const pillVisible = existingPill.style.display !== 'none';
 
@@ -2854,14 +2854,14 @@
                     <span class="yd-sq-title">YD Helper</span>
                 </div>
                 <div class="yd-sq-header-right">
-                    <button id="yd-sq-help-btn" class="yd-sq-icon-btn" title="Горячие клавиши">
+                    <button id="yd-sq-help-btn" class="yd-sq-icon-btn" title="������� �������">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
                             <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
                     </button>
-                    <button id="yd-sq-panel-toggle" class="yd-sq-icon-btn" title="Свернуть">
+                    <button id="yd-sq-panel-toggle" class="yd-sq-icon-btn" title="��������">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
                         </svg>
@@ -2871,21 +2871,21 @@
 
             <!-- Body (flex container) -->
             <div id="yd-sq-panel-body" class="yd-sq-body">
-                <!-- Section: ВЫБРАНО -->
+                <!-- Section: ������� -->
                 <div class="yd-sq-section yd-sq-section-selected">
                     <div class="yd-sq-section-header">
                         <div class="yd-sq-section-header-left">
-                            <span class="yd-sq-section-label">ВЫБРАНО</span>
+                            <span class="yd-sq-section-label">�������</span>
                             <span id="yd-sq-global-count" class="yd-sq-badge">0</span>
                         </div>
                         <div class="yd-sq-section-header-right">
-                            <button id="yd-sq-copy-selected" class="yd-sq-icon-btn-sm" title="Копировать">
+                            <button id="yd-sq-copy-selected" class="yd-sq-icon-btn-sm" title="����������">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                 </svg>
                             </button>
-                            <button id="yd-sq-clear-all" class="yd-sq-icon-btn-sm" title="Очистить всё">
+                            <button id="yd-sq-clear-all" class="yd-sq-icon-btn-sm" title="�������� ��">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <polyline points="3 6 5 6 21 6"/>
                                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -2896,20 +2896,20 @@
                     <div id="yd-sq-list" class="yd-sq-list"></div>
                 </div>
 
-                <!-- Section: В КАМПАНИИ (Accordion) -->
+                <!-- Section: � �������� (Accordion) -->
                 <div id="yd-sq-imported-section" class="yd-sq-section yd-sq-accordion">
                     <div class="yd-sq-accordion-header" id="yd-sq-imported-toggle">
                         <div class="yd-sq-accordion-header-left">
-                            <span class="yd-sq-section-label-muted">В КАМПАНИИ</span>
+                            <span class="yd-sq-section-label-muted">� ��������</span>
                             <span id="yd-sq-imported-count" class="yd-sq-badge-muted">0</span>
                             <svg class="yd-sq-accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M6 9l6 6 6-6"/>
                             </svg>
                         </div>
                         <div class="yd-sq-section-header-right">
-                            <!-- Dropdown меню вместо 4 отдельных кнопок -->
+                            <!-- Dropdown ���� ������ 4 ��������� ������ -->
                             <div class="yd-sq-dropdown" id="yd-sq-imported-menu">
-                                <button class="yd-sq-icon-btn-sm yd-sq-dropdown-trigger" title="Действия">
+                                <button class="yd-sq-icon-btn-sm yd-sq-dropdown-trigger" title="��������">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                         <circle cx="12" cy="5" r="2"/>
                                         <circle cx="12" cy="12" r="2"/>
@@ -2922,14 +2922,14 @@
                                             <rect x="9" y="9" width="13" height="13" rx="2"/>
                                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                         </svg>
-                                        <span>Копировать</span>
+                                        <span>����������</span>
                                     </button>
                                     <button class="yd-sq-dropdown-item" id="yd-sq-load-clipboard">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                                             <rect x="8" y="2" width="8" height="4" rx="1"/>
                                         </svg>
-                                        <span>Вставить из буфера</span>
+                                        <span>�������� �� ������</span>
                                     </button>
                                     <div class="yd-sq-dropdown-divider"></div>
                                     <button class="yd-sq-dropdown-item yd-sq-dropdown-item-danger" id="yd-sq-clear-imported">
@@ -2938,7 +2938,7 @@
                                             <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
                                         </svg>
-                                        <span>Очистить</span>
+                                        <span>��������</span>
                                     </button>
                                 </div>
                             </div>
@@ -2956,9 +2956,9 @@
                             <line x1="22" y1="2" x2="11" y2="13"/>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                         </svg>
-                        <span>Отправить в Директ</span>
+                        <span>��������� � ������</span>
                     </button>
-                    <button id="yd-sq-sync-all" class="yd-sq-btn-icon" title="Синхронизировать минус-слова кампании">
+                    <button id="yd-sq-sync-all" class="yd-sq-btn-icon" title="���������������� �����-����� ��������">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
                             <path d="M21 3v5h-5"/>
@@ -2972,10 +2972,10 @@
 
             <!-- Help Tooltip -->
             <div id="yd-sq-help-tooltip" class="yd-sq-help-tooltip" style="display:none;">
-                <div class="yd-sq-help-title">Горячие клавиши</div>
-                <div class="yd-sq-help-row"><kbd>Клик</kbd> — мягкое совпадение</div>
-                <div class="yd-sq-help-row"><kbd>Alt+Клик</kbd> — строгое (!)</div>
-                <div class="yd-sq-help-row"><kbd>2×Клик</kbd> — режим фразы</div>
+                <div class="yd-sq-help-title">������� �������</div>
+                <div class="yd-sq-help-row"><kbd>����</kbd> � ������ ����������</div>
+                <div class="yd-sq-help-row"><kbd>Alt+����</kbd> � ������� (!)</div>
+                <div class="yd-sq-help-row"><kbd>2?����</kbd> � ����� �����</div>
             </div>
 
             <!-- Resize handles -->
@@ -2989,7 +2989,7 @@
             <div class="yd-sq-resize-handle yd-sq-resize-sw" data-resize="sw"></div>
         `;
 
-        // Floating Pill (свёрнутое состояние)
+        // Floating Pill (�������� ���������)
         const pill = document.createElement('div');
         pill.id = 'yd-sq-pill';
         pill.className = 'yd-sq-pill';
@@ -3006,38 +3006,38 @@
 
         document.body.appendChild(panel);
 
-        // Применить позицию
+        // ��������� �������
         panel.style.position = 'fixed';
         panel.style.left = panelPosition.left;
         panel.style.right = panelPosition.right;
         panel.style.top = panelPosition.top;
 
-        // Обработчики
+        // �����������
         // Toggle panel -> Floating Pill with animation
         document.getElementById('yd-sq-panel-toggle').addEventListener('click', () => {
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
             const helpTooltip = document.getElementById('yd-sq-help-tooltip');
 
-            console.log('[YD-SQ] 🔽 СВОРАЧИВАНИЕ: начало');
+            console.log('[YD-SQ] ?? ������������: ������');
 
             if (!pill) {
-                console.error('[YD-SQ] ❌ Pill не найден!');
+                console.error('[YD-SQ] ? Pill �� ������!');
                 return;
             }
 
             helpTooltip.style.display = 'none';
 
-            // Анимация сворачивания
+            // �������� ������������
             panel.classList.add('yd-sq-panel-minimizing');
             setTimeout(() => {
                 panel.style.display = 'none';
                 panel.classList.remove('yd-sq-panel-minimizing');
 
-                // Сбрасываем сохранённую позицию чтобы pill появился в стандартном месте
+                // ���������� ���������� ������� ����� pill �������� � ����������� �����
                 localStorage.removeItem('yd-sq-pill-position');
 
-                // Показываем pill в правом нижнем углу (стандартная позиция)
+                // ���������� pill � ������ ������ ���� (����������� �������)
                 pill.style.cssText = '';
                 pill.style.display = 'flex';
                 pill.style.position = 'fixed';
@@ -3053,7 +3053,7 @@
                 pill.classList.add('yd-sq-pill-appear');
                 setTimeout(() => pill.classList.remove('yd-sq-pill-appear'), 300);
 
-                console.log('[YD-SQ] 🔽 СВОРАЧИВАНИЕ: pill показан', {
+                console.log('[YD-SQ] ?? ������������: pill �������', {
                     display: pill.style.display,
                     position: pill.style.position,
                     bottom: pill.style.bottom,
@@ -3066,55 +3066,55 @@
                 });
             }, 200);
 
-            // Обновляем счётчик на pill
+            // ��������� ������� �� pill
             updatePillCount();
         });
 
         // Pill click -> Restore panel
         document.getElementById('yd-sq-pill').addEventListener('click', (e) => {
-            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: клик по pill');
+            console.log('[YD-SQ] ?? ��������������: ���� �� pill');
 
-            // Игнорируем если это drag
+            // ���������� ���� ��� drag
             if (e.target.closest('.yd-sq-pill').classList.contains('yd-sq-pill-dragging')) {
-                console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: пропуск (drag)');
+                console.log('[YD-SQ] ?? ��������������: ������� (drag)');
                 return;
             }
 
             const panel = document.getElementById('yd-sq-panel');
             const pill = document.getElementById('yd-sq-pill');
 
-            // Скрываем pill
+            // �������� pill
             pill.style.display = 'none';
 
-            // Восстанавливаем панель с анимацией
+            // ��������������� ������ � ���������
             panel.classList.remove('yd-sq-panel-minimizing');
             panel.style.display = 'flex';
             panel.style.opacity = '1';
             panel.style.transform = 'none';
             panel.style.visibility = 'visible';
 
-            // Запускаем анимацию появления
+            // ��������� �������� ���������
             panel.classList.add('yd-sq-panel-appearing');
             setTimeout(() => panel.classList.remove('yd-sq-panel-appearing'), 400);
 
-            // Проверяем что панель в видимой области
+            // ��������� ��� ������ � ������� �������
             const rect = panel.getBoundingClientRect();
             if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
-                // Панель за экраном - возвращаем в стандартную позицию
-                console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель за экраном, возвращаем');
+                // ������ �� ������� - ���������� � ����������� �������
+                console.log('[YD-SQ] ?? ��������������: ������ �� �������, ����������');
                 panel.style.right = '20px';
                 panel.style.top = '100px';
                 panel.style.left = 'auto';
                 panel.style.bottom = 'auto';
             }
 
-            console.log('[YD-SQ] 🔼 РАЗВОРАЧИВАНИЕ: панель показана');
+            console.log('[YD-SQ] ?? ��������������: ������ ��������');
         });
 
         // Pill drag & drop
         makePillDraggable();
 
-        // Help tooltip - HOVER only (не клик)
+        // Help tooltip - HOVER only (�� ����)
         const helpBtn = document.getElementById('yd-sq-help-btn');
         const helpTooltip = document.getElementById('yd-sq-help-tooltip');
 
@@ -3141,7 +3141,7 @@
             }
         });
 
-        // Import button - сразу импортирует из буфера
+        // Import button - ����� ����������� �� ������
         document.getElementById('yd-sq-load-clipboard').addEventListener('click', async (e) => {
             e.stopPropagation();
             const btn = e.currentTarget;
@@ -3149,25 +3149,25 @@
             if (result.success) {
                 showIconFeedback(btn, 'success');
             }
-            // Закрываем dropdown
+            // ��������� dropdown
             document.getElementById('yd-sq-imported-menu').classList.remove('open');
         });
 
-        // Dropdown меню toggle
+        // Dropdown ���� toggle
         const dropdown = document.getElementById('yd-sq-imported-menu');
         dropdown.querySelector('.yd-sq-dropdown-trigger').addEventListener('click', (e) => {
             e.stopPropagation();
             dropdown.classList.toggle('open');
         });
 
-        // Закрытие dropdown при клике вне
+        // �������� dropdown ��� ����� ���
         document.addEventListener('click', (e) => {
             if (!dropdown.contains(e.target)) {
                 dropdown.classList.remove('open');
             }
         });
 
-        // Объединённая кнопка синхронизации (минусы + дата)
+        // ����������� ������ ������������� (������ + ����)
         document.getElementById('yd-sq-sync-all').addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             if (btn.classList.contains('syncing')) return;
@@ -3175,18 +3175,18 @@
             btn.classList.add('syncing');
 
             try {
-                // 1. Синхронизируем минус-слова кампании
+                // 1. �������������� �����-����� ��������
                 await startCampaignSync();
 
-                // 2. Синхронизируем дату последней отправки
+                // 2. �������������� ���� ��������� ��������
                 if (typeof syncLatestDateFromHistory === 'function') {
                     await syncLatestDateFromHistory();
                 }
 
-                showYdsqNotification('Синхронизация завершена', 'success');
+                showYdsqNotification('������������� ���������', 'success');
             } catch (err) {
-                log.error('Ошибка синхронизации:', err);
-                showYdsqNotification('Ошибка синхронизации', 'error');
+                log.error('������ �������������:', err);
+                showYdsqNotification('������ �������������', 'error');
             } finally {
                 btn.classList.remove('syncing');
             }
@@ -3198,11 +3198,11 @@
             const btn = e.currentTarget;
             await copyImportedToClipboard();
             showIconFeedback(btn, 'success');
-            // Закрываем dropdown
+            // ��������� dropdown
             document.getElementById('yd-sq-imported-menu').classList.remove('open');
         });
 
-        // Clear Imported - удаляет всё с возможностью отмены
+        // Clear Imported - ������� �� � ������������ ������
         let importedUndoMode = false;
         let importedBackup = [];
 
@@ -3210,7 +3210,7 @@
             e.stopPropagation();
             const btn = e.currentTarget;
 
-            // Если в режиме undo - восстановить из backup
+            // ���� � ������ undo - ������������ �� backup
             if (importedUndoMode) {
                 importedMinuses.push(...importedBackup);
                 importedBackup = [];
@@ -3219,39 +3219,39 @@
                 syncLocalToGlobal();
                 renderImportedMinuses();
                 updateHighlights();
-                showYdsqNotification('Восстановлено', 'success');
+                showYdsqNotification('�������������', 'success');
                 return;
             }
 
-            // Проверяем есть ли элементы
+            // ��������� ���� �� ��������
             if (importedMinuses.length === 0) {
-                showYdsqNotification('Нет элементов для очистки', 'info');
+                showYdsqNotification('��� ��������� ��� �������', 'info');
                 return;
             }
 
-            // Сохраняем backup и очищаем
+            // ��������� backup � �������
             importedBackup = [...importedMinuses];
             importedMinuses.length = 0;
             importedUndoMode = true;
 
-            // Меняем кнопку на иконку Undo
+            // ������ ������ �� ������ Undo
             btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h12a5 5 0 0 1 0 10H9"/><polyline points="7 8 3 12 7 16"/></svg>`;
-            btn.title = 'Нажмите чтобы вернуть';
+            btn.title = '������� ����� �������';
             btn.style.color = 'var(--yd-primary)';
 
             syncLocalToGlobal();
             renderImportedMinuses();
             updateHighlights();
 
-            showYdsqNotification(`Удалено ${importedBackup.length} элементов (нажмите ↩ чтобы вернуть)`, 'info');
+            showYdsqNotification(`������� ${importedBackup.length} ��������� (������� ? ����� �������)`, 'info');
 
-            // Закрываем dropdown
+            // ��������� dropdown
             document.getElementById('yd-sq-imported-menu').classList.remove('open');
         });
 
         function restoreClearImportedButton(btn) {
             btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-            btn.title = 'Очистить';
+            btn.title = '��������';
             btn.style.color = '';
         }
 
@@ -3274,13 +3274,13 @@
         makePanelDraggable();
         makePanelResizable();
 
-        // Отображаем дату последней отправки
+        // ���������� ���� ��������� ��������
         updateLastSendDateUI();
 
-        // Инъекция стилей синхронизации
+        // �������� ������ �������������
         injectSyncStyles();
 
-        // Обработчик кнопки синхронизации даты
+        // ���������� ������ ������������� ����
         const syncDateBtn = document.getElementById('yd-sq-sync-date-btn');
         if (syncDateBtn) {
             syncDateBtn.addEventListener('click', async () => {
@@ -3290,40 +3290,40 @@
             });
         }
 
-        // Автосинхронизация при первом запуске (с задержкой)
+        // ����������������� ��� ������ ������� (� ���������)
         setTimeout(() => {
             checkAndAutoSync();
         }, 2000);
     }
 
-    // Обновление счётчика на pill
+    // ���������� �������� �� pill
     function updatePillCount() {
         const pillCount = document.getElementById('yd-sq-pill-count');
         if (pillCount) {
             pillCount.textContent = selections.size;
-            // Красный бейдж если есть слова
+            // ������� ����� ���� ���� �����
             pillCount.classList.toggle('has-items', selections.size > 0);
         }
     }
 
-    // Drag & Drop для pill
+    // Drag & Drop ��� pill
     function makePillDraggable() {
         const pill = document.getElementById('yd-sq-pill');
         let isDragging = false;
-        let hasMoved = false; // Флаг - было ли реальное перемещение
+        let hasMoved = false; // ���� - ���� �� �������� �����������
         let startX, startY, startLeft, startTop;
 
-        // Загружаем сохранённую позицию - НЕ применяем, т.к. сбрасываем при сворачивании
+        // ��������� ���������� ������� - �� ���������, �.�. ���������� ��� ������������
         // const savedPos = localStorage.getItem('yd-sq-pill-position');
 
         pill.addEventListener('mousedown', (e) => {
             isDragging = true;
-            hasMoved = false; // Сбрасываем флаг перемещения
+            hasMoved = false; // ���������� ���� �����������
             startX = e.clientX;
             startY = e.clientY;
             startLeft = pill.offsetLeft;
             startTop = pill.offsetTop;
-            e.preventDefault(); // Предотвращаем выделение текста
+            e.preventDefault(); // ������������� ��������� ������
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -3332,7 +3332,7 @@
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
-            // Считаем drag только если сдвинули больше 5px
+            // ������� drag ������ ���� �������� ������ 5px
             if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
                 hasMoved = true;
                 pill.classList.add('yd-sq-pill-dragging');
@@ -3348,7 +3348,7 @@
             isDragging = false;
 
             if (hasMoved) {
-                // Был drag - сохраняем позицию
+                // ��� drag - ��������� �������
                 setTimeout(() => {
                     pill.classList.remove('yd-sq-pill-dragging');
                 }, 100);
@@ -3358,21 +3358,21 @@
                     top: pill.offsetTop
                 }));
             }
-            // Если не было перемещения - это click, обработчик click сработает
+            // ���� �� ���� ����������� - ��� click, ���������� click ���������
         });
     }
 
-    // Clear с Undo
+    // Clear � Undo
     let clearUndoBuffer = null;
     let clearUndoTimeout = null;
 
     function handleClearWithUndo(btn) {
-        // Если уже в режиме Undo - восстановить
+        // ���� ��� � ������ Undo - ������������
         if (btn.dataset.undoMode === 'true') {
             if (clearUndoBuffer) {
                 selections = new Map(clearUndoBuffer);
                 clearUndoBuffer = null;
-                // Восстанавливаем чекбоксы
+                // ��������������� ��������
                 selections.forEach(sel => {
                     if (sel.rowId) ensureRowChecked(sel.rowId);
                 });
@@ -3380,20 +3380,20 @@
             restoreClearButton(btn);
             syncLocalToGlobal();
             updateUI();
-            showYdsqNotification('Восстановлено', 'success');
+            showYdsqNotification('�������������', 'success');
             return;
         }
 
-        // Нечего очищать
+        // ������ �������
         if (selections.size === 0) {
-            showYdsqNotification('Нет слов для очистки', 'info');
+            showYdsqNotification('��� ���� ��� �������', 'info');
             return;
         }
 
-        // Сохраняем буфер для отмены
+        // ��������� ����� ��� ������
         clearUndoBuffer = new Map(selections);
 
-        // Снимаем чекбоксы в таблице
+        // ������� �������� � �������
         selections.forEach(sel => {
             if (sel.rowId) {
                 const row = document.querySelector(`[data-yd-row-id="${sel.rowId}"]`);
@@ -3406,21 +3406,21 @@
             }
         });
 
-        // Очищаем
+        // �������
         selections.clear();
         syncLocalToGlobal();
         updateUI();
 
-        // Меняем кнопку на иконку Undo (стрелка назад)
+        // ������ ������ �� ������ Undo (������� �����)
         btn.dataset.undoMode = 'true';
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h12a5 5 0 0 1 0 10H9"/><polyline points="7 8 3 12 7 16"/></svg>`;
-        btn.title = 'Нажмите чтобы вернуть';
+        btn.title = '������� ����� �������';
         btn.style.color = 'var(--yd-primary)';
 
-        // НЕ ставим таймаут - сбрасывается только при добавлении нового минуса
+        // �� ������ ������� - ������������ ������ ��� ���������� ������ ������
     }
 
-    // Вызывать при добавлении нового минуса чтобы сбросить режим undo
+    // �������� ��� ���������� ������ ������ ����� �������� ����� undo
     function clearUndoModeOnNewSelection() {
         clearUndoBuffer = null;
         const btn = document.getElementById('yd-sq-clear-all');
@@ -3432,11 +3432,11 @@
     function restoreClearButton(btn) {
         delete btn.dataset.undoMode;
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-        btn.title = 'Очистить всё';
+        btn.title = '�������� ��';
         btn.style.color = '';
     }
 
-    // Функция обратной связи для иконок
+    // ������� �������� ����� ��� ������
     function showIconFeedback(btn, type = 'success') {
         const originalHTML = btn.innerHTML;
         if (type === 'success') {
@@ -3449,7 +3449,7 @@
         }, 2000);
     }
 
-    // Анимация успешной отправки кнопки "Отправить в Директ"
+    // �������� �������� �������� ������ "��������� � ������"
     function animateSendButtonSuccess() {
         const btn = document.getElementById('yd-sq-send');
         if (!btn) return;
@@ -3460,7 +3460,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                     <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                <span>✓ Отправлено!</span>
+                <span>? ����������!</span>
             `;
 
         setTimeout(() => {
@@ -3468,14 +3468,14 @@
             btn.innerHTML = originalHTML;
         }, 3000);
     }
-    // Форматирование минуса для копирования/отправки (с операторами)
+    // �������������� ������ ��� �����������/�������� (� �����������)
     function formatMinusForCopy(sel) {
         if (!sel) return '';
         const raw = sel.raw || sel.display;
 
-        // Применяем операторы на основе matchType
+        // ��������� ��������� �� ������ matchType
         if (sel.matchType === 'strict') {
-            // Для strict - добавляем ! к каждому слову
+            // ��� strict - ��������� ! � ������� �����
             const words = raw.split(/\s+/).filter(Boolean);
             return words.map(w => w.startsWith('!') ? w : '!' + w).join(' ');
         } else if (sel.matchType === 'bracket' && sel.kind === 'phrase') {
@@ -3486,23 +3486,23 @@
         return raw;
     }
 
-    // Копирование выбранных минусов
+    // ����������� ��������� �������
     async function copySelectedToClipboard() {
         const minuses = Array.from(selections.values())
             .filter(sel => !sel._building)
             .map(sel => formatMinusForCopy(sel));
 
         if (minuses.length === 0) {
-            showYdsqNotification('Нет слов для копирования', 'info');
+            showYdsqNotification('��� ���� ��� �����������', 'info');
             return;
         }
 
         try {
             await navigator.clipboard.writeText(minuses.join('\n'));
-            showYdsqNotification(`Скопировано ${minuses.length} слов`, 'success');
+            showYdsqNotification(`����������� ${minuses.length} ����`, 'success');
         } catch (err) {
-            log.error('Ошибка копирования', err);
-            showYdsqNotification('Ошибка копирования', 'error');
+            log.error('������ �����������', err);
+            showYdsqNotification('������ �����������', 'error');
         }
     }
 
@@ -3543,7 +3543,7 @@
         });
     }
 
-    // Размер панели (загружаем из localStorage)
+    // ������ ������ (��������� �� localStorage)
     let panelSize = {
         width: parseInt(localStorage.getItem('yd-sq-panel-width')) || null,
         height: parseInt(localStorage.getItem('yd-sq-panel-height')) || null
@@ -3562,7 +3562,7 @@
         const MIN_HEIGHT = 200;
         const MAX_HEIGHT = 800;
 
-        // Применяем сохранённый размер
+        // ��������� ���������� ������
         if (panelSize.width) {
             panel.style.width = panelSize.width + 'px';
             panel.style.minWidth = 'unset';
@@ -3586,7 +3586,7 @@
                 startLeft = panel.offsetLeft;
                 startTop = panel.offsetTop;
 
-                log.resize('Начало resize', { handle: currentHandle, startWidth, startHeight });
+                log.resize('������ resize', { handle: currentHandle, startWidth, startHeight });
 
                 document.body.style.cursor = getComputedStyle(handle).cursor;
                 document.body.style.userSelect = 'none';
@@ -3604,7 +3604,7 @@
             let newLeft = startLeft;
             let newTop = startTop;
 
-            // Обработка разных направлений
+            // ��������� ������ �����������
             if (currentHandle.includes('e')) {
                 newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + dx));
             }
@@ -3626,7 +3626,7 @@
                 }
             }
 
-            // Применяем новые размеры
+            // ��������� ����� �������
             panel.style.width = newWidth + 'px';
             panel.style.minWidth = 'unset';
             panel.style.maxWidth = 'unset';
@@ -3649,13 +3649,13 @@
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
 
-            // Сохраняем размер
+            // ��������� ������
             panelSize.width = panel.offsetWidth;
             panelSize.height = panel.offsetHeight;
             localStorage.setItem('yd-sq-panel-width', panelSize.width);
             localStorage.setItem('yd-sq-panel-height', panelSize.height);
 
-            log.resize('Конец resize', { width: panelSize.width, height: panelSize.height });
+            log.resize('����� resize', { width: panelSize.width, height: panelSize.height });
         });
     }
 
@@ -3681,8 +3681,8 @@
                             <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="8" stroke-linecap="round"/>
                         </svg>
                     </div>
-                    <div class="yd-sq-empty-text">Кликните по слову в таблице</div>
-                    <div class="yd-sq-empty-hint">2×клик — для создания фразы</div>
+                    <div class="yd-sq-empty-text">�������� �� ����� � �������</div>
+                    <div class="yd-sq-empty-hint">2?���� � ��� �������� �����</div>
                 </div>
             `;
             return;
@@ -3693,14 +3693,14 @@
         container.innerHTML = items.map(sel => {
             const isBuilding = sel._building;
 
-            // Определяем тип для badge
+            // ���������� ��� ��� badge
             const isQuote = sel.matchType === 'quote';
             const isBracket = sel.matchType === 'bracket';
             const isStrict = sel.matchType === 'strict';
             const isPhrase = sel.kind === 'phrase';
 
-            // Badge отображает текущий тип (кликабельный для смены)
-            let badgeText = '—'; // нет оператора
+            // Badge ���������� ������� ��� (������������ ��� �����)
+            let badgeText = '�'; // ��� ���������
             let badgeClass = 'yd-sq-badge-type';
             if (isStrict) {
                 badgeText = '!';
@@ -3713,19 +3713,19 @@
                 badgeClass += ' yd-sq-badge-quote';
             }
 
-            // Чистый текст без операторов - берём из raw
+            // ������ ����� ��� ���������� - ���� �� raw
             const cleanText = sel.raw || sel.display;
 
             return `
                 <div class="yd-sq-item${isBuilding ? ' yd-sq-item-building' : ''}" data-sel-id="${escapeHtml(sel.id)}">
-                    <button class="yd-sq-item-delete" data-action="remove" data-sel-id="${escapeHtml(sel.id)}" title="Удалить">
+                    <button class="yd-sq-item-delete" data-action="remove" data-sel-id="${escapeHtml(sel.id)}" title="�������">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
                     </button>
-                    <button class="${badgeClass}" data-action="cycle-type" data-sel-id="${escapeHtml(sel.id)}" title="Клик для смены типа">${badgeText}</button>
-                    <span class="yd-sq-item-text" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="Клик для редактирования">${escapeHtml(cleanText)}</span>
+                    <button class="${badgeClass}" data-action="cycle-type" data-sel-id="${escapeHtml(sel.id)}" title="���� ��� ����� ����">${badgeText}</button>
+                    <span class="yd-sq-item-text" data-action="edit" data-sel-id="${escapeHtml(sel.id)}" title="���� ��� ��������������">${escapeHtml(cleanText)}</span>
                     ${isBuilding ? '<span class="yd-sq-item-building-hint">(building...)</span>' : ''}
                 </div>
             `;
@@ -3755,12 +3755,12 @@
         updatePillCount();
     }
 
-    // Циклическая смена типа соответствия (включая нейтральный)
+    // ����������� ����� ���� ������������ (������� �����������)
     function cycleMatchType(id) {
         const sel = selections.get(id);
         if (!sel) return;
 
-        // Цикл: нейтральный -> quote -> bracket (для phrase) -> strict -> нейтральный
+        // ����: ����������� -> quote -> bracket (��� phrase) -> strict -> �����������
         const types = sel.kind === 'phrase'
             ? [null, 'quote', 'bracket', 'strict']
             : [null, 'quote', 'strict'];
@@ -3769,7 +3769,7 @@
         const nextIndex = (currentIndex + 1) % types.length;
         sel.matchType = types[nextIndex];
 
-        // Применяем изменения
+        // ��������� ���������
         applyMatchTypeToSelection(sel, sel.matchType);
         syncLocalToGlobal();
         updateHighlights();
@@ -3783,7 +3783,7 @@
         countIndicator.textContent = sentHistory.length;
 
         if (sentHistory.length === 0) {
-            container.innerHTML = '<div class="yd-sq-empty">История пуста</div>';
+            container.innerHTML = '<div class="yd-sq-empty">������� �����</div>';
             return;
         }
 
@@ -3791,19 +3791,19 @@
 
         container.innerHTML = sorted.map((sent, idx) => {
             const date = new Date(sent.lastSentAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-            const pages = sent.pageNumbers.length > 0 ? `на стр. ${sent.pageNumbers.join(', ')}` : '';
+            const pages = sent.pageNumbers.length > 0 ? `�� ���. ${sent.pageNumbers.join(', ')}` : '';
 
             return `
                 <div class="yd-sq-item yd-sq-item-sent" data-sent-idx="${idx}">
                     <div class="yd-sq-left">
-                        <span class="yd-sq-checkmark">✓</span>
+                        <span class="yd-sq-checkmark">?</span>
                     </div>
                     <div class="yd-sq-mid">
                         <span class="yd-sq-item-text">${escapeHtml(sent.raw)}</span>
-                        <span class="yd-sq-page-hint">×${sent.count} (${date}) ${pages}</span>
+                        <span class="yd-sq-page-hint">?${sent.count} (${date}) ${pages}</span>
                     </div>
                     <div class="yd-sq-right">
-                        <button class="yd-sq-item-remove" data-sent-idx="${idx}" title="Удалить из истории">×</button>
+                        <button class="yd-sq-item-remove" data-sent-idx="${idx}" title="������� �� �������">?</button>
                     </div>
                 </div>
             `;
@@ -3824,14 +3824,14 @@
 
         countIndicator.textContent = importedMinuses.length;
 
-        // Всегда показываем секцию
+        // ������ ���������� ������
         section.style.display = '';
 
-        // Если пусто - показываем placeholder
+        // ���� ����� - ���������� placeholder
         if (importedMinuses.length === 0) {
             container.innerHTML = `
                 <div class="yd-sq-empty-placeholder">
-                    <span style="opacity: 0.5; font-size: 11px;">Нажмите ⟳ для синхронизации с кампанией</span>
+                    <span style="opacity: 0.5; font-size: 11px;">������� ? ��� ������������� � ���������</span>
                 </div>
             `;
             return;
@@ -3840,24 +3840,24 @@
         container.innerHTML = importedMinuses.map((imp, idx) => {
             const itemClass = `yd-sq-item yd-sq-item-imported`;
 
-            // Иконка источника
+            // ������ ���������
             let sourceIcon = '';
             switch (imp.source) {
                 case 'clipboard':
-                    sourceIcon = '<span class="yd-sq-source-icon" title="Импортировано из буфера">📋</span>';
+                    sourceIcon = '<span class="yd-sq-source-icon" title="������������� �� ������">??</span>';
                     break;
                 case 'sync':
-                    sourceIcon = '<span class="yd-sq-source-icon" title="Синхронизировано">☁️</span>';
+                    sourceIcon = '<span class="yd-sq-source-icon" title="����������������">??</span>';
                     break;
                 case 'table':
                 default:
-                    sourceIcon = '<span class="yd-sq-source-icon" title="Отправлено через расширение">📤</span>';
+                    sourceIcon = '<span class="yd-sq-source-icon" title="���������� ����� ����������">??</span>';
                     break;
             }
 
             return `
                 <div class="${itemClass}" data-imp-idx="${idx}">
-                    <button class="yd-sq-item-delete" data-action="remove-imported" data-imp-idx="${idx}" title="Удалить">
+                    <button class="yd-sq-item-delete" data-action="remove-imported" data-imp-idx="${idx}" title="�������">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -3873,7 +3873,7 @@
             e.stopPropagation();
             const idx = parseInt(btn.dataset.impIdx);
 
-            // Удаляем элемент сразу
+            // ������� ������� �����
             importedMinuses.splice(idx, 1);
 
             syncLocalToGlobal();
@@ -3913,7 +3913,7 @@
         } else if (matchType === 'strict') {
             if (sel.kind === 'phrase') {
                 const words = sel.raw.split(/\s+/).map(w => {
-                    const wlow = w.toLowerCase().replace(/[^а-яa-z0-9ё]+/gi, '');
+                    const wlow = w.toLowerCase().replace(/[^�-�a-z0-9�]+/gi, '');
                     return STOPWORDS.has(wlow) ? w : ('!' + w);
                 });
                 sel.display = words.join(' ');
@@ -3924,12 +3924,12 @@
     }
 
     function startInlineEdit(id) {
-        // Ищем span с текстом по data-sel-id
+        // ���� span � ������� �� data-sel-id
         const span = document.querySelector(`.yd-sq-item-text[data-sel-id="${id}"]`);
         const sel = selections.get(id);
         if (!span || !sel) return;
 
-        // Уже редактируется?
+        // ��� �������������?
         if (span.dataset.editing === 'true') return;
         span.dataset.editing = 'true';
 
@@ -3986,31 +3986,31 @@
         input.select();
     }
 
-    // ==================== ОТПРАВКА (Logic from Малый код) ====================
+    // ==================== �������� (Logic from ����� ���) ====================
 
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     async function sendBatch() {
         if (currentBatchIndex >= batchQueue.length) {
-            // Все пакеты отправлены
+            // ��� ������ ����������
             batchQueue = [];
             currentBatchIndex = 0;
-            showYdsqNotification('✅ Все пакеты отправлены!', 'success');
+            showYdsqNotification('? ��� ������ ����������!', 'success');
             isSending = false;
             return;
         }
 
         const batch = batchQueue[currentBatchIndex];
         const values = batch.map(sel => sel.display);
-        const batchInfo = `Пакет ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} минусов)`;
+        const batchInfo = `����� ${currentBatchIndex + 1}/${batchQueue.length} (${values.length} �������)`;
 
-        log.batch(`Начало отправки ${batchInfo}`);
-        log.state(`Перед отправкой пакета ${currentBatchIndex + 1}`);
+        log.batch(`������ �������� ${batchInfo}`);
+        log.state(`����� ��������� ������ ${currentBatchIndex + 1}`);
 
         showYdsqNotification(batchInfo, 'info');
-        console.log(`[YD-SQ] Отправка ${batchInfo}`);
+        console.log(`[YD-SQ] �������� ${batchInfo}`);
 
-        // **КРИТИЧНО: Очищаем auto-чекбоксы от предыдущего batch**
+        // **��������: ������� auto-�������� �� ����������� batch**
         const rows = getAllRowsOnPage();
         let autoCleared = 0;
         rows.forEach(row => {
@@ -4023,64 +4023,64 @@
             }
         });
 
-        log.reserve(`Очищено ${autoCleared} auto-чекбоксов от предыдущего batch`);
+        log.reserve(`������� ${autoCleared} auto-��������� �� ����������� batch`);
 
-        await delay(100); // Даем время чекбоксам обновиться
+        await delay(100); // ���� ����� ��������� ����������
 
-        // **Пересчитываем ресурсы ПОСЛЕ очистки**
+        // **������������� ������� ����� �������**
         let checkedCount = rows.filter(r => {
             const cb = r.querySelector('input[type="checkbox"]');
-            return cb && cb.checked && cb.dataset.ydAuto !== 'true'; // Не учитываем auto
+            return cb && cb.checked && cb.dataset.ydAuto !== 'true'; // �� ��������� auto
         }).length;
 
         const freeRows = findFreeRows(null);
 
-        log.reserve(`Ресурсы после очистки`, {
+        log.reserve(`������� ����� �������`, {
             checkedCount,
             freeRowsCount: freeRows.length,
             neededForBatch: values.length,
             totalAvailable: checkedCount + freeRows.length
         });
 
-        // **АДАПТИВНАЯ ЛОГИКА**: Если строк меньше чем нужно - отправляем сколько есть
+        // **���������� ������**: ���� ����� ������ ��� ����� - ���������� ������� ����
         const actualAvailable = checkedCount + freeRows.length;
 
         if (actualAvailable === 0) {
-            log.error('Нет доступных строк на странице');
-            showYdsqNotification('Нет доступных строк. Перейдите на другую страницу.', 'error');
+            log.error('��� ��������� ����� �� ��������');
+            showYdsqNotification('��� ��������� �����. ��������� �� ������ ��������.', 'error');
             isSending = false;
             batchQueue = [];
             return;
         }
 
-        // Если доступных строк меньше чем в пакете - пересоздаём очередь
+        // ���� ��������� ����� ������ ��� � ������ - ���������� �������
         if (actualAvailable < values.length) {
-            log.warn(`Недостаточно строк для полного пакета. Адаптируем: отправим ${actualAvailable} из ${values.length}`);
+            log.warn(`������������ ����� ��� ������� ������. ����������: �������� ${actualAvailable} �� ${values.length}`);
 
-            // Разбиваем текущий пакет: отправляем что можем, остальное в новый пакет
+            // ��������� ������� �����: ���������� ��� �����, ��������� � ����� �����
             const canSendNow = batch.slice(0, actualAvailable);
             const leftOver = batch.slice(actualAvailable);
 
-            // Обновляем текущий пакет
+            // ��������� ������� �����
             batchQueue[currentBatchIndex] = canSendNow;
 
-            // Добавляем остаток как новый пакет
+            // ��������� ������� ��� ����� �����
             if (leftOver.length > 0) {
                 batchQueue.splice(currentBatchIndex + 1, 0, leftOver);
-                log.batch(`Создан дополнительный пакет: ${leftOver.length} минусов`);
+                log.batch(`������ �������������� �����: ${leftOver.length} �������`);
             }
 
-            // Обновляем values для текущей отправки
+            // ��������� values ��� ������� ��������
             values.length = 0;
             canSendNow.forEach(sel => values.push(sel.display));
 
-            showYdsqNotification(`Адаптировано: отправляем ${actualAvailable} минусов (всего пакетов: ${batchQueue.length})`, 'info');
+            showYdsqNotification(`������������: ���������� ${actualAvailable} ������� (����� �������: ${batchQueue.length})`, 'info');
         }
 
-        // Резервируем строки для текущего пакета
+        // ����������� ������ ��� �������� ������
         if (checkedCount < values.length) {
             const toReserve = values.length - checkedCount;
-            log.reserve(`Нужно зарезервировать ${toReserve} строк`);
+            log.reserve(`����� ��������������� ${toReserve} �����`);
 
             let reserved = 0;
             for (let i = 0; i < freeRows.length && reserved < toReserve; i++) {
@@ -4091,42 +4091,42 @@
                     cb.dataset.ydAuto = 'true';
                     row.dataset.ydAutoRow = 'true';
                     reserved++;
-                    log.reserve(`Зарезервирована строка ${i + 1}/${toReserve}`, { rowId: row.dataset.ydRowId });
+                    log.reserve(`��������������� ������ ${i + 1}/${toReserve}`, { rowId: row.dataset.ydRowId });
                 }
             }
 
-            log.success(`Зарезервировано ${reserved} строк для пакета ${currentBatchIndex + 1}`);
-            console.log(`[YD-SQ] Зарезервировано ${reserved} строк для пакета ${currentBatchIndex + 1}`);
+            log.success(`��������������� ${reserved} ����� ��� ������ ${currentBatchIndex + 1}`);
+            console.log(`[YD-SQ] ��������������� ${reserved} ����� ��� ������ ${currentBatchIndex + 1}`);
         }
 
         await delay(250);
 
-        // Открываем модалку
-        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
+        // ��������� �������
+        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('�������� � �����-�����'));
         if (!addBtn) {
-            showYdsqNotification('Кнопка не найдена', 'error');
+            showYdsqNotification('������ �� �������', 'error');
             isSending = false;
             batchQueue = [];
             return;
         }
 
         addBtn.click();
-        log.batch('Кнопка нажата, ожидаем модалку');
+        log.batch('������ ������, ������� �������');
 
         try {
             await waitForMinusModal(values);
-            log.success(`Пакет ${currentBatchIndex + 1} успешно завершён`);
+            log.success(`����� ${currentBatchIndex + 1} ������� ��������`);
 
-            // ВАЖНО: Удаляем ТОЛЬКО реально отправленные минусы (не весь пакет!)
+            // �����: ������� ������ ������� ������������ ������ (�� ���� �����!)
             const currentBatch = batchQueue[currentBatchIndex];
             const sentBackup = pendingSentMinusesBackup || [];
             const sentCount = sentBackup.length;
             let deletedCount = 0;
 
-            log.batch(`Обработка пакета: currentBatch=${currentBatch?.length || 0}, sentBackup=${sentCount}`);
+            log.batch(`��������� ������: currentBatch=${currentBatch?.length || 0}, sentBackup=${sentCount}`);
 
             if (sentCount > 0) {
-                // Удаляем по backup (реально отправленные)
+                // ������� �� backup (������� ������������)
                 for (const item of sentBackup) {
                     for (const [key, sel] of selections.entries()) {
                         if (sel.display === item.raw) {
@@ -4137,8 +4137,8 @@
                     }
                 }
             } else if (currentBatch && currentBatch.length > 0) {
-                // Fallback: если backup пуст, удаляем по currentBatch
-                log.warn('pendingSentMinusesBackup пуст, используем currentBatch');
+                // Fallback: ���� backup ����, ������� �� currentBatch
+                log.warn('pendingSentMinusesBackup ����, ���������� currentBatch');
                 for (const sel of currentBatch) {
                     if (selections.has(sel.id)) {
                         selections.delete(sel.id);
@@ -4147,87 +4147,87 @@
                 }
             }
 
-            log.selection(`Удалено ${deletedCount} selections после пакета ${currentBatchIndex + 1}`);
+            log.selection(`������� ${deletedCount} selections ����� ������ ${currentBatchIndex + 1}`);
 
-            // Проверяем, остались ли минусы которые не влезли в модалку
+            // ���������, �������� �� ������ ������� �� ������ � �������
             const remainingInSelections = selections.size;
             const lostInThisBatch = (currentBatch?.length || 0) - deletedCount;
 
             if (lostInThisBatch > 0) {
-                log.warn(`⚠️ В пакете ${currentBatchIndex + 1} не влезло ${lostInThisBatch} минусов - они остаются в selections`);
+                log.warn(`?? � ������ ${currentBatchIndex + 1} �� ������ ${lostInThisBatch} ������� - ��� �������� � selections`);
             }
 
             syncLocalToGlobal();
             updateUI();
 
-            // Переходим к следующему пакету
+            // ��������� � ���������� ������
             currentBatchIndex++;
 
             if (currentBatchIndex < batchQueue.length) {
-                log.batch(`Переход к пакету ${currentBatchIndex + 1}/${batchQueue.length}`);
-                showYdsqNotification(`Пакет ${currentBatchIndex} отправлен. Следующий пакет через 2 сек...`, 'success');
-                await delay(2000); // Пауза между пакетами
-                await sendBatch(); // Рекурсивный вызов СЛЕДУЮЩЕГО пакета
+                log.batch(`������� � ������ ${currentBatchIndex + 1}/${batchQueue.length}`);
+                showYdsqNotification(`����� ${currentBatchIndex} ���������. ��������� ����� ����� 2 ���...`, 'success');
+                await delay(2000); // ����� ����� ��������
+                await sendBatch(); // ����������� ����� ���������� ������
             } else {
-                // Все пакеты отправлены
+                // ��� ������ ����������
                 const totalBatches = batchQueue.length;
                 const remainingAfterAllBatches = selections.size;
 
                 batchQueue = [];
                 currentBatchIndex = 0;
                 isSending = false;
-                pendingSentMinuses = []; // Очищаем pending
+                pendingSentMinuses = []; // ������� pending
 
                 if (remainingAfterAllBatches > 0) {
-                    // Остались минусы которые не влезли в модалки - запускаем автоповтор
-                    log.batch(`⚠️ После ${totalBatches} пакетов осталось ${remainingAfterAllBatches} минусов - автоповтор`);
-                    showYdsqNotification(`Пакеты отправлены, осталось ${remainingAfterAllBatches}. Автоотправка...`, 'info');
+                    // �������� ������ ������� �� ������ � ������� - ��������� ����������
+                    log.batch(`?? ����� ${totalBatches} ������� �������� ${remainingAfterAllBatches} ������� - ����������`);
+                    showYdsqNotification(`������ ����������, �������� ${remainingAfterAllBatches}. ������������...`, 'info');
 
                     setTimeout(() => {
                         if (selections.size > 0) {
-                            log.batch('=== АВТОПОВТОРНАЯ ОТПРАВКА ПОСЛЕ ПАКЕТОВ ===');
+                            log.batch('=== ������������� �������� ����� ������� ===');
                             sendToMinusPhrases();
                         }
                     }, 2000);
                 } else {
-                    log.success(`✅ Все ${totalBatches} пакетов успешно отправлены!`);
-                    showYdsqNotification(`✅ Все ${totalBatches} пакетов отправлены!`, 'success');
+                    log.success(`? ��� ${totalBatches} ������� ������� ����������!`);
+                    showYdsqNotification(`? ��� ${totalBatches} ������� ����������!`, 'success');
 
-                    // Анимация кнопки успеха
+                    // �������� ������ ������
                     animateSendButtonSuccess();
                 }
                 resetClearAllButton();
             }
 
         } catch (error) {
-            log.error('Ошибка в пакетной отправке', error);
-            console.error('[YD-SQ] Ошибка:', error);
-            showYdsqNotification('Ошибка при обработке окна', 'error');
+            log.error('������ � �������� ��������', error);
+            console.error('[YD-SQ] ������:', error);
+            showYdsqNotification('������ ��� ��������� ����', 'error');
             isSending = false;
             batchQueue = [];
             pendingSentMinuses = [];
         }
     }
 
-    // Проверяет нужна ли пакетная отправка и показывает диалог если да
+    // ��������� ����� �� �������� �������� � ���������� ������ ���� ��
     function showSendConfirmDialog() {
         if (!selections.size) {
-            showYdsqNotification('Список минус-слов пуст', 'warn');
+            showYdsqNotification('������ �����-���� ����', 'warn');
             return;
         }
         if (isSending) {
-            showYdsqNotification('Отправка уже идёт...', 'warn');
+            showYdsqNotification('�������� ��� ���...', 'warn');
             return;
         }
 
-        // Считаем доступные строки
+        // ������� ��������� ������
         const values = [];
         selections.forEach(sel => {
             if (!sel.unassignedOnThisPage) values.push(sel.display);
         });
 
         if (values.length === 0) {
-            showYdsqNotification('Нет элементов для отправки', 'warn');
+            showYdsqNotification('��� ��������� ��� ��������', 'warn');
             return;
         }
 
@@ -4239,39 +4239,39 @@
         const freeCount = findFreeRows(null).length;
         const availableRows = checkedCount + freeCount;
 
-        // Определяем количество пакетов
+        // ���������� ���������� �������
         const MAX_BATCH_SIZE = 100;
         const batchSize = Math.min(availableRows, MAX_BATCH_SIZE);
         const totalBatches = batchSize > 0 ? Math.ceil(values.length / batchSize) : 0;
 
-        log.batch(`Проверка: ${values.length} минусов, ${availableRows} доступных строк, ~${totalBatches} пакетов`);
+        log.batch(`��������: ${values.length} �������, ${availableRows} ��������� �����, ~${totalBatches} �������`);
 
-        // Если нужен только 1 пакет - отправляем сразу без подтверждения
+        // ���� ����� ������ 1 ����� - ���������� ����� ��� �������������
         if (totalBatches <= 1) {
-            log.batch('Один пакет - отправляем без подтверждения');
+            log.batch('���� ����� - ���������� ��� �������������');
             startAutomaticSending();
             return;
         }
 
-        // Нужна пакетная отправка - показываем диалог
+        // ����� �������� �������� - ���������� ������
         const count = selections.size;
 
         const overlay = document.createElement('div');
         overlay.id = 'yd-sq-confirm-overlay';
         overlay.innerHTML = `
             <div class="yd-sq-confirm-dialog">
-                <div class="yd-sq-confirm-title">⚠️ Пакетная отправка</div>
+                <div class="yd-sq-confirm-title">?? �������� ��������</div>
                 <div class="yd-sq-confirm-text">
-                    Отправить <strong>${count}</strong> минус-фраз в кампанию?
+                    ��������� <strong>${count}</strong> �����-���� � ��������?
                 </div>
                 <div class="yd-sq-confirm-hint">
-                    На странице недостаточно строк.<br>
-                    Отправка будет разбита на <strong>${totalBatches} пакетов</strong>.<br>
-                    Процесс автоматический и займёт некоторое время.
+                    �� �������� ������������ �����.<br>
+                    �������� ����� ������� �� <strong>${totalBatches} �������</strong>.<br>
+                    ������� �������������� � ����� ��������� �����.
                 </div>
                 <div class="yd-sq-confirm-buttons">
-                    <button class="yd-sq-confirm-btn yd-sq-confirm-cancel">Отмена</button>
-                    <button class="yd-sq-confirm-btn yd-sq-confirm-ok">Начать отправку</button>
+                    <button class="yd-sq-confirm-btn yd-sq-confirm-cancel">������</button>
+                    <button class="yd-sq-confirm-btn yd-sq-confirm-ok">������ ��������</button>
                 </div>
             </div>
         `;
@@ -4288,12 +4288,12 @@
         };
 
         overlay.querySelector('.yd-sq-confirm-cancel').addEventListener('click', () => {
-            log.info('Пакетная отправка отменена пользователем');
+            log.info('�������� �������� �������� �������������');
             closeDialog();
         });
 
         overlay.querySelector('.yd-sq-confirm-ok').addEventListener('click', async () => {
-            log.info('Пользователь подтвердил пакетную отправку');
+            log.info('������������ ���������� �������� ��������');
             closeDialog();
             await startAutomaticSending();
         });
@@ -4313,18 +4313,18 @@
         document.addEventListener('keydown', handleEsc);
     }
 
-    // Запуск автоматической отправки
+    // ������ �������������� ��������
     async function startAutomaticSending() {
-        log.batch('=== ЗАПУСК АВТОМАТИЧЕСКОЙ ОТПРАВКИ ===');
+        log.batch('=== ������ �������������� �������� ===');
         await sendToMinusPhrases();
     }
 
     async function sendToMinusPhrases() {
-        if (!selections.size) { showYdsqNotification('Список минус-слов пуст', 'warn'); return; }
+        if (!selections.size) { showYdsqNotification('������ �����-���� ����', 'warn'); return; }
         if (isSending) return;
         isSending = true;
-        log.batch('=== ОТПРАВКА НАЧАТА ===');
-        console.log('[YD SQ] === ОТПРАВКА ===');
+        log.batch('=== �������� ������ ===');
+        console.log('[YD SQ] === �������� ===');
         await delay(150);
 
         const values = [];
@@ -4334,10 +4334,10 @@
             else unassigned.push(sel.raw);
         });
 
-        if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} элементов не найдены на странице`, 'warn');
-        if (values.length === 0) { showYdsqNotification('Нет элементов для отправки', 'warn'); isSending = false; return; }
+        if (unassigned.length > 0) showYdsqNotification(`${unassigned.length} ��������� �� ������� �� ��������`, 'warn');
+        if (values.length === 0) { showYdsqNotification('��� ��������� ��� ��������', 'warn'); isSending = false; return; }
 
-        // Синхронизация чекбоксов: снять лишние, оставить только для строк с selections
+        // ������������� ���������: ����� ������, �������� ������ ��� ����� � selections
         const rowsWithSelections = new Set();
         selections.forEach(sel => {
             if (sel.pageKey === currentPageKey && sel.rowId && !sel.unassignedOnThisPage) {
@@ -4345,7 +4345,7 @@
             }
         });
 
-        console.log(`[YD-SQ] 🔍 ДИАГНОСТИКА: values=${values.length}, rowsWithSelections=${rowsWithSelections.size}, currentPageKey=${currentPageKey}`);
+        console.log(`[YD-SQ] ?? �����������: values=${values.length}, rowsWithSelections=${rowsWithSelections.size}, currentPageKey=${currentPageKey}`);
 
         const allRows = getAllRowsOnPage();
         let uncheckedCount = 0;
@@ -4353,7 +4353,7 @@
             const cb = row.querySelector('input[type="checkbox"]');
             const rowId = row.dataset.ydRowId;
             if (cb && cb.checked && !rowsWithSelections.has(rowId)) {
-                // Снять чекбокс, если строка не содержит selections
+                // ����� �������, ���� ������ �� �������� selections
                 clickCheckbox(cb, false);
                 delete cb.dataset.ydAuto;
                 delete row.dataset.ydAutoRow;
@@ -4362,7 +4362,7 @@
         });
 
         if (uncheckedCount > 0) {
-            console.log(`[YD-SQ] ⚠️ Сняли ${uncheckedCount} лишних чекбоксов`);
+            console.log(`[YD-SQ] ?? ����� ${uncheckedCount} ������ ���������`);
         }
 
         const rows = getAllRowsOnPage();
@@ -4370,22 +4370,22 @@
         const neededTotal = values.length;
         const availableRows = checkedCount + findFreeRows(null).length;
 
-        console.log(`[YD-SQ] 📊 ПЕРЕД ОТПРАВКОЙ: checkedCount=${checkedCount}, neededTotal=${neededTotal}, availableRows=${availableRows}`);
+        console.log(`[YD-SQ] ?? ����� ���������: checkedCount=${checkedCount}, neededTotal=${neededTotal}, availableRows=${availableRows}`);
 
-        // **ГРАНИЧНЫЙ СЛУЧАЙ: Нет доступных строк**
+        // **��������� ������: ��� ��������� �����**
         if (availableRows === 0) {
             showYdsqNotification(
-                'На странице нет свободных строк.\n\nПерейдите на другую страницу или снимите чекбоксы.',
+                '�� �������� ��� ��������� �����.\n\n��������� �� ������ �������� ��� ������� ��������.',
                 'error'
             );
             isSending = false;
             return;
         }
 
-        // **НОВАЯ ЛОГИКА БАТЧИНГА**
-        // Если не хватает строк - разбиваем на пакеты
+        // **����� ������ ��������**
+        // ���� �� ������� ����� - ��������� �� ������
         if (neededTotal > availableRows) {
-            const MAX_BATCH_SIZE = 100; // Лимит для защиты от перегрузки Яндекса
+            const MAX_BATCH_SIZE = 100; // ����� ��� ������ �� ���������� �������
             const batchSize = Math.min(availableRows, MAX_BATCH_SIZE);
             const batches = [];
             const allSelections = Array.from(selections.values()).filter(s => !s.unassignedOnThisPage);
@@ -4397,14 +4397,14 @@
             batchQueue = batches;
             currentBatchIndex = 0;
 
-            showYdsqNotification(`Пакетная отправка: ${batches.length} пакетов (макс. ${batchSize} минусов/пакет)`, 'info');
+            showYdsqNotification(`�������� ��������: ${batches.length} ������� (����. ${batchSize} �������/�����)`, 'info');
             await delay(1000);
 
-            // Отправляем первый пакет
+            // ���������� ������ �����
             return sendBatch();
         }
 
-        // **ОБЫЧНАЯ ОТПРАВКА** (если строк достаточно)
+        // **������� ��������** (���� ����� ����������)
         if (checkedCount < neededTotal) {
             const toReserve = neededTotal - checkedCount;
             let lastUsedRowId = null;
@@ -4413,7 +4413,7 @@
 
             const freeRows = findFreeRows(lastUsedRowId);
             if (toReserve > freeRows.length) {
-                showYdsqNotification(`Недостаточно строк (нужно: ${neededTotal}, свободно: ${freeRows.length})`, 'error');
+                showYdsqNotification(`������������ ����� (�����: ${neededTotal}, ��������: ${freeRows.length})`, 'error');
                 isSending = false;
                 return;
             }
@@ -4435,43 +4435,43 @@
         await delay(250);
         const finalChecked = getAllRowsOnPage().filter(r => { const cb = r.querySelector('input[type="checkbox"]'); return cb && cb.checked; }).length;
 
-        if (values.length > finalChecked) { showYdsqNotification(`Ошибка: недостаточно строк`, 'error'); isSending = false; return; }
+        if (values.length > finalChecked) { showYdsqNotification(`������: ������������ �����`, 'error'); isSending = false; return; }
 
-        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('Добавить в минус-фразы'));
-        if (!addBtn) { showYdsqNotification('Кнопка не найдена', 'error'); isSending = false; return; }
+        const addBtn = Array.from(document.querySelectorAll('button, span')).find(el => el.textContent && el.textContent.includes('�������� � �����-�����'));
+        if (!addBtn) { showYdsqNotification('������ �� �������', 'error'); isSending = false; return; }
 
         addBtn.click();
 
         try {
             await waitForMinusModal(values);
         } catch (error) {
-            console.error('[YD SQ] Ошибка:', error);
-            showYdsqNotification('Ошибка при обработке окна', 'error');
+            console.error('[YD SQ] ������:', error);
+            showYdsqNotification('������ ��� ��������� ����', 'error');
         } finally {
             setTimeout(() => { isSending = false; }, 500);
         }
     }
 
-    // КРИТИЧНО: Возвращает Promise и ждет ПОЛНОГО завершения (включая закрытие результата)
+    // ��������: ���������� Promise � ���� ������� ���������� (������� �������� ����������)
     function waitForMinusModal(values, attempt = 0) {
         return new Promise((resolve, reject) => {
-            log.modal(`waitForMinusModal: попытка ${attempt}`);
+            log.modal(`waitForMinusModal: ������� ${attempt}`);
 
             const checkModal = (att) => {
                 const modal = findMinusModal();
                 if (modal) {
-                    log.modal('Модальное окно найдено, заполняем поля');
+                    log.modal('��������� ���� �������, ��������� ����');
                     fillMinusModalAsync(modal, values).then(() => {
-                        log.modal('Поля заполнены, ждём закрытия результата');
-                        // Ждём появления результата и его закрытия
+                        log.modal('���� ���������, ��� �������� ����������');
+                        // ��� ��������� ���������� � ��� ��������
                         waitForResultPopupClosed().then(resolve).catch(reject);
                     }).catch(reject);
                 } else if (att < 50) {
                     setTimeout(() => checkModal(att + 1), 200);
                 } else {
-                    log.error('Модальное окно не найдено после 50 попыток');
-                    showYdsqNotification('Окно не обнаружено', 'error');
-                    // В пакетном режиме НЕ сбрасываем isSending
+                    log.error('��������� ���� �� ������� ����� 50 �������');
+                    showYdsqNotification('���� �� ����������', 'error');
+                    // � �������� ������ �� ���������� isSending
                     if (batchQueue.length === 0) {
                         isSending = false;
                     }
@@ -4483,24 +4483,24 @@
         });
     }
 
-    // Ждёт появления и закрытия попапа с результатом
+    // ��� ��������� � �������� ������ � �����������
     function waitForResultPopupClosed() {
         return new Promise((resolve) => {
-            log.modal('waitForResultPopupClosed: начинаем ожидание');
+            log.modal('waitForResultPopupClosed: �������� ��������');
             let checkCount = 0;
-            const maxChecks = 120; // 60 секунд макс
-            let popupWasFound = false; // Флаг - был ли popup найден хотя бы раз
-            const isBatchMode = batchQueue.length > 0; // Проверяем пакетный режим
+            const maxChecks = 120; // 60 ������ ����
+            let popupWasFound = false; // ���� - ��� �� popup ������ ���� �� ���
+            const isBatchMode = batchQueue.length > 0; // ��������� �������� �����
 
             const checkClosed = () => {
                 checkCount++;
 
-                // Проверяем - не закрылось ли модальное окно (отмена пользователем)
-                // НО только если popup ещё НЕ появлялся (иначе это нормальное закрытие)
+                // ��������� - �� ��������� �� ��������� ���� (������ �������������)
+                // �� ������ ���� popup ��� �� ��������� (����� ��� ���������� ��������)
                 const modal = findMinusModal();
                 if (!modal && checkCount > 4 && !popupWasFound) {
-                    log.warn('Модальное окно закрыто (возможно отмена)');
-                    // В пакетном режиме НЕ сбрасываем isSending - это сделает sendBatch
+                    log.warn('��������� ���� ������� (�������� ������)');
+                    // � �������� ������ �� ���������� isSending - ��� ������� sendBatch
                     if (!isBatchMode) {
                         isSending = false;
                     }
@@ -4511,13 +4511,13 @@
                 const popup = findResultPopup();
 
                 if (popup) {
-                    popupWasFound = true; // Запоминаем что popup появился
-                    // Попап найден - пытаемся закрыть
-                    log.modal('Результат найден, tryCloseResultPopup');
+                    popupWasFound = true; // ���������� ��� popup ��������
+                    // ����� ������ - �������� �������
+                    log.modal('��������� ������, tryCloseResultPopup');
                     const closed = tryCloseResultPopup();
                     if (closed) {
-                        log.success('Попап результата закрыт, пакет завершён');
-                        setTimeout(resolve, 500); // Даём время на обработку
+                        log.success('����� ���������� ������, ����� ��������');
+                        setTimeout(resolve, 500); // ��� ����� �� ���������
                         return;
                     }
                 }
@@ -4525,16 +4525,16 @@
                 if (checkCount < maxChecks) {
                     setTimeout(checkClosed, 500);
                 } else {
-                    log.warn('Таймаут ожидания результата, продолжаем');
-                    // В пакетном режиме НЕ сбрасываем isSending
+                    log.warn('������� �������� ����������, ����������');
+                    // � �������� ������ �� ���������� isSending
                     if (!isBatchMode) {
                         isSending = false;
                     }
-                    resolve(); // Продолжаем даже если таймаут
+                    resolve(); // ���������� ���� ���� �������
                 }
             };
 
-            setTimeout(checkClosed, 1000); // Начинаем проверку через 1 сек
+            setTimeout(checkClosed, 1000); // �������� �������� ����� 1 ���
         });
     }
 
@@ -4543,29 +4543,29 @@
         for (const el of candidates) {
             const txt = el.textContent || '';
             if (!txt) continue;
-            if (txt.includes('Добавление минус-фраз')) return el.closest('[role="dialog"]') || el;
+            if (txt.includes('���������� �����-����')) return el.closest('[role="dialog"]') || el;
         }
         return null;
     }
 
 
 
-    // Async версия для пакетной отправки
+    // Async ������ ��� �������� ��������
     function fillMinusModalAsync(modal, values) {
         return new Promise((resolve, reject) => {
-            log.modal('fillMinusModalAsync: начало');
+            log.modal('fillMinusModalAsync: ������');
 
             const selects = Array.from(modal.querySelectorAll('select'));
             selects.forEach((select) => {
                 const opts = Array.from(select.options);
-                const opt = opts.find(o => o.textContent.trim() === 'на кампанию' || o.textContent.trim() === 'На кампанию');
+                const opt = opts.find(o => o.textContent.trim() === '�� ��������' || o.textContent.trim() === '�� ��������');
                 if (opt) {
-                    log.modal('Выбираем "на кампанию" в select');
+                    log.modal('�������� "�� ��������" � select');
                     select.value = opt.value;
                     select.dispatchEvent(new Event('change', { bubbles: true }));
                     select.dispatchEvent(new Event('input', { bubbles: true }));
                     const btn = select.closest('.select')?.querySelector('button.select__button');
-                    if (btn) { const t = btn.querySelector('.button__text'); if (t) t.textContent = 'на кампанию'; }
+                    if (btn) { const t = btn.querySelector('.button__text'); if (t) t.textContent = '�� ��������'; }
                 }
             });
 
@@ -4573,11 +4573,11 @@
         });
     }
 
-    // Async версия waitForInputFields
+    // Async ������ waitForInputFields
     async function waitForInputFieldsAsync(modal, values, attempt, resolve, reject) {
         if (attempt > 12) {
-            log.error('Поля ввода не найдены после 12 попыток');
-            showYdsqNotification('Поля ввода не найдены', 'error');
+            log.error('���� ����� �� ������� ����� 12 �������');
+            showYdsqNotification('���� ����� �� �������', 'error');
             isSending = false;
             reject(new Error('Input fields not found'));
             return;
@@ -4589,49 +4589,49 @@
             const otherInputs = modal.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
             const contentEditables = modal.querySelectorAll('[contenteditable="true"]');
 
-            // 🔬 ДИАГНОСТИКА: Подсчет полей по типам
-            console.log('[YD-SQ] 🔬 ЭКСПЕРИМЕНТ: Анализ полей в модалке');
-            console.log(`  📝 textareas: ${textareas.length}`);
-            console.log(`  📝 textInputs: ${textInputs.length}`);
-            console.log(`  📝 otherInputs: ${otherInputs.length}`);
-            console.log(`  📝 contentEditables: ${contentEditables.length}`);
+            // ?? �����������: ������� ����� �� �����
+            console.log('[YD-SQ] ?? �����������: ������ ����� � �������');
+            console.log(`  ?? textareas: ${textareas.length}`);
+            console.log(`  ?? textInputs: ${textInputs.length}`);
+            console.log(`  ?? otherInputs: ${otherInputs.length}`);
+            console.log(`  ?? contentEditables: ${contentEditables.length}`);
 
             const all = [...textareas, ...textInputs, ...otherInputs, ...contentEditables];
             const uniq = [...new Set(all)];
-            console.log(`  📊 Всего уникальных элементов: ${uniq.length}`);
+            console.log(`  ?? ����� ���������� ���������: ${uniq.length}`);
 
             const visible = uniq.filter(el => {
                 const r = el.getBoundingClientRect();
                 return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
             });
 
-            // 🔬 ДИАГНОСТИКА: Сколько строк отмечено чекбоксами
+            // ?? �����������: ������� ����� �������� ����������
             const checkedRows = document.querySelectorAll('input[type="checkbox"]:checked').length;
-            console.log(`  ✅ Отмечено строк чекбоксами: ${checkedRows}`);
-            console.log(`  👁️ Видимых полей для ввода: ${visible.length}`);
-            console.log(`  🎯 Нужно отправить слов: ${values.length}`);
+            console.log(`  ? �������� ����� ����������: ${checkedRows}`);
+            console.log(`  ??? ������� ����� ��� �����: ${visible.length}`);
+            console.log(`  ?? ����� ��������� ����: ${values.length}`);
 
             if (visible.length > 0) {
-                // Определяем сколько слов реально влезет
+                // ���������� ������� ���� ������� ������
                 const canFitCount = Math.min(visible.length, values.length);
                 const valuesToFit = values.slice(0, canFitCount);
                 const remainingValues = values.slice(canFitCount);
 
-                log.modal(`Найдено ${visible.length} полей. Влезет: ${canFitCount}, Остаток: ${remainingValues.length}`);
+                log.modal(`������� ${visible.length} �����. ������: ${canFitCount}, �������: ${remainingValues.length}`);
 
                 if (remainingValues.length > 0) {
-                    showYdsqNotification(`Не все слова влезли (${canFitCount}/${values.length}). Остаток будет в следующем пакете.`, 'warn');
+                    showYdsqNotification(`�� ��� ����� ������ (${canFitCount}/${values.length}). ������� ����� � ��������� ������.`, 'warn');
                 }
 
                 await fillFields(visible, valuesToFit);
 
-                // ВАЖНО: сохраняем в pending ТОЛЬКО те слова, которые влезли
+                // �����: ��������� � pending ������ �� �����, ������� ������
                 preparePendingMinuses(valuesToFit);
 
                 setTimeout(() => tryCloseResultPopup(), 1200);
                 resolve();
             } else {
-                log.modal(`Попытка ${attempt}: полей не найдено, повтор`);
+                log.modal(`������� ${attempt}: ����� �� �������, ������`);
                 waitForInputFieldsAsync(modal, values, attempt + 1, resolve, reject);
             }
         }, 300);
@@ -4655,14 +4655,14 @@
 
 
     async function fillFields(inputs, values) {
-        // Очищаем поля перед заполнением
+        // ������� ���� ����� �����������
         inputs.forEach((input) => {
             if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') input.value = ''; else input.textContent = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        const n = values.length; // Используем длину values, так как мы уже сделали Math.min выше
+        const n = values.length; // ���������� ����� values, ��� ��� �� ��� ������� Math.min ����
         for (let i = 0; i < n; i++) {
             const el = inputs[i];
             const val = values[i];
@@ -4677,64 +4677,64 @@
             if (el.isContentEditable) el.dispatchEvent(new Event('keyup', { bubbles: true }));
         }
 
-        // **КРИТИЧЕСКИ ВАЖНО: Переключаем на "В кампанию" и снимаем "Добавлять в группу"**
+        // **���������� �����: ����������� �� "� ��������" � ������� "��������� � ������"**
         await delay(100);
 
-        // Находим модальное окно
+        // ������� ��������� ����
         const modal = document.querySelector('[role="dialog"]');
         if (modal) {
-            // 1. Переключаем радио на "В кампанию"
+            // 1. ����������� ����� �� "� ��������"
             const radios = Array.from(modal.querySelectorAll('input[type="radio"]'));
             const campaignRadio = radios.find(r => {
                 const label = r.closest('label') || r.nextElementSibling;
                 const text = label?.textContent || '';
-                return text.includes('кампанию') || text.includes('campaign');
+                return text.includes('��������') || text.includes('campaign');
             });
 
             if (campaignRadio && !campaignRadio.checked) {
-                log.modal('Переключаем на "В кампанию"');
+                log.modal('����������� �� "� ��������"');
                 campaignRadio.click();
                 await delay(50);
             }
 
-            // 2. Снимаем галочку "Добавлять в группу"
+            // 2. ������� ������� "��������� � ������"
             const checkboxes = Array.from(modal.querySelectorAll('input[type="checkbox"]'));
             const groupCheckbox = checkboxes.find(ch => {
                 const label = ch.closest('label') || ch.nextElementSibling;
                 const text = label?.textContent || '';
-                return text.includes('группу') || text.includes('group');
+                return text.includes('������') || text.includes('group');
             });
 
             if (groupCheckbox && groupCheckbox.checked) {
-                log.modal('Снимаем галочку "Добавлять в группу"');
+                log.modal('������� ������� "��������� � ������"');
                 groupCheckbox.click();
             }
         }
     }
 
-    // Время начала текущей операции отправки (для защиты от race condition)
+    // ����� ������ ������� �������� �������� (��� ������ �� race condition)
     let currentSendStartTime = 0;
 
-    // Время когда последний раз видели попап результата (для определения "нового" попапа)
+    // ����� ����� ��������� ��� ������ ����� ���������� (��� ����������� "������" ������)
     let lastPopupSeenTime = 0;
 
     function findResultPopup() {
-        // Сначала ищем по точному селектору Яндекса
+        // ������� ���� �� ������� ��������� �������
         const popup = document.querySelector('.popup.popup_visibility_visible.b-confirm');
         if (popup) {
             const text = popup.textContent || '';
-            if (text.includes('Добавлено') && text.includes('минус')) {
+            if (text.includes('���������') && text.includes('�����')) {
                 return popup;
             }
         }
 
-        // Fallback: ищем по тексту
+        // Fallback: ���� �� ������
         const candidates = document.querySelectorAll('.popup, [role="dialog"], div, section');
         for (const el of candidates) {
             const t = el.textContent || '';
             if (!t) continue;
-            if (t.includes('Добавлено') && t.includes('минус')) {
-                // Проверяем что это видимый элемент
+            if (t.includes('���������') && t.includes('�����')) {
+                // ��������� ��� ��� ������� �������
                 const rect = el.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0) {
                     return el.closest('.popup') || el.closest('[role="dialog"]') || el;
@@ -4747,7 +4747,7 @@
     let lastResultPopupSuccessTime = 0;
 
     function tryCloseResultPopup() {
-        // КРИТИЧНО: выполняем только во время активной отправки
+        // ��������: ��������� ������ �� ����� �������� ��������
         if (!isSending) {
             return false;
         }
@@ -4755,93 +4755,93 @@
         const pop = findResultPopup();
         if (!pop) return false;
 
-        log.modal('tryCloseResultPopup: найден попап результата');
+        log.modal('tryCloseResultPopup: ������ ����� ����������');
 
-        // Улучшенный поиск кнопки OK
-        // 1. Сначала по классу Яндекса
+        // ���������� ����� ������ OK
+        // 1. ������� �� ������ �������
         let ok = pop.querySelector('.b-confirm__yes, button.button_action_confirm');
 
-        // 2. Fallback: по тексту
+        // 2. Fallback: �� ������
         if (!ok) {
             const allButtons = Array.from(pop.querySelectorAll('button, span[role="button"], div[role="button"], a'));
             ok = allButtons.find(el => {
                 const s = (el.textContent || '').trim().toLowerCase();
-                return s === 'ok' || s === 'ок' || s === 'хорошо' || s === 'понятно' || s === 'закрыть';
+                return s === 'ok' || s === '��' || s === '������' || s === '�������' || s === '�������';
             });
         }
 
         if (ok) {
-            log.modal('Нажимаем кнопку OK');
+            log.modal('�������� ������ OK');
 
-            // Используем несколько способов клика для надёжности
+            // ���������� ��������� �������� ����� ��� ���������
             ok.click();
             ok.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
             // Prevent double success logic (debounce 1.5 seconds)
-            // OK нажимается ВСЕГДА, но логика обработки только если debounce прошёл
+            // OK ���������� ������, �� ������ ��������� ������ ���� debounce ������
             if (Date.now() - lastResultPopupSuccessTime < 1500) {
-                log.modal('Debounce: OK нажат, но логика пропущена');
-                return true; // Возвращаем true т.к. OK нажат
+                log.modal('Debounce: OK �����, �� ������ ���������');
+                return true; // ���������� true �.�. OK �����
             }
 
-            // ЗАЩИТА от race condition: проверяем есть ли pendingSentMinuses
-            // Если их 0, значит это старый попап от предыдущей операции
+            // ������ �� race condition: ��������� ���� �� pendingSentMinuses
+            // ���� �� 0, ������ ��� ������ ����� �� ���������� ��������
             if (pendingSentMinuses.length === 0) {
-                log.modal('SKIP: pendingSentMinuses пустой - это старый попап');
+                log.modal('SKIP: pendingSentMinuses ������ - ��� ������ �����');
                 return true;
             }
 
             lastResultPopupSuccessTime = Date.now();
 
-            // После успешного сохранения:
-            // Переносим pendingSentMinuses в importedMinuses и sentHistory
-            log.sync('Обрабатываем pendingSentMinuses', { count: pendingSentMinuses.length });
+            // ����� ��������� ����������:
+            // ��������� pendingSentMinuses � importedMinuses � sentHistory
+            log.sync('������������ pendingSentMinuses', { count: pendingSentMinuses.length });
 
-            pendingSentMinusesBackup = [...pendingSentMinuses]; // Сохраняем в глобальную переменную
+            pendingSentMinusesBackup = [...pendingSentMinuses]; // ��������� � ���������� ����������
 
             if (pendingSentMinuses.length > 0) {
                 for (const item of pendingSentMinuses) {
-                    // Добавляем в importedMinuses
+                    // ��������� � importedMinuses
                     if (!importedMinuses.some(imp => imp.raw === item.raw)) {
                         importedMinuses.push({
                             id: `imp:${Date.now()}_${Math.random()}`,
                             raw: item.raw,
-                            source: 'table', // Различаем: из таблицы, не импортированные
+                            source: 'table', // ���������: �� �������, �� ���������������
                             importedAt: Date.now(),
                             deleted: false
                         });
                     }
 
-                    // Добавляем в историю
+                    // ��������� � �������
                     addToSentHistory(item.raw, null, [item.page]);
                 }
 
-                log.success(`Добавлено ${pendingSentMinuses.length} минусов в importedMinuses`);
+                log.success(`��������� ${pendingSentMinuses.length} ������� � importedMinuses`);
 
-                // КРИТИЧНО: Очищаем pendingSentMinuses сразу после обработки
-                // чтобы не накапливались между пакетами
+                // ��������: ������� pendingSentMinuses ����� ����� ���������
+                // ����� �� ������������� ����� ��������
                 pendingSentMinuses = [];
 
-                // Сохраняем дату последней отправки
+                // ��������� ���� ��������� ��������
                 lastSendDate = Date.now();
                 saveLastSendDate();
                 updateLastSendDateUI();
 
-                // Обновляем UI и синхронизируем
+                // ��������� UI � ��������������
                 syncLocalToGlobal();
                 rebuildCampaignMinusList();
                 updateHighlights();
             }
 
-            // Если это НЕ пакетная отправка - очищаем только отправленные слова из selections
+            // ���� ��� �� �������� �������� - ������� ������ ������������ ����� �� selections
             if (batchQueue.length === 0) {
                 const countBefore = selections.size;
                 const sentCount = pendingSentMinusesBackup.length;
 
                 if (sentCount > 0) {
-                    log.selection(`Обычная отправка: удаляем ${sentCount} отправленных слов из selections`);
+                    log.selection(`������� ��������: ������� ${sentCount} ������������ ���� �� selections`);
 
-                    // Удаляем только те, что были в бэкапе (т.е. реально попали в поля)
+                    // ������� ������ ��, ��� ���� � ������ (�.�. ������� ������ � ����)
                     for (const item of pendingSentMinusesBackup) {
                         for (const [key, sel] of selections.entries()) {
                             if (sel.display === item.raw) {
@@ -4858,34 +4858,34 @@
                     updateHighlights();
 
                     if (remaining > 0) {
-                        showYdsqNotification(`Отправлено ${sentCount}. Осталось: ${remaining}. Автоотправка...`, 'info');
+                        showYdsqNotification(`���������� ${sentCount}. ��������: ${remaining}. ������������...`, 'info');
 
-                        // Автоматическая повторная отправка оставшихся минусов
-                        log.batch(`Осталось ${remaining} минусов - запускаем автоотправку`);
-                        isSending = false; // Сбрасываем флаг перед повторной отправкой
+                        // �������������� ��������� �������� ���������� �������
+                        log.batch(`�������� ${remaining} ������� - ��������� ������������`);
+                        isSending = false; // ���������� ���� ����� ��������� ���������
 
                         setTimeout(() => {
                             if (selections.size > 0) {
-                                log.batch('=== АВТОПОВТОРНАЯ ОТПРАВКА ===');
+                                log.batch('=== ������������� �������� ===');
                                 sendToMinusPhrases();
                             }
                         }, 2000);
                     } else {
-                        showYdsqNotification(`Все выбранные слова (${sentCount}) отправлены`, 'success');
+                        showYdsqNotification(`��� ��������� ����� (${sentCount}) ����������`, 'success');
                     }
                 }
 
                 pendingSentMinuses = [];
             }
-            // При пакетной отправке selections очищаются в sendBatch
+            // ��� �������� �������� selections ��������� � sendBatch
 
             return true;
         }
 
-        // Если кнопка OK не найдена - пробуем найти любую кнопку закрытия
-        const close = pop.querySelector('button[aria-label="Закрыть"], button[aria-label="Close"], button.close');
+        // ���� ������ OK �� ������� - ������� ����� ����� ������ ��������
+        const close = pop.querySelector('button[aria-label="�������"], button[aria-label="Close"], button.close');
         if (close) {
-            log.modal('Нажимаем кнопку Закрыть');
+            log.modal('�������� ������ �������');
             close.click();
             return true;
         }
@@ -4912,7 +4912,7 @@
                 sentHistory = data.sentHistory || [];
                 importedMinuses = data.importedMinuses || [];
 
-                // МИГРАЦИЯ: Добавляем deleted: false к старым записям
+                // ��������: ��������� deleted: false � ������ �������
                 importedMinuses = importedMinuses.map(imp => {
                     if (imp.deleted === undefined) {
                         imp.deleted = false;
@@ -4923,7 +4923,7 @@
                 panelPosition = data.panelPosition || { left: 'auto', right: '15px', top: '15px' };
                 phraseCounter = data.phraseCounter || 0;
 
-                // Восстановить selections
+                // ������������ selections
                 if (data.selections) {
                     selections.clear();
                     let selCount = 0;
@@ -4931,17 +4931,17 @@
                         selections.set(key, val);
                         selCount++;
                     }
-                    console.log(`[YD-SQ] 💾 LOAD: Загружено ${selCount} выделений, ${importedMinuses.length} имп/эксп минусов, ${sentHistory.length} в истории`);
+                    console.log(`[YD-SQ] ?? LOAD: ��������� ${selCount} ���������, ${importedMinuses.length} ���/���� �������, ${sentHistory.length} � �������`);
                 }
 
                 rebuildCampaignMinusList();
 
-                // Форсируем пересчет кэша импортированных правил
+                // ��������� �������� ���� ��������������� ������
                 lastImportedMinusesRef = null;
                 cachedImportedRules = null;
             }
         } catch (err) {
-            console.error('[YD-SQ] Ошибка загрузки состояния:', err);
+            console.error('[YD-SQ] ������ �������� ���������:', err);
         }
     }
 
@@ -4963,12 +4963,12 @@
                 panelPosition: panelPosition
             };
 
-            // ОТЛАДКА: логируем что сохраняем
-            console.log(`[YD-SQ] 💾 SAVE: ${Object.keys(selectionsObj).length} sel, ${importedMinuses.length} imp, ${sentHistory.length} hist`);
+            // �������: �������� ��� ���������
+            console.log(`[YD-SQ] ?? SAVE: ${Object.keys(selectionsObj).length} sel, ${importedMinuses.length} imp, ${sentHistory.length} hist`);
 
             localStorage.setItem(key, JSON.stringify(data));
         } catch (err) {
-            console.error('[YD-SQ] Ошибка сохранения состояния:', err);
+            console.error('[YD-SQ] ������ ���������� ���������:', err);
         }
     }
 
@@ -4979,16 +4979,16 @@
         }
     }
 
-    // ==================== ДАТА ПОСЛЕДНЕЙ ОТПРАВКИ ====================
+    // ==================== ���� ��������� �������� ====================
 
     function saveLastSendDate() {
         try {
             const campaignId = getCampaignId();
             const key = `yd-sq-last-send:${campaignId}`;
             localStorage.setItem(key, lastSendDate.toString());
-            log.sync('Дата отправки сохранена', new Date(lastSendDate).toLocaleString());
+            log.sync('���� �������� ���������', new Date(lastSendDate).toLocaleString());
         } catch (err) {
-            console.error('[YD-SQ] Ошибка сохранения даты:', err);
+            console.error('[YD-SQ] ������ ���������� ����:', err);
         }
     }
 
@@ -4999,10 +4999,10 @@
             const saved = localStorage.getItem(key);
             if (saved) {
                 lastSendDate = parseInt(saved);
-                log.sync('Дата отправки загружена', new Date(lastSendDate).toLocaleString());
+                log.sync('���� �������� ���������', new Date(lastSendDate).toLocaleString());
             }
         } catch (err) {
-            console.error('[YD-SQ] Ошибка загрузки даты:', err);
+            console.error('[YD-SQ] ������ �������� ����:', err);
         }
     }
 
@@ -5022,24 +5022,24 @@
                 minute: '2-digit'
             });
             container.innerHTML = `
-                <span class="yd-sq-last-send-label">📤 Последняя отправка:</span>
-                <span class="yd-sq-last-send-date">${dateStr} в ${timeStr}</span>
+                <span class="yd-sq-last-send-label">?? ��������� ��������:</span>
+                <span class="yd-sq-last-send-date">${dateStr} � ${timeStr}</span>
             `;
             container.style.display = 'flex';
         } else {
             container.innerHTML = `
-                <span class="yd-sq-last-send-label">📤 Минусы ещё не отправлялись</span>
+                <span class="yd-sq-last-send-label">?? ������ ��� �� ������������</span>
             `;
             container.style.display = 'flex';
         }
     }
 
-    // ==================== СИНХРОНИЗАЦИЯ С ИСТОРИЕЙ ИЗМЕНЕНИЙ ====================
+    // ==================== ������������� � �������� ��������� ====================
 
     const SYNC_HISTORY_KEY_PREFIX = 'yd-sq-synced:';
     const SYNC_IN_PROGRESS_KEY = 'yd-sq-sync-in-progress';
 
-    // Проверяем, была ли уже синхронизация для этой кампании
+    // ���������, ���� �� ��� ������������� ��� ���� ��������
     function isCampaignSynced(campaignId) {
         return localStorage.getItem(`${SYNC_HISTORY_KEY_PREFIX}${campaignId}`) === 'true';
     }
@@ -5048,9 +5048,9 @@
         localStorage.setItem(`${SYNC_HISTORY_KEY_PREFIX}${campaignId}`, 'true');
     }
 
-    // Apple-стиль уведомления (toast)
+    // Apple-����� ����������� (toast)
     function showSyncToast(message, type = 'info', duration = 3000) {
-        // Удаляем предыдущий toast
+        // ������� ���������� toast
         const existing = document.getElementById('yd-sq-sync-toast');
         if (existing) existing.remove();
 
@@ -5059,10 +5059,10 @@
         toast.className = `yd-sq-sync-toast yd-sq-sync-toast-${type}`;
 
         const icons = {
-            info: '🔄',
-            success: '✅',
-            warning: '⚠️',
-            error: '❌'
+            info: '??',
+            success: '?',
+            warning: '??',
+            error: '?'
         };
 
         toast.innerHTML = `
@@ -5072,12 +5072,12 @@
 
         document.body.appendChild(toast);
 
-        // Анимация появления
+        // �������� ���������
         requestAnimationFrame(() => {
             toast.classList.add('yd-sq-sync-toast-visible');
         });
 
-        // Автоскрытие
+        // �����������
         if (duration > 0) {
             setTimeout(() => {
                 toast.classList.remove('yd-sq-sync-toast-visible');
@@ -5088,7 +5088,7 @@
         return toast;
     }
 
-    // Показать прогресс синхронизации
+    // �������� �������� �������������
     function showSyncProgress(step, total, message) {
         let progressEl = document.getElementById('yd-sq-sync-progress');
 
@@ -5107,8 +5107,8 @@
 
         progressEl.innerHTML = `
             <div class="yd-sq-sync-progress-header">
-                <span class="yd-sq-sync-progress-icon">🔄</span>
-                <span class="yd-sq-sync-progress-title">Синхронизация</span>
+                <span class="yd-sq-sync-progress-icon">??</span>
+                <span class="yd-sq-sync-progress-title">�������������</span>
             </div>
             <div class="yd-sq-sync-progress-message">${message}</div>
             <div class="yd-sq-sync-progress-bar-container">
@@ -5128,31 +5128,31 @@
         }
     }
 
-    // Форматирование даты для API (ISO формат с временем)
+    // �������������� ���� ��� API (ISO ������ � ��������)
     function formatDateForHistoryApi(date, isEndDate = false) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
-        // dateFrom: T21:00:00 (начало дня в UTC+3)
-        // dateTo: T20:59:59 (конец дня в UTC+3)
+        // dateFrom: T21:00:00 (������ ��� � UTC+3)
+        // dateTo: T20:59:59 (����� ��� � UTC+3)
         const time = isEndDate ? 'T20:59:59' : 'T21:00:00';
         return `${y}-${m}-${d}${time}`;
     }
 
-    // Получение CSRF токена из cookies
+    // ��������� CSRF ������ �� cookies
     function getCsrfToken() {
         const match = document.cookie.match(/_direct_csrf_token=([^;]+)/);
         return match ? match[1] : '';
     }
 
-    // Запрос к API истории изменений (GraphQL userActionLog)
+    // ������ � API ������� ��������� (GraphQL userActionLog)
     async function fetchHistoryApi(ulogin, campaignId, dateFrom, dateTo) {
         try {
             const url = `https://direct.yandex.ru/web-api/user-action-log/api?operationName=userActionLog&ulogin=${encodeURIComponent(ulogin)}`;
 
             const csrfToken = getCsrfToken();
 
-            // GraphQL запрос (упрощённая версия)
+            // GraphQL ������ (���������� ������)
             const graphqlQuery = `query userActionLog($login:String$campaignIds:[Long!]$limit:Int=200$token:String$dateFrom:LocalDateTime$dateTo:LocalDateTime$categories:[CategoryInput!]$order:OrderInput){userActionLog(clientLogin:$login campaignIds:$campaignIds limit:$limit pageToken:$token dateFrom:$dateFrom dateTo:$dateTo categories:$categories order:$order){nextPageToken logRecords{datetime user{login}event{...on CampaignValueChangeEvent{__typename category clientId campaign{id name}}...on CampaignListChangeEvent{__typename category clientId campaign{id name}}}}}}`;
 
             const payload = {
@@ -5174,7 +5174,7 @@
                 query: graphqlQuery
             };
 
-            log.sync('API запрос:', url);
+            log.sync('API ������:', url);
             log.sync('Payload variables:', JSON.stringify(payload.variables));
 
             const headers = {
@@ -5184,7 +5184,7 @@
                 'x-direct-api': '1'
             };
 
-            // Добавляем CSRF токен если есть
+            // ��������� CSRF ����� ���� ����
             if (csrfToken) {
                 headers['x-csrf-token'] = csrfToken;
             }
@@ -5196,18 +5196,18 @@
                 body: JSON.stringify(payload)
             });
 
-            log.sync('HTTP статус:', response.status);
+            log.sync('HTTP ������:', response.status);
 
             if (!response.ok) {
                 const errorText = await response.text();
-                log.error('API вернул ошибку:', { status: response.status, body: errorText.slice(0, 500) });
+                log.error('API ������ ������:', { status: response.status, body: errorText.slice(0, 500) });
                 throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
 
-            // Детальное логирование для отладки
-            log.sync('API ответ получен:', {
+            // ��������� ����������� ��� �������
+            log.sync('API ����� �������:', {
                 hasData: !!data.data,
                 hasUserActionLog: !!data.data?.userActionLog,
                 recordsCount: data.data?.userActionLog?.logRecords?.length || 0
@@ -5215,46 +5215,46 @@
 
             return data;
         } catch (error) {
-            log.error('Ошибка API истории:', error.message || error);
+            log.error('������ API �������:', error.message || error);
             return null;
         }
     }
 
-    // Поиск даты последней чистки минус-фраз в ответе API
+    // ����� ���� ��������� ������ �����-���� � ������ API
     function findMinusPhraseInApiResponse(data) {
         try {
-            // Структура ответа GraphQL: data.data.userActionLog.logRecords[]
+            // ��������� ������ GraphQL: data.data.userActionLog.logRecords[]
             const logRecords = data?.data?.userActionLog?.logRecords || [];
 
-            log.sync(`Получено ${logRecords.length} записей из API`);
+            log.sync(`�������� ${logRecords.length} ������� �� API`);
 
             if (logRecords.length === 0) {
-                log.sync('Нет записей в ответе');
+                log.sync('��� ������� � ������');
                 return null;
             }
 
-            // Логируем первый элемент для отладки
+            // �������� ������ ������� ��� �������
             if (logRecords.length > 0) {
-                log.sync('Пример записи:', JSON.stringify(logRecords[0]).slice(0, 400));
+                log.sync('������ ������:', JSON.stringify(logRecords[0]).slice(0, 400));
             }
 
-            // Ищем записи о минус-фразах
+            // ���� ������ � �����-������
             for (const record of logRecords) {
-                // Проверяем категорию события
+                // ��������� ��������� �������
                 const category = record.event?.category || '';
 
-                // Если категория CAMPAIGN_MINUS_WORDS — это то что нам нужно
+                // ���� ��������� CAMPAIGN_MINUS_WORDS � ��� �� ��� ��� �����
                 if (category === 'CAMPAIGN_MINUS_WORDS' ||
                     category.includes('MINUS') ||
                     category.includes('minus')) {
 
-                    // Берём дату из datetime
+                    // ���� ���� �� datetime
                     const dateStr = record.datetime;
 
                     if (dateStr) {
                         const parsedDate = new Date(dateStr);
                         if (!Number.isNaN(parsedDate.getTime())) {
-                            log.sync('Найдена запись минус-фраз:', {
+                            log.sync('������� ������ �����-����:', {
                                 date: parsedDate.toISOString(),
                                 category: category,
                                 campaign: record.event?.campaign?.name || 'N/A'
@@ -5265,24 +5265,24 @@
                 }
             }
 
-            log.sync('Записи о минус-фразах не найдены в ответе');
+            log.sync('������ � �����-������ �� ������� � ������');
             return null;
         } catch (error) {
-            log.error('Ошибка парсинга API:', error);
+            log.error('������ �������� API:', error);
             return null;
         }
     }
 
 
-    // Умный поиск по периодам через API
+    // ����� ����� �� �������� ����� API
     async function smartSyncFromHistory(ulogin, campaignId, onProgress) {
         const today = new Date();
 
-        // Периоды для поиска (от короткого к длинному)
+        // ������� ��� ������ (�� ��������� � ��������)
         const periods = [
-            { days: 30, label: 'последний месяц' },
-            { days: 90, label: 'последние 3 месяца' },
-            { days: 365, label: 'последний год' }
+            { days: 30, label: '��������� �����' },
+            { days: 90, label: '��������� 3 ������' },
+            { days: 365, label: '��������� ���' }
         ];
 
         for (let i = 0; i < periods.length; i++) {
@@ -5291,13 +5291,13 @@
             const total = periods.length;
 
             if (onProgress) {
-                onProgress(step, total + 1, `Проверяю ${period.label}...`);
+                onProgress(step, total + 1, `�������� ${period.label}...`);
             }
 
             const dateFrom = new Date(today);
             dateFrom.setDate(dateFrom.getDate() - period.days);
 
-            log.sync(`Запрашиваю API за ${period.label}`);
+            log.sync(`���������� API �� ${period.label}`);
 
             const apiResponse = await fetchHistoryApi(
                 ulogin,
@@ -5311,41 +5311,41 @@
 
                 if (foundDate) {
                     if (onProgress) {
-                        onProgress(total + 1, total + 1, 'Дата найдена!');
+                        onProgress(total + 1, total + 1, '���� �������!');
                     }
                     return foundDate;
                 }
             }
 
-            // Небольшая задержка между запросами
+            // ��������� �������� ����� ���������
             await new Promise(resolve => setTimeout(resolve, 300));
         }
 
-        // Не найдено за весь год
+        // �� ������� �� ���� ���
         if (onProgress) {
-            onProgress(periods.length + 1, periods.length + 1, 'Записей не найдено');
+            onProgress(periods.length + 1, periods.length + 1, '������� �� �������');
         }
 
 
         return null;
     }
 
-    // Основная функция синхронизации
+    // �������� ������� �������������
     async function syncLastSendDate(showUI = true) {
         const campaignId = getCampaignId();
         const ulogin = getUlogin();
 
         if (!campaignId || !ulogin) {
             if (showUI) {
-                showSyncToast('Не удалось определить кампанию', 'error');
+                showSyncToast('�� ������� ���������� ��������', 'error');
             }
             return false;
         }
 
-        // Проверяем, не идёт ли уже синхронизация
+        // ���������, �� ��� �� ��� �������������
         if (sessionStorage.getItem(SYNC_IN_PROGRESS_KEY) === 'true') {
             if (showUI) {
-                showSyncToast('Синхронизация уже выполняется...', 'warning');
+                showSyncToast('������������� ��� �����������...', 'warning');
             }
             return false;
         }
@@ -5353,18 +5353,18 @@
         sessionStorage.setItem(SYNC_IN_PROGRESS_KEY, 'true');
 
         try {
-            // Показываем прогресс
+            // ���������� ��������
             const onProgress = showUI ? showSyncProgress : null;
 
             if (showUI) {
-                showSyncProgress(0, 4, 'Подключаюсь к истории изменений...');
+                showSyncProgress(0, 4, '����������� � ������� ���������...');
             }
 
-            // Умный поиск
+            // ����� �����
             const foundDate = await smartSyncFromHistory(ulogin, campaignId, onProgress);
 
             if (foundDate) {
-                // Нашли дату!
+                // ����� ����!
                 lastSendDate = foundDate.getTime();
                 saveLastSendDate();
                 updateLastSendDateUI();
@@ -5377,31 +5377,31 @@
                         month: '2-digit',
                         year: 'numeric'
                     });
-                    showSyncToast(`Дата синхронизирована: ${dateStr}`, 'success', 4000);
+                    showSyncToast(`���� ����������������: ${dateStr}`, 'success', 4000);
                 }
 
-                log.sync('Дата синхронизирована из истории', foundDate.toISOString());
+                log.sync('���� ���������������� �� �������', foundDate.toISOString());
                 return true;
 
             } else {
-                // Не нашли
+                // �� �����
                 markCampaignSynced(campaignId);
 
                 if (showUI) {
                     hideSyncProgress();
-                    showSyncToast('Записей о минус-фразах не найдено', 'info', 4000);
+                    showSyncToast('������� � �����-������ �� �������', 'info', 4000);
                 }
 
-                log.sync('Минус-фразы в истории не найдены');
+                log.sync('�����-����� � ������� �� �������');
                 return false;
             }
 
         } catch (error) {
-            log.error('Ошибка синхронизации:', error);
+            log.error('������ �������������:', error);
 
             if (showUI) {
                 hideSyncProgress();
-                showSyncToast('Ошибка синхронизации', 'error');
+                showSyncToast('������ �������������', 'error');
             }
 
             return false;
@@ -5411,38 +5411,38 @@
         }
     }
 
-    // Получение ulogin из URL
+    // ��������� ulogin �� URL
     function getUlogin() {
         const params = new URLSearchParams(window.location.search);
         return params.get('ulogin') || '';
     }
 
-    // Автосинхронизация при первом запуске в кампании
+    // ����������������� ��� ������ ������� � ��������
     function checkAndAutoSync() {
         const campaignId = getCampaignId();
 
         if (!campaignId) return;
 
-        // Если кампания уже синхронизирована — пропускаем
+        // ���� �������� ��� ���������������� � ����������
         if (isCampaignSynced(campaignId)) {
-            log.sync('Кампания уже синхронизирована');
+            log.sync('�������� ��� ����������������');
             return;
         }
 
-        // Если уже есть lastSendDate (записано расширением ранее) — не синхронизируем автоматически
+        // ���� ��� ���� lastSendDate (�������� ����������� �����) � �� �������������� �������������
         loadLastSendDate();
         if (lastSendDate) {
-            log.sync('Есть сохранённая дата, автосинхронизация не требуется');
+            log.sync('���� ���������� ����, ����������������� �� ���������');
             markCampaignSynced(campaignId);
             return;
         }
 
-        // Показываем приветственное сообщение и запускаем синхронизацию
-        log.sync('Первый запуск в кампании — автосинхронизация');
+        // ���������� �������������� ��������� � ��������� �������������
+        log.sync('������ ������ � �������� � �����������������');
 
-        // Небольшая задержка для загрузки UI
+        // ��������� �������� ��� �������� UI
         setTimeout(() => {
-            showSyncToast('Первый запуск — определяю дату последней чистки...', 'info', 3000);
+            showSyncToast('������ ������ � ��������� ���� ��������� ������...', 'info', 3000);
 
             setTimeout(() => {
                 syncLastSendDate(true);
@@ -5450,14 +5450,14 @@
         }, 1500);
     }
 
-    // Инъекция стилей для синхронизации
+    // �������� ������ ��� �������������
     function injectSyncStyles() {
         if (document.getElementById('yd-sq-sync-styles')) return;
 
         const style = document.createElement('style');
         style.id = 'yd-sq-sync-styles';
         style.textContent = `
-            /* Кнопка синхронизации даты */
+            /* ������ ������������� ���� */
             .yd-sq-last-send-row {
                 display: flex;
                 align-items: center;
@@ -5499,7 +5499,7 @@
                 to { transform: rotate(360deg); }
             }
 
-            /* Toast уведомления (Apple-стиль) */
+            /* Toast ����������� (Apple-�����) */
             .yd-sq-sync-toast {
                 position: fixed;
                 top: 20px;
@@ -5548,7 +5548,7 @@
                 background: rgba(245, 158, 11, 0.95);
             }
 
-            /* Прогресс синхронизации */
+            /* �������� ������������� */
             .yd-sq-sync-progress {
                 position: fixed;
                 top: 50%;
@@ -5617,7 +5617,7 @@
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
 
-            /* Overlay для прогресса */
+            /* Overlay ��� ��������� */
             .yd-sq-sync-progress::before {
                 content: '';
                 position: fixed;
@@ -5633,7 +5633,7 @@
         document.head.appendChild(style);
     }
 
-    // ==================== АВТОРЕДИРЕКТ НА ПРАВИЛЬНЫЙ URL ====================
+    // ==================== ������������ �� ���������� URL ====================
 
     function formatDateForUrl(date) {
         const y = date.getFullYear();
@@ -5642,7 +5642,7 @@
         return `${y}-${m}-${d}`;
     }
 
-    // Вычисляет правильный период на основе lastSendDate
+    // ��������� ���������� ������ �� ������ lastSendDate
     function calculateCorrectPeriod() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -5661,11 +5661,11 @@
             dayAfterSend.setDate(dayAfterSend.getDate() + 1);
 
             if (sendDate >= yesterday) {
-                // Отправка была сегодня или вчера → показываем только вчерашний день
+                // �������� ���� ������� ��� ����� > ���������� ������ ��������� ����
                 dateFrom = formatDateForUrl(yesterday);
                 dateTo = formatDateForUrl(yesterday);
             } else {
-                // Отправка была раньше → показываем период
+                // �������� ���� ������ > ���������� ������
                 dateFrom = formatDateForUrl(dayAfterSend);
                 dateTo = formatDateForUrl(yesterday);
 
@@ -5675,7 +5675,7 @@
                 }
             }
         } else {
-            // Если не было отправок - берём 14 дней назад до вчера
+            // ���� �� ���� �������� - ���� 14 ���� ����� �� �����
             const twoWeeksAgo = new Date();
             twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
             dateFrom = formatDateForUrl(twoWeeksAgo);
@@ -5688,25 +5688,25 @@
     function checkAndRedirectUrl() {
         const currentUrl = window.location.href;
 
-        // Проверяем что мы на странице статистики Директа
+        // ��������� ��� �� �� �������� ���������� �������
         if (!currentUrl.includes('direct.yandex.ru') ||
             !currentUrl.includes('stat_type=search_queries')) {
-            return; // Не трогаем другие страницы
+            return; // �� ������� ������ ��������
         }
 
         const url = new URL(currentUrl);
         const params = url.searchParams;
 
-        // Получаем текущие параметры
+        // �������� ������� ���������
         const cid = params.get('cid');
         const ulogin = params.get('ulogin');
 
         if (!cid || !ulogin) {
-            log.warn('Не найдены cid или ulogin в URL');
+            log.warn('�� ������� cid ��� ulogin � URL');
             return;
         }
 
-        // Проверяем есть ли уже ВСЕ необходимые параметры для правильного формата
+        // ��������� ���� �� ��� ��� ����������� ��������� ��� ����������� �������
         const hasAllRequiredParams =
             params.get('show_stat') === '1' &&
             params.get('group_by_date') === 'none' &&
@@ -5714,55 +5714,55 @@
             params.get('group_by')?.includes('match_type') &&
             params.get('group_by')?.includes('matched_phrase');
 
-        // ВАЖНО: Проверяем, была ли эта кампания уже проверена
-        // Если да и базовые параметры есть — не трогаем период (пользователь мог изменить вручную)
+        // �����: ���������, ���� �� ��� �������� ��� ���������
+        // ���� �� � ������� ��������� ���� � �� ������� ������ (������������ ��� �������� �������)
         const isSameCampaign = lastCheckedCampaignId === cid;
 
         if (isSameCampaign && hasAllRequiredParams) {
-            log.info('Кампания уже проверена, базовые параметры есть → не трогаем период');
+            log.info('�������� ��� ���������, ������� ��������� ���� > �� ������� ������');
             return;
         }
 
-        // Загружаем дату последней отправки для ТЕКУЩЕЙ кампании
+        // ��������� ���� ��������� �������� ��� ������� ��������
         loadLastSendDate();
 
-        // Вычисляем правильный период для текущей кампании
+        // ��������� ���������� ������ ��� ������� ��������
         const expectedPeriod = calculateCorrectPeriod();
         const currentDateFrom = params.get('date_from');
         const currentDateTo = params.get('date_to');
 
-        // Проверяем соответствует ли текущий период правильному
+        // ��������� ������������� �� ������� ������ �����������
         const isPeriodCorrect =
             currentDateFrom === expectedPeriod.dateFrom &&
             currentDateTo === expectedPeriod.dateTo;
 
-        // Если все параметры верны И период правильный — просто запоминаем кампанию
+        // ���� ��� ��������� ����� � ������ ���������� � ������ ���������� ��������
         if (hasAllRequiredParams && isPeriodCorrect) {
-            log.info('URL уже в правильном формате со всеми параметрами и правильным периодом');
+            log.info('URL ��� � ���������� ������� �� ����� ����������� � ���������� ��������');
             lastCheckedCampaignId = cid;
             sessionStorage.setItem('yd-sq-last-checked-cid', cid);
             return;
         }
 
-        // Если это НОВАЯ кампания или нет базовых параметров — делаем редирект        
+        // ���� ��� ����� �������� ��� ��� ������� ���������� � ������ ��������        
         if (!isSameCampaign) {
-            log.info(`Новая кампания: ${cid} (была: ${lastCheckedCampaignId})`);
+            log.info(`����� ��������: ${cid} (����: ${lastCheckedCampaignId})`);
         }
         if (!hasAllRequiredParams) {
-            log.info('Нет базовых параметров, нужен редирект');
+            log.info('��� ������� ����������, ����� ��������');
         }
         if (hasAllRequiredParams && !isPeriodCorrect && !isSameCampaign) {
-            log.info(`Период неверный: текущий ${currentDateFrom}→${currentDateTo}, нужен ${expectedPeriod.dateFrom}→${expectedPeriod.dateTo}`);
+            log.info(`������ ��������: ������� ${currentDateFrom}>${currentDateTo}, ����� ${expectedPeriod.dateFrom}>${expectedPeriod.dateTo}`);
         }
 
-        log.info('Выполняем редирект');
+        log.info('��������� ��������');
 
-        // Используем уже вычисленный период (loadLastSendDate уже вызван выше)
+        // ���������� ��� ����������� ������ (loadLastSendDate ��� ������ ����)
         const { dateFrom, dateTo } = expectedPeriod;
 
-        log.info(`Редирект: период ${dateFrom} - ${dateTo}`);
+        log.info(`��������: ������ ${dateFrom} - ${dateTo}`);
 
-        // Формируем правильный URL
+        // ��������� ���������� URL
         const newUrl = `https://direct.yandex.ru/registered/main.pl?` +
             `show_stat=1&cmd=showStat&stat_periods=&ulogin=${ulogin}` +
             `&stat_type=search_queries&cid=${cid}&single_camp=1` +
@@ -5774,26 +5774,26 @@
             `&columns_positions=shows%2Ceshows%2Cclicks%2Cctr%2Cectr%2Csum%2Cav_sum%2Cfp_shows_avg_pos%2Cavg_x%2Cfp_clicks_avg_pos%2Cbounce_ratio%2Cadepth%2Caconv%2Cagoalcost%2Cagoalnum%2Cagoalroi%2Cagoalcrr%2Cagoalincome` +
             `&group_by_positions=search_query%2Cadgroup%2Cbanner%2Ccontextcond_orig%2Ccriterion_type%2Cmatch_type%2Cmatched_phrase%2Ctext_source%2Cpage_group%2Cposition%2Ctargeting_category%2Cautotargeting_brand_option%2Cprisma_income_grade%2Cltv_level%2Coffer_attributes_name%2Coffer_attributes_vendor%2Coffer_attributes_category%2Cbanner_title%2Cbanner_body%2Cbanner_href`;
 
-        // Проверяем что URL отличается
+        // ��������� ��� URL ����������
         if (currentUrl !== newUrl) {
-            log.success('Редирект на оптимизированный URL');
-            // Запоминаем cid чтобы после редиректа не делать его повторно
+            log.success('�������� �� ���������������� URL');
+            // ���������� cid ����� ����� ��������� �� ������ ��� ��������
             lastCheckedCampaignId = cid;
             sessionStorage.setItem('yd-sq-last-checked-cid', cid);
-            // Уведомление убрано по просьбе пользователя
+            // ����������� ������ �� ������� ������������
             window.location.replace(newUrl);
         } else {
-            // URL не изменился, просто запоминаем кампанию
+            // URL �� ���������, ������ ���������� ��������
             lastCheckedCampaignId = cid;
             sessionStorage.setItem('yd-sq-last-checked-cid', cid);
         }
     }
 
 
-    // ==================== УВЕДОМЛЕНИЯ ====================
+    // ==================== ����������� ====================
 
     function showYdsqNotification(message, type = 'info') {
-        // Иконки для разных типов уведомлений (Apple SF Symbols style)
+        // ������ ��� ������ ����� ����������� (Apple SF Symbols style)
         const icons = {
             info: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
@@ -5824,19 +5824,19 @@
 
         document.body.appendChild(notification);
 
-        // Анимация появления
+        // �������� ���������
         requestAnimationFrame(() => {
             notification.classList.add('yd-sq-notification-show');
         });
 
-        // Автоскрытие
+        // �����������
         setTimeout(() => {
             notification.classList.remove('yd-sq-notification-show');
             setTimeout(() => notification.remove(), 350);
         }, 3500);
     }
 
-    // ==================== ГЛОБАЛЬНЫЕ СЛУШАТЕЛИ ====================
+    // ==================== ���������� ��������� ====================
 
     let clearAllUndoState = null;
 
@@ -5844,7 +5844,7 @@
         const btn = document.getElementById('yd-sq-clear-all');
         if (btn && btn.dataset.undoMode === 'true') {
             btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-            btn.title = 'Очистить всё';
+            btn.title = '�������� ��';
             delete btn.dataset.undoMode;
             btn.style.background = '';
             btn.style.color = '';
@@ -5853,12 +5853,12 @@
     }
 
     function setupGlobalListeners() {
-        // Скролл пользователя
+        // ������ ������������
         window.addEventListener('scroll', () => {
             lastManualScrollTime = Date.now();
         }, { passive: true });
 
-        // Завершение фразы при клике вне слов активной строки
+        // ���������� ����� ��� ����� ��� ���� �������� ������
         document.addEventListener('click', (e) => {
             if (phraseInProgress) {
                 // Ignore clicks on phrase buttons
@@ -5876,13 +5876,13 @@
                 }
 
                 // Click is outside active row - show confirm
-                if (confirm('Отменить фразу и снять все выделения в этой строке?')) {
+                if (confirm('�������� ����� � ����� ��� ��������� � ���� ������?')) {
                     cancelPhraseBuilding();
                 }
             }
         });
 
-        // Клавиши
+        // �������
         document.addEventListener('keydown', (e) => {
             if (phraseInProgress) {
                 if (e.key === 'Enter') {
@@ -5897,25 +5897,25 @@
             }
         });
 
-        // Делегирование для кнопок панели
+        // ������������� ��� ������ ������
         document.body.addEventListener('click', (e) => {
-            // Кнопка "Очист ить все"
+            // ������ "����� ��� ���"
             const clearAllBtn = e.target.closest('#yd-sq-clear-all');
             if (clearAllBtn) {
-                console.log('[YD-SQ] Кнопка "Очистить все" нажата');
+                console.log('[YD-SQ] ������ "�������� ���" ������');
                 console.log('[YD-SQ] undoMode:', clearAllBtn.dataset.undoMode);
                 console.log('[YD-SQ] selections.size:', selections.size);
 
                 if (clearAllBtn.dataset.undoMode === 'true') {
-                    console.log('[YD-SQ] Режим Вернуть');
-                    // Режим "Вернуть" - восстанавливаем состояние
+                    console.log('[YD-SQ] ����� �������');
+                    // ����� "�������" - ��������������� ���������
                     if (clearAllUndoState) {
                         selections.clear();
                         for (const [key, val] of clearAllUndoState) {
                             selections.set(key, val);
                         }
 
-                        // Восстанавливаем чекбоксы
+                        // ��������������� ��������
                         for (const sel of selections.values()) {
                             if (sel.pageKey === currentPageKey && sel.rowId) {
                                 ensureRowChecked(sel.rowId);
@@ -5924,24 +5924,24 @@
 
                         syncLocalToGlobal();
                         updateUI();
-                        showYdsqNotification('Очистка отменена', 'success');
+                        showYdsqNotification('������� ��������', 'success');
                     }
                     resetClearAllButton();
                 } else {
-                    console.log('[YD-SQ] Режим Очистить');
-                    // Режим "Очистить"
+                    console.log('[YD-SQ] ����� ��������');
+                    // ����� "��������"
                     if (selections.size === 0) {
-                        console.log('[YD-SQ] Нет выделений');
-                        showYdsqNotification('Нет выделений для очистки', 'info');
+                        console.log('[YD-SQ] ��� ���������');
+                        showYdsqNotification('��� ��������� ��� �������', 'info');
                         return;
                     }
 
-                    console.log('[YD-SQ] Сохраняем состояние, размер:', selections.size);
-                    // Сохраняем состояние
+                    console.log('[YD-SQ] ��������� ���������, ������:', selections.size);
+                    // ��������� ���������
                     clearAllUndoState = new Map(selections);
 
-                    console.log('[YD-SQ] Снимаем чекбоксы');
-                    // Снимаем чекбоксы для текущей страницы
+                    console.log('[YD-SQ] ������� ��������');
+                    // ������� �������� ��� ������� ��������
                     for (const sel of selections.values()) {
                         if (sel.pageKey === currentPageKey && sel.rowId) {
                             const cb = getRowCheckbox(sel.rowId);
@@ -5952,53 +5952,53 @@
                         }
                     }
 
-                    console.log('[YD-SQ] Очищаем selections');
+                    console.log('[YD-SQ] ������� selections');
                     selections.clear();
-                    pushUndo('clear_all', 'Очищены все выделения');
+                    pushUndo('clear_all', '������� ��� ���������');
                     syncLocalToGlobal();
-                    console.log('[YD-SQ] Вызываем updateUI');
+                    console.log('[YD-SQ] �������� updateUI');
                     updateUI();
-                    console.log('[YD-SQ] Переключаем кнопку');
+                    console.log('[YD-SQ] ����������� ������');
 
-                    // Переключаем кнопку в режим "Вернуть"
-                    clearAllBtn.textContent = 'Вернуть ↩';
+                    // ����������� ������ � ����� "�������"
+                    clearAllBtn.textContent = '������� ?';
                     clearAllBtn.dataset.undoMode = 'true';
                     clearAllBtn.style.background = '#e6f7ff';
                     clearAllBtn.style.color = '#1890ff';
-                    console.log('[YD-SQ] Готово');
+                    console.log('[YD-SQ] ������');
                 }
             }
 
-            // Кнопка "Очистить импортированные"
+            // ������ "�������� ���������������"
             const clearImpBtn = e.target.closest('#yd-sq-clear-imported');
             if (clearImpBtn) {
                 if (importedMinuses.length === 0) {
-                    showYdsqNotification('Список импортированных пуст', 'info');
+                    showYdsqNotification('������ ��������������� ����', 'info');
                     return;
                 }
 
                 if (clearImpBtn.dataset.confirming === 'true') {
-                    // Второе нажатие - выполняем очистку
+                    // ������ ������� - ��������� �������
                     importedMinuses = [];
                     syncLocalToGlobal();
                     updateHighlights();
                     updateUI();
-                    showYdsqNotification('Список импортированных очищен', 'success');
+                    showYdsqNotification('������ ��������������� ������', 'success');
 
-                    // Сброс кнопки
+                    // ����� ������
                     clearImpBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
                     delete clearImpBtn.dataset.confirming;
                     clearImpBtn.style.background = '';
                     clearImpBtn.style.color = '';
                 } else {
-                    // Первое нажатие - запрашиваем подтверждение
+                    // ������ ������� - ����������� �������������
                     clearImpBtn.dataset.confirming = 'true';
                     const originalHtml = clearImpBtn.innerHTML;
-                    clearImpBtn.textContent = 'Точно?';
+                    clearImpBtn.textContent = '�����?';
                     clearImpBtn.style.background = '#ff4d4f';
                     clearImpBtn.style.color = 'white';
 
-                    // Сброс через 3 секунды
+                    // ����� ����� 3 �������
                     setTimeout(() => {
                         if (clearImpBtn.dataset.confirming === 'true') {
                             clearImpBtn.innerHTML = originalHtml;
@@ -6039,7 +6039,7 @@
         const dialogs = document.querySelectorAll('[role="dialog"]');
         for (const dialog of dialogs) {
             const title = dialog.querySelector('h3, .title, [class*="Title"]');
-            if (title && (title.textContent.includes('Минус-фразы') || title.textContent.includes('Минус слова'))) {
+            if (title && (title.textContent.includes('�����-�����') || title.textContent.includes('����� �����'))) {
                 return dialog.querySelector('textarea');
             }
         }
@@ -6080,7 +6080,7 @@
         }
     }
 
-    // ==================== CSS СТИЛИ ====================
+    // ==================== CSS ����� ====================
 
     function injectStyles() {
         if (document.getElementById('yd-sq-styles')) return;
@@ -6088,7 +6088,7 @@
         const style = document.createElement('style');
         style.id = 'yd-sq-styles';
         style.textContent = `
-            /* ===== ОСНОВНЫЕ ПЕРЕМЕННЫЕ ===== */
+            /* ===== �������� ���������� ===== */
             :root {
                 --yd-primary: #205598;
                 --yd-primary-light: #2F6FDB;
@@ -6128,7 +6128,7 @@
                 background: rgba(0, 0, 0, 0.25);
             }
 
-            /* ===== ПАНЕЛЬ (Floating Layer) ===== */
+            /* ===== ������ (Floating Layer) ===== */
             #yd-sq-panel {
                 position: fixed;
                 z-index: 9999999;
@@ -6330,7 +6330,7 @@
                 to { transform: rotate(360deg); }
             }
 
-            /* Source icon (📥 or ➕) */
+            /* Source icon (?? or ?) */
             .yd-sq-source-icon {
                 font-size: 10px;
                 flex-shrink: 0;
@@ -6373,7 +6373,7 @@
                 flex-shrink: 0;
             }
 
-            /* Секция ВЫБРАНО - занимает всё доступное место, имеет свой скролл */
+            /* ������ ������� - �������� �� ��������� �����, ����� ���� ������ */
             .yd-sq-section-selected {
                 flex: 1 1 auto;
                 display: flex;
@@ -6497,7 +6497,7 @@
                 background: var(--yd-bg-hover);
             }
 
-            /* Delete button - крайний левый, hover-only */
+            /* Delete button - ������� �����, hover-only */
             .yd-sq-item-delete {
                 opacity: 0;
                 background: none;
@@ -6522,7 +6522,7 @@
                 background: var(--yd-danger-bg);
             }
 
-            /* Badge Type - кликабельный для смены типа */
+            /* Badge Type - ������������ ��� ����� ���� */
             .yd-sq-badge-type {
                 font-size: 10px;
                 font-weight: 600;
@@ -6557,7 +6557,7 @@
                 color: var(--yd-primary);
             }
 
-            /* Item text - кликабельный для редактирования */
+            /* Item text - ������������ ��� �������������� */
             .yd-sq-item-text {
                 flex: 1;
                 font-size: 14px;
@@ -6731,7 +6731,7 @@
                 box-shadow: none;
             }
 
-            /* Успешная отправка — анимация */
+            /* �������� �������� � �������� */
             #yd-sq-panel .yd-sq-btn-primary.success {
                 background: var(--yd-success) !important;
             }
@@ -6744,12 +6744,12 @@
                 margin-bottom: 6px;
             }
 
-            /* Главная кнопка занимает всё доступное место */
+            /* ������� ������ �������� �� ��������� ����� */
             .yd-sq-footer-buttons .yd-sq-btn-primary {
                 flex: 1;
             }
 
-            /* Кнопка синхронизации — компактная иконка */
+            /* ������ ������������� � ���������� ������ */
             #yd-sq-panel .yd-sq-btn-icon {
                 flex: 0 0 auto;
                 display: flex;
@@ -7083,7 +7083,7 @@
                 font-weight: 600;
             }
 
-            /* ДАТА ПОСЛЕДНЕЙ ОТПРАВКИ */
+            /* ���� ��������� �������� */
             .yd-sq-last-send-info {
                 display: flex;
                 flex-direction: column;
@@ -7107,7 +7107,7 @@
                 font-size: 12px;
             }
 
-            /* СЛОВА В ТАБЛИЦЕ */
+            /* ����� � ������� */
             .yd-word {
                 cursor: pointer;
                 transition: background 0.15s ease, box-shadow 0.15s ease;
@@ -7121,33 +7121,33 @@
                 background: rgba(47, 111, 219, 0.1);
             }
 
-            /* Отключаем hover для импортированных слов */
+            /* ��������� hover ��� ��������������� ���� */
             .yd-imported-minus:hover {
                 background: var(--yd-success-bg) !important;
             }
 
-            /* Одиночное слово - синий */
+            /* ��������� ����� - ����� */
             .yd-selected-soft {
                 background: var(--yd-primary-bg) !important;
                 border: 1px solid var(--yd-primary) !important;
                 border-radius: 2px;
             }
 
-            /* Строгое слово */
+            /* ������� ����� */
             .yd-selected-strict {
                 background: rgba(220, 53, 69, 0.15) !important;
                 border: 1px solid var(--yd-danger) !important;
                 border-radius: 2px;
             }
 
-            /* Фраза - фиолетовый */
+            /* ����� - ���������� */
             .yd-selected-phrase {
                 background: var(--yd-purple-bg) !important;
                 border: 1px solid var(--yd-purple) !important;
                 border-radius: 2px;
             }
 
-            /* Строящаяся фраза */
+            /* ���������� ����� */
             .yd-phrase-building {
                 background: var(--yd-primary-bg) !important;
                 border: 2px dashed var(--yd-primary) !important;
@@ -7172,7 +7172,7 @@
                 font-weight: 600;
             }
 
-            /* Уже добавлено - серый с tooltip */
+            /* ��� ��������� - ����� � tooltip */
             .yd-imported-minus {
                 background: var(--yd-success-bg) !important;
                 color: var(--yd-text-secondary) !important;
@@ -7182,7 +7182,7 @@
                 position: relative;
             }
 
-            /* Apple-style tooltip для imported минусов */
+            /* Apple-style tooltip ��� imported ������� */
             .yd-imported-minus[data-tooltip]::after {
                 content: attr(data-tooltip);
                 position: absolute;
@@ -7229,7 +7229,7 @@
             .yd-phrase-btn-cancel { color: #dc3545; border-color: #dc3545; }
             .yd-phrase-btn-cancel:hover { background: #ffe6e6; }
 
-            /* COPY КНОПКА */
+            /* COPY ������ */
             .yd-copy-query-btn {
                 display: inline-flex;
                 align-items: center;
@@ -7249,7 +7249,7 @@
                 line-height: 1;
             }
 
-            /* Контейнер для кнопок действий */
+            /* ��������� ��� ������ �������� */
             .yd-query-actions {
                 display: inline-flex;
                 gap: 4px;
@@ -7257,7 +7257,7 @@
                 vertical-align: middle;
             }
 
-            /* Кнопка поиска в Яндекс */
+            /* ������ ������ � ������ */
             .yd-search-query-btn {
                 display: inline-flex;
                 align-items: center;
@@ -7327,7 +7327,7 @@
                 font-size: 11px;
             }
 
-            /* ==================== УВЕДОМЛЕНИЯ (Apple Style) ==================== */
+            /* ==================== ����������� (Apple Style) ==================== */
             .yd-sq-notification {
                 position: fixed;
                 top: 20px;
@@ -7389,7 +7389,7 @@
                 color: #fff;
             }
 
-            /* ДИАЛОГ ПОДТВЕРЖДЕНИЯ */
+            /* ������ ������������� */
             #yd-sq-confirm-overlay {
                 position: fixed;
                 top: 0;
@@ -7490,7 +7490,7 @@
         document.head.appendChild(style);
     }
 
-    // ==================== ЗАПУСК ====================
+    // ==================== ������ ====================
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
@@ -7499,9 +7499,9 @@
     }
 
 })();
-// ==================== МОДУЛЬ: ПЛОЩАДКИ (stat_type=pages) ====================
-// Автоматическое выделение площадок по правилам
-// Работает только на страницах с stat_type=pages
+// ==================== МОДУЛЬ: ПЛОЩАДКИ (stat_type=pages) v3.0 ====================
+// Полностью переработанный модуль в стиле Apple
+// Унифицирован с модулем поисковых запросов
 (function () {
     'use strict';
 
@@ -7510,43 +7510,53 @@
         return;
     }
 
-    console.log("[YD-PL] 🚀 Модуль площадок инициализируется...");
+    console.log("[YD-PL] 🚀 Модуль площадок v3.0 инициализируется...");
 
     // ==================== КОНСТАНТЫ ====================
-    const STORAGE_KEY = 'yd-pl-settings';
-    const DEFAULT_TEMPLATES = {
-        'Стандарт': 'com., dsp, puzzle, game, teskin',
-        'Мобильные': 'com., android, ios, app, mobile',
-        'Игры': 'game, puzzle, play, casino, slot'
-    };
+    const STORAGE_KEY = 'yd-pl-settings-v3';
 
     // ==================== СОСТОЯНИЕ ====================
     let settings = loadSettings();
+    let highlightedRows = new Set(); // Для подсветки preview
 
+    function getDefaultSettings() {
+        return {
+            templates: [{
+                id: 'default',
+                name: 'Мой фильтр',
+                patterns: ['com.', 'dsp', 'game'],
+                isDefault: true
+            }],
+            currentTemplateId: 'default',
+            panelPosition: { top: '15px', right: '15px' },
+            panelSize: { width: 340, height: 'auto' },
+            whitelist: [], // Белый список - эти домены никогда не выделяются
+            filters: {
+                clicksMin: '',
+                clicksMax: '',
+                ctrMin: '',
+                ctrMax: '',
+                cpcMin: '',
+                cpcMax: '',
+                spendMin: '',
+                spendMax: ''
+            },
+            mode: 'and',
+            showTemplates: false,
+            highlightPreview: true
+        };
+    }
 
     function loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                return JSON.parse(saved);
+                return { ...getDefaultSettings(), ...JSON.parse(saved) };
             }
         } catch (e) {
             console.error('[YD-PL] Ошибка загрузки настроек:', e);
         }
-        return {
-            templates: { ...DEFAULT_TEMPLATES },
-            currentTemplate: 'Стандарт',
-            panelPosition: { top: '15px', right: '15px' },
-            panelSize: { width: 340, height: 420 },
-            filters: {
-                domains: DEFAULT_TEMPLATES['Стандарт'],
-                minClicks: '',
-                minCtr: '',
-                maxCpc: '',
-                maxSpend: ''
-            },
-            mode: 'and'
-        };
+        return getDefaultSettings();
     }
 
     function saveSettings() {
@@ -7569,42 +7579,59 @@
     }
 
     function isGreyElement(el) {
-        if (!el || !window.getComputedStyle) return false;
-        const color = window.getComputedStyle(el).color;
+        if (!el || !globalThis.getComputedStyle) return false;
+        const color = globalThis.getComputedStyle(el).color;
         const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
         if (!m) return false;
         const [r, g, b] = m.slice(1).map(Number);
-        const diffRG = Math.abs(r - g);
-        const diffGB = Math.abs(g - b);
-        const diffRB = Math.abs(r - b);
-        if (diffRG > 10 || diffGB > 10 || diffRB > 10) return false;
-        return (r + g + b) / 3 > 80;
+        return Math.abs(r - g) <= 10 && Math.abs(g - b) <= 10 && (r + g + b) / 3 > 80;
     }
 
-    function getValNum(id) {
+    function getFilterValue(id) {
         const el = document.getElementById(id);
         if (!el) return null;
         const val = el.value.trim();
         return val ? Number(val.replace(',', '.')) : null;
     }
 
-    // ==================== ПОДСЧЁТ ПЛОЩАДОК ====================
-    function countMatchingRows() {
+    function debounce(fn, delay) {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    }
+
+    function getCurrentTemplate() {
+        return settings.templates.find(t => t.id === settings.currentTemplateId) || settings.templates[0];
+    }
+
+    function generateId() {
+        return 'tpl_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    }
+
+    // ==================== ПОДСВЕТКА PREVIEW ====================
+    function highlightMatchingRows() {
+        clearHighlights();
+        if (!settings.highlightPreview) return;
+
         const rows = document.querySelectorAll('tbody tr');
-        const domainInput = document.getElementById('yd-pl-domain-patterns');
-        const domainPatterns = domainInput ? domainInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+        const template = getCurrentTemplate();
+        const patterns = template.patterns || [];
 
-        const minClicks = getValNum('yd-pl-min-clicks');
-        const minCtr = getValNum('yd-pl-min-ctr');
-        const maxCpc = getValNum('yd-pl-max-cpc');
-        const maxSpend = getValNum('yd-pl-max-spend');
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
-
-        let count = 0;
+        const clicksMin = getFilterValue('yd-pl-clicks-min');
+        const clicksMax = getFilterValue('yd-pl-clicks-max');
+        const ctrMin = getFilterValue('yd-pl-ctr-min');
+        const ctrMax = getFilterValue('yd-pl-ctr-max');
+        const cpcMin = getFilterValue('yd-pl-cpc-min');
+        const cpcMax = getFilterValue('yd-pl-cpc-max');
+        const spendMin = getFilterValue('yd-pl-spend-min');
+        const spendMax = getFilterValue('yd-pl-spend-max');
+        const mode = settings.mode;
 
         rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
-            if (!checkbox || checkbox.disabled) return;
+            if (!checkbox || checkbox.disabled || checkbox.checked) return;
 
             const tds = row.querySelectorAll('td');
             if (tds.length < 6) return;
@@ -7613,6 +7640,11 @@
             const domainEl = domainCell.querySelector('a') || domainCell;
             if (isGreyElement(domainEl)) return;
 
+            const domain = domainEl.textContent.trim().toLowerCase();
+
+            // Проверка белого списка
+            if (settings.whitelist.some(w => domain.includes(w.toLowerCase()))) return;
+
             const clicks = parseNumber(tds[2].textContent);
             const ctr = parseNumber(tds[3].textContent);
             const spend = parseNumber(tds[4].textContent);
@@ -7620,95 +7652,62 @@
 
             const conditions = [];
 
-            if (domainPatterns.length > 0) {
-                const domain = domainEl.textContent.trim().toLowerCase();
-                const ok = domainPatterns.some(p => {
+            // Паттерны доменов
+            if (patterns.length > 0) {
+                const ok = patterns.some(p => {
                     if (!p) return false;
-                    if (p === 'com.') return domain.startsWith('com.');
-                    return domain.startsWith(p) || domain.includes(p);
+                    const pl = p.toLowerCase().trim();
+                    if (pl.endsWith('.')) return domain.startsWith(pl.slice(0, -1) + '.');
+                    if (pl.startsWith('.')) return domain.endsWith(pl);
+                    return domain.includes(pl);
                 });
                 conditions.push(ok);
             }
 
-            if (minClicks !== null) conditions.push(clicks >= minClicks);
-            if (minCtr !== null) conditions.push(ctr >= minCtr);
-            if (maxCpc !== null) conditions.push(cpc <= maxCpc);
-            if (maxSpend !== null) conditions.push(spend <= maxSpend);
+            // Числовые фильтры (диапазоны)
+            if (clicksMin !== null) conditions.push(clicks >= clicksMin);
+            if (clicksMax !== null) conditions.push(clicks <= clicksMax);
+            if (ctrMin !== null) conditions.push(ctr >= ctrMin);
+            if (ctrMax !== null) conditions.push(ctr <= ctrMax);
+            if (cpcMin !== null) conditions.push(cpc >= cpcMin);
+            if (cpcMax !== null) conditions.push(cpc <= cpcMax);
+            if (spendMin !== null) conditions.push(spend >= spendMin);
+            if (spendMax !== null) conditions.push(spend <= spendMax);
 
             if (conditions.length === 0) return;
 
             const pass = mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
-            if (pass && !checkbox.checked) count++;
+            if (pass) {
+                row.classList.add('yd-pl-highlight');
+                highlightedRows.add(row);
+            }
         });
 
-        return count;
+        updateStats();
+    }
+
+    function clearHighlights() {
+        highlightedRows.forEach(row => row.classList.remove('yd-pl-highlight'));
+        highlightedRows.clear();
     }
 
     // ==================== ЛОГИКА ВЫДЕЛЕНИЯ ====================
     function selectPlacements() {
         const rows = document.querySelectorAll('tbody tr');
-        if (!rows.length) {
-            showNotification('Строк не найдено', 'error');
-            return;
-        }
-
-        const domainInput = document.getElementById('yd-pl-domain-patterns');
-        const domainPatterns = domainInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-
-        const minClicks = getValNum('yd-pl-min-clicks');
-        const minCtr = getValNum('yd-pl-min-ctr');
-        const maxCpc = getValNum('yd-pl-max-cpc');
-        const maxSpend = getValNum('yd-pl-max-spend');
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
-
         let count = 0;
 
         rows.forEach(row => {
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            if (!checkbox) return;
-
-            const tds = row.querySelectorAll('td');
-            if (tds.length < 6) return;
-
-            const domainCell = tds[0];
-            const domainEl = domainCell.querySelector('a') || domainCell;
-            if (isGreyElement(domainEl)) return;
-
-            const clicks = parseNumber(tds[2].textContent);
-            const ctr = parseNumber(tds[3].textContent);
-            const spend = parseNumber(tds[4].textContent);
-            const cpc = parseNumber(tds[5].textContent);
-
-            const conditions = [];
-
-            if (domainPatterns.length > 0) {
-                const domain = domainEl.textContent.trim().toLowerCase();
-                const ok = domainPatterns.some(p => {
-                    if (!p) return false;
-                    if (p === 'com.') return domain.startsWith('com.');
-                    return domain.startsWith(p) || domain.includes(p);
-                });
-                conditions.push(ok);
-            }
-
-            if (minClicks !== null) conditions.push(clicks >= minClicks);
-            if (minCtr !== null) conditions.push(ctr >= minCtr);
-            if (maxCpc !== null) conditions.push(cpc <= maxCpc);
-            if (maxSpend !== null) conditions.push(spend <= maxSpend);
-
-            if (conditions.length === 0) return;
-
-            const pass = mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
-
-            if (!pass) return;
-
-            if (!checkbox.checked && !checkbox.disabled) {
-                checkbox.click();
-                count++;
+            if (row.classList.contains('yd-pl-highlight')) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                    checkbox.click();
+                    count++;
+                }
             }
         });
 
         showNotification(`Выделено: ${count}`, 'success');
+        clearHighlights();
         updateStats();
         saveCurrentFilters();
     }
@@ -7726,24 +7725,16 @@
         updateStats();
     }
 
-    function resetAllFilters() {
-        document.getElementById('yd-pl-domain-patterns').value = '';
-        document.getElementById('yd-pl-min-clicks').value = '';
-        document.getElementById('yd-pl-min-ctr').value = '';
-        document.getElementById('yd-pl-max-cpc').value = '';
-        document.getElementById('yd-pl-max-spend').value = '';
-        document.querySelector('input[name="yd-pl-mode"][value="and"]').checked = true;
-        updatePreview();
-        showNotification('Фильтры сброшены', 'info');
-    }
-
     function saveCurrentFilters() {
         settings.filters = {
-            domains: document.getElementById('yd-pl-domain-patterns').value,
-            minClicks: document.getElementById('yd-pl-min-clicks').value,
-            minCtr: document.getElementById('yd-pl-min-ctr').value,
-            maxCpc: document.getElementById('yd-pl-max-cpc').value,
-            maxSpend: document.getElementById('yd-pl-max-spend').value
+            clicksMin: document.getElementById('yd-pl-clicks-min')?.value || '',
+            clicksMax: document.getElementById('yd-pl-clicks-max')?.value || '',
+            ctrMin: document.getElementById('yd-pl-ctr-min')?.value || '',
+            ctrMax: document.getElementById('yd-pl-ctr-max')?.value || '',
+            cpcMin: document.getElementById('yd-pl-cpc-min')?.value || '',
+            cpcMax: document.getElementById('yd-pl-cpc-max')?.value || '',
+            spendMin: document.getElementById('yd-pl-spend-min')?.value || '',
+            spendMax: document.getElementById('yd-pl-spend-max')?.value || ''
         };
         settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
         saveSettings();
@@ -7753,18 +7744,17 @@
     function updateStats() {
         const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
         const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+        const preview = highlightedRows.size;
+
         const statsEl = document.getElementById('yd-pl-stats');
         if (statsEl) {
             statsEl.textContent = `${checked} / ${total}`;
         }
-    }
 
-    function updatePreview() {
-        const count = countMatchingRows();
-        const previewEl = document.getElementById('yd-pl-preview');
+        const previewEl = document.getElementById('yd-pl-preview-count');
         if (previewEl) {
-            previewEl.textContent = count > 0 ? `Будет выделено: ${count}` : 'Нет совпадений';
-            previewEl.className = count > 0 ? 'yd-pl-preview yd-pl-preview-active' : 'yd-pl-preview';
+            previewEl.textContent = preview > 0 ? `Будет выделено: ${preview}` : 'Нет совпадений';
+            previewEl.className = preview > 0 ? 'yd-pl-preview-count active' : 'yd-pl-preview-count';
         }
     }
 
@@ -7784,17 +7774,202 @@
         }, 2000);
     }
 
-    function updateTemplateSelect() {
-        const select = document.getElementById('yd-pl-template-select');
-        if (!select) return;
-        select.innerHTML = '';
-        for (const name of Object.keys(settings.templates)) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            if (name === settings.currentTemplate) opt.selected = true;
-            select.appendChild(opt);
+    // ==================== ШАБЛОНЫ ====================
+    function renderTemplates() {
+        const container = document.getElementById('yd-pl-templates-list');
+        if (!container) return;
+
+        container.innerHTML = settings.templates.map(t => `
+            <div class="yd-pl-template-item ${t.id === settings.currentTemplateId ? 'active' : ''}" data-id="${t.id}">
+                <div class="yd-pl-template-info">
+                    <span class="yd-pl-template-name" contenteditable="true">${t.name}</span>
+                    <span class="yd-pl-template-patterns">${t.patterns.slice(0, 3).join(', ')}${t.patterns.length > 3 ? '...' : ''}</span>
+                </div>
+                <div class="yd-pl-template-actions">
+                    <button class="yd-pl-template-copy" title="Копировать">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                    </button>
+                    ${!t.isDefault ? `
+                    <button class="yd-pl-template-delete" title="Удалить">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        // Event listeners
+        container.querySelectorAll('.yd-pl-template-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.closest('[contenteditable]')) return;
+                selectTemplate(item.dataset.id);
+            });
+
+            const nameEl = item.querySelector('.yd-pl-template-name');
+            nameEl.addEventListener('blur', () => {
+                const tpl = settings.templates.find(t => t.id === item.dataset.id);
+                if (tpl) {
+                    tpl.name = nameEl.textContent.trim() || 'Без названия';
+                    saveSettings();
+                }
+            });
+            nameEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+            });
+
+            item.querySelector('.yd-pl-template-copy')?.addEventListener('click', () => copyTemplate(item.dataset.id));
+            item.querySelector('.yd-pl-template-delete')?.addEventListener('click', () => deleteTemplate(item.dataset.id));
+        });
+    }
+
+    function selectTemplate(id) {
+        settings.currentTemplateId = id;
+        saveSettings();
+        renderTemplates();
+        renderPatternChips();
+        highlightMatchingRows();
+    }
+
+    function copyTemplate(id) {
+        const source = settings.templates.find(t => t.id === id);
+        if (!source) return;
+
+        const newTpl = {
+            id: generateId(),
+            name: source.name + ' (копия)',
+            patterns: [...source.patterns],
+            isDefault: false
+        };
+        settings.templates.push(newTpl);
+        settings.currentTemplateId = newTpl.id;
+        saveSettings();
+        renderTemplates();
+        renderPatternChips();
+        showNotification('Шаблон скопирован', 'success');
+    }
+
+    function deleteTemplate(id) {
+        const idx = settings.templates.findIndex(t => t.id === id);
+        if (idx === -1 || settings.templates[idx].isDefault) return;
+
+        settings.templates.splice(idx, 1);
+        if (settings.currentTemplateId === id) {
+            settings.currentTemplateId = settings.templates[0].id;
         }
+        saveSettings();
+        renderTemplates();
+        renderPatternChips();
+        showNotification('Шаблон удалён', 'info');
+    }
+
+    function addNewTemplate() {
+        const newTpl = {
+            id: generateId(),
+            name: 'Новый фильтр',
+            patterns: [],
+            isDefault: false
+        };
+        settings.templates.push(newTpl);
+        settings.currentTemplateId = newTpl.id;
+        saveSettings();
+        renderTemplates();
+        renderPatternChips();
+    }
+
+    // ==================== ПАТТЕРНЫ (CHIPS) ====================
+    function renderPatternChips() {
+        const container = document.getElementById('yd-pl-patterns-chips');
+        if (!container) return;
+
+        const template = getCurrentTemplate();
+        const patterns = template.patterns || [];
+
+        container.innerHTML = patterns.map((p, i) => `
+            <span class="yd-pl-chip">
+                <span class="yd-pl-chip-text">${escapeHtml(p)}</span>
+                <button class="yd-pl-chip-remove" data-index="${i}">×</button>
+            </span>
+        `).join('') + `
+            <input type="text" class="yd-pl-chip-input" id="yd-pl-pattern-input" 
+                   placeholder="${patterns.length === 0 ? 'com., dsp, game...' : '+ добавить'}">
+        `;
+
+        // Event listeners
+        container.querySelectorAll('.yd-pl-chip-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.index);
+                template.patterns.splice(idx, 1);
+                saveSettings();
+                renderPatternChips();
+                highlightMatchingRows();
+            });
+        });
+
+        const input = container.querySelector('#yd-pl-pattern-input');
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const val = input.value.trim().replace(/,/g, '');
+                if (val && !template.patterns.includes(val)) {
+                    template.patterns.push(val);
+                    saveSettings();
+                    renderPatternChips();
+                    highlightMatchingRows();
+                }
+            } else if (e.key === 'Backspace' && !input.value && template.patterns.length > 0) {
+                template.patterns.pop();
+                saveSettings();
+                renderPatternChips();
+                highlightMatchingRows();
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+    }
+
+    // ==================== БЕЛЫЙ СПИСОК ====================
+    function renderWhitelist() {
+        const container = document.getElementById('yd-pl-whitelist-chips');
+        if (!container) return;
+
+        container.innerHTML = settings.whitelist.map((w, i) => `
+            <span class="yd-pl-chip yd-pl-chip-white">
+                <span class="yd-pl-chip-text">${escapeHtml(w)}</span>
+                <button class="yd-pl-chip-remove" data-index="${i}">×</button>
+            </span>
+        `).join('') + `
+            <input type="text" class="yd-pl-chip-input" id="yd-pl-whitelist-input" 
+                   placeholder="${settings.whitelist.length === 0 ? 'yandex.ru, google.com...' : '+ добавить'}">
+        `;
+
+        container.querySelectorAll('.yd-pl-chip-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                settings.whitelist.splice(parseInt(btn.dataset.index), 1);
+                saveSettings();
+                renderWhitelist();
+                highlightMatchingRows();
+            });
+        });
+
+        const input = container.querySelector('#yd-pl-whitelist-input');
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const val = input.value.trim().replace(/,/g, '');
+                if (val && !settings.whitelist.includes(val)) {
+                    settings.whitelist.push(val);
+                    saveSettings();
+                    renderWhitelist();
+                    highlightMatchingRows();
+                }
+            }
+        });
     }
 
     // ==================== СОЗДАНИЕ ПАНЕЛИ ====================
@@ -7805,30 +7980,23 @@
 
         const panel = document.createElement('div');
         panel.id = 'yd-pl-panel';
+        panel.style.top = settings.panelPosition.top;
+        panel.style.right = settings.panelPosition.right;
+        if (settings.panelPosition.left) panel.style.left = settings.panelPosition.left;
         panel.innerHTML = `
             <!-- Header -->
             <div class="yd-pl-header" id="yd-pl-panel-header">
                 <div class="yd-pl-header-left">
                     <svg class="yd-pl-logo" width="20" height="20" viewBox="0 0 100 100">
-                        <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
-                        <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
-                        <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
-                        <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
+                        <circle cx="38" cy="38" r="28" fill="none" stroke="var(--yd-primary)" stroke-width="8"/>
+                        <line x1="58" y1="58" x2="85" y2="85" stroke="var(--yd-primary)" stroke-width="10" stroke-linecap="round"/>
+                        <rect x="22" y="28" width="32" height="6" rx="2" fill="var(--yd-accent)"/>
+                        <rect x="22" y="42" width="24" height="6" rx="2" fill="var(--yd-primary)"/>
                     </svg>
-                    <div class="yd-pl-title-group">
-                        <span class="yd-pl-title">YD Helper</span>
-                        <span class="yd-pl-subtitle">Площадки</span>
-                    </div>
+                    <span class="yd-pl-title">YD Helper</span>
                 </div>
                 <div class="yd-pl-header-right">
                     <span id="yd-pl-stats" class="yd-pl-badge">0 / 0</span>
-                    <button id="yd-pl-help-btn" class="yd-pl-icon-btn" title="Справка">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                    </button>
                     <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -7839,90 +8007,94 @@
 
             <!-- Body -->
             <div id="yd-pl-panel-body" class="yd-pl-body">
-                <!-- Секция: ШАБЛОНЫ -->
+                <!-- Секция: ПАТТЕРНЫ ДОМЕНОВ -->
                 <div class="yd-pl-section">
                     <div class="yd-pl-section-header">
-                        <span class="yd-pl-section-label">ШАБЛОНЫ</span>
-                        <div class="yd-pl-section-actions">
-                            <button id="yd-pl-template-save" class="yd-pl-icon-btn-sm" title="Сохранить текущие настройки как шаблон">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                            </button>
-                            <button id="yd-pl-template-delete" class="yd-pl-icon-btn-sm" title="Удалить шаблон">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"/>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                </svg>
-                            </button>
-                        </div>
+                        <span class="yd-pl-section-label">ПАТТЕРНЫ ДОМЕНОВ</span>
+                        <button id="yd-pl-toggle-templates" class="yd-pl-link-btn">Шаблоны</button>
                     </div>
-                    <select id="yd-pl-template-select" class="yd-pl-select"></select>
+                    <div id="yd-pl-patterns-chips" class="yd-pl-chips-container"></div>
+                    <div class="yd-pl-hint">Суффикс <code>.</code> = строго с начала (com. → com.example)</div>
                 </div>
 
-                <!-- Секция: ФИЛЬТРЫ -->
-                <div class="yd-pl-section">
+                <!-- Секция: ШАБЛОНЫ (скрыта по умолчанию) -->
+                <div id="yd-pl-templates-section" class="yd-pl-section yd-pl-collapsible ${settings.showTemplates ? 'open' : ''}">
                     <div class="yd-pl-section-header">
-                        <span class="yd-pl-section-label">ФИЛЬТРЫ</span>
-                        <button id="yd-pl-reset-filters" class="yd-pl-icon-btn-sm" title="Сбросить все фильтры">
+                        <span class="yd-pl-section-label-muted">СОХРАНЁННЫЕ ШАБЛОНЫ</span>
+                        <button id="yd-pl-add-template" class="yd-pl-icon-btn-sm" title="Добавить шаблон">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                             </svg>
                         </button>
                     </div>
+                    <div id="yd-pl-templates-list" class="yd-pl-templates-list"></div>
+                </div>
+
+                <!-- Секция: ФИЛЬТРЫ ПО ПОКАЗАТЕЛЯМ -->
+                <div class="yd-pl-section">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-label">ФИЛЬТРЫ ПО ПОКАЗАТЕЛЯМ</span>
+                        <button id="yd-pl-reset-filters" class="yd-pl-link-btn">Сбросить</button>
+                    </div>
                     
-                    <!-- Домены -->
-                    <div class="yd-pl-field-group">
-                        <label class="yd-pl-label-sm">Паттерны доменов</label>
-                        <textarea id="yd-pl-domain-patterns" class="yd-pl-textarea" rows="2" 
-                            placeholder="com., dsp, puzzle, game...">${settings.filters.domains}</textarea>
+                    <div class="yd-pl-filters-grid">
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Клики</span>
+                            <div class="yd-pl-filter-range">
+                                <input type="number" id="yd-pl-clicks-min" class="yd-pl-input-sm" placeholder="от" min="0" step="1" value="${settings.filters.clicksMin}">
+                                <span class="yd-pl-range-sep">—</span>
+                                <input type="number" id="yd-pl-clicks-max" class="yd-pl-input-sm" placeholder="до" min="0" step="1" value="${settings.filters.clicksMax}">
+                            </div>
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CTR %</span>
+                            <div class="yd-pl-filter-range">
+                                <input type="number" id="yd-pl-ctr-min" class="yd-pl-input-sm" placeholder="от" min="0" step="0.1" value="${settings.filters.ctrMin}">
+                                <span class="yd-pl-range-sep">—</span>
+                                <input type="number" id="yd-pl-ctr-max" class="yd-pl-input-sm" placeholder="до" min="0" step="0.1" value="${settings.filters.ctrMax}">
+                            </div>
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CPC ₽</span>
+                            <div class="yd-pl-filter-range">
+                                <input type="number" id="yd-pl-cpc-min" class="yd-pl-input-sm" placeholder="от" min="0" step="1" value="${settings.filters.cpcMin}">
+                                <span class="yd-pl-range-sep">—</span>
+                                <input type="number" id="yd-pl-cpc-max" class="yd-pl-input-sm" placeholder="до" min="0" step="1" value="${settings.filters.cpcMax}">
+                            </div>
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Расход ₽</span>
+                            <div class="yd-pl-filter-range">
+                                <input type="number" id="yd-pl-spend-min" class="yd-pl-input-sm" placeholder="от" min="0" step="1" value="${settings.filters.spendMin}">
+                                <span class="yd-pl-range-sep">—</span>
+                                <input type="number" id="yd-pl-spend-max" class="yd-pl-input-sm" placeholder="до" min="0" step="1" value="${settings.filters.spendMax}">
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Числовые фильтры -->
-                    <div class="yd-pl-grid">
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Мин. кликов</label>
-                            <input id="yd-pl-min-clicks" class="yd-pl-input-sm" type="number" min="0" 
-                                placeholder="—" value="${settings.filters.minClicks}">
-                        </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Мин. CTR %</label>
-                            <input id="yd-pl-min-ctr" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.minCtr}">
-                        </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Макс. CPC ₽</label>
-                            <input id="yd-pl-max-cpc" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.maxCpc}">
-                        </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Макс. расход ₽</label>
-                            <input id="yd-pl-max-spend" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.maxSpend}">
-                        </div>
-                    </div>
-
-                    <!-- Режим -->
-                    <div class="yd-pl-mode-row">
-                        <span class="yd-pl-label-sm">Условия:</span>
-                        <div class="yd-pl-toggle-group">
-                            <label class="yd-pl-toggle ${settings.mode === 'and' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
-                                <span>И (все)</span>
-                            </label>
-                            <label class="yd-pl-toggle ${settings.mode === 'or' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
-                                <span>ИЛИ (любое)</span>
-                            </label>
-                        </div>
+                    <!-- Режим И/ИЛИ -->
+                    <div class="yd-pl-mode-toggle">
+                        <label class="yd-pl-mode-option ${settings.mode === 'and' ? 'active' : ''}">
+                            <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                            <span>Все условия</span>
+                        </label>
+                        <label class="yd-pl-mode-option ${settings.mode === 'or' ? 'active' : ''}">
+                            <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                            <span>Любое условие</span>
+                        </label>
                     </div>
                 </div>
 
-                <!-- Предпросмотр -->
-                <div id="yd-pl-preview" class="yd-pl-preview">Введите фильтры...</div>
+                <!-- Секция: ИСКЛЮЧЕНИЯ -->
+                <div class="yd-pl-section yd-pl-section-compact">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-label-muted">ИСКЛЮЧЕНИЯ (белый список)</span>
+                    </div>
+                    <div id="yd-pl-whitelist-chips" class="yd-pl-chips-container yd-pl-chips-small"></div>
+                </div>
+
+                <!-- Preview -->
+                <div id="yd-pl-preview-count" class="yd-pl-preview-count">Нет совпадений</div>
             </div>
 
             <!-- Footer -->
@@ -7933,39 +8105,15 @@
                     </svg>
                     <span>Выделить</span>
                 </button>
-                <button id="yd-pl-clear" class="yd-pl-btn-secondary" title="Снять все галочки">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
+                <button id="yd-pl-clear" class="yd-pl-btn-icon" title="Снять все галочки">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>
-
-            <!-- Help Tooltip -->
-            <div id="yd-pl-help-tooltip" class="yd-pl-help-tooltip" style="display:none;">
-                <div class="yd-pl-help-title">Горячие клавиши</div>
-                <div class="yd-pl-help-row"><kbd>Alt+P</kbd> — выделить по фильтрам</div>
-                <div class="yd-pl-help-row"><kbd>Alt+Shift+P</kbd> — снять все галочки</div>
-                <div class="yd-pl-help-divider"></div>
-                <div class="yd-pl-help-row">com. — строго с начала домена</div>
-                <div class="yd-pl-help-row">dsp — вхождение в любом месте</div>
-            </div>
-
-            <!-- Resize handles -->
-            <div class="yd-pl-resize-handle yd-pl-resize-n" data-resize="n"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-s" data-resize="s"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-e" data-resize="e"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-w" data-resize="w"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
         `;
 
         document.body.appendChild(panel);
-
-        // Применить размер и позицию
-        panel.style.width = settings.panelSize.width + 'px';
-        panel.style.height = settings.panelSize.height + 'px';
-        panel.style.top = settings.panelPosition.top;
-        panel.style.right = settings.panelPosition.right;
 
         // Floating Pill
         const pill = document.createElement('div');
@@ -7974,27 +8122,29 @@
         pill.style.display = 'none';
         pill.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 100 100">
-                <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
-                <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+                <circle cx="38" cy="38" r="28" fill="none" stroke="var(--yd-primary)" stroke-width="8"/>
+                <line x1="58" y1="58" x2="85" y2="85" stroke="var(--yd-primary)" stroke-width="10" stroke-linecap="round"/>
             </svg>
-            <span>Площадки</span>
-            <span id="yd-pl-pill-count" class="yd-pl-pill-badge">0</span>
+            <span id="yd-pl-pill-count">0</span>
+            <span id="yd-pl-pill-indicator" class="yd-pl-pill-indicator" style="display:none;"></span>
         `;
         document.body.appendChild(pill);
 
-        // Инициализация
-        updateTemplateSelect();
-        updateStats();
-        setTimeout(updatePreview, 100);
-
-        // Event Listeners
+        // Setup events
         setupEventListeners(panel, pill);
-        makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
-        makeDraggable(pill, pill);
-        makeResizable(panel);
+        renderTemplates();
+        renderPatternChips();
+        renderWhitelist();
+        updateStats();
+
+        // Начальная подсветка
+        setTimeout(highlightMatchingRows, 500);
     }
 
     function setupEventListeners(panel, pill) {
+        // Drag
+        makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
+
         // Toggle panel
         document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
             panel.classList.add('yd-pl-panel-minimizing');
@@ -8002,7 +8152,7 @@
                 panel.style.display = 'none';
                 panel.classList.remove('yd-pl-panel-minimizing');
                 pill.style.display = 'flex';
-                updatePillCount();
+                updatePillIndicator();
             }, 200);
         });
 
@@ -8011,107 +8161,90 @@
             panel.style.display = 'flex';
         });
 
-        // Help tooltip
-        const helpBtn = document.getElementById('yd-pl-help-btn');
-        const helpTooltip = document.getElementById('yd-pl-help-tooltip');
-        helpBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            helpTooltip.style.display = helpTooltip.style.display === 'none' ? 'block' : 'none';
-        });
-        document.addEventListener('click', () => {
-            helpTooltip.style.display = 'none';
+        // Templates toggle
+        document.getElementById('yd-pl-toggle-templates').addEventListener('click', () => {
+            const section = document.getElementById('yd-pl-templates-section');
+            section.classList.toggle('open');
+            settings.showTemplates = section.classList.contains('open');
+            saveSettings();
         });
 
-        // Template select
-        document.getElementById('yd-pl-template-select').addEventListener('change', (e) => {
-            const name = e.target.value;
-            settings.currentTemplate = name;
-            document.getElementById('yd-pl-domain-patterns').value = settings.templates[name] || '';
-            saveSettings();
-            updatePreview();
-        });
-
-        // Template save
-        document.getElementById('yd-pl-template-save').addEventListener('click', () => {
-            const name = prompt('Название шаблона:', 'Мой шаблон');
-            if (!name) return;
-            settings.templates[name] = document.getElementById('yd-pl-domain-patterns').value;
-            settings.currentTemplate = name;
-            saveSettings();
-            updateTemplateSelect();
-            showNotification(`Шаблон "${name}" сохранён`, 'success');
-        });
-
-        // Template delete
-        document.getElementById('yd-pl-template-delete').addEventListener('click', () => {
-            const name = document.getElementById('yd-pl-template-select').value;
-            if (Object.keys(DEFAULT_TEMPLATES).includes(name)) {
-                showNotification('Встроенные шаблоны нельзя удалить', 'error');
-                return;
-            }
-            if (!confirm(`Удалить шаблон "${name}"?`)) return;
-            delete settings.templates[name];
-            settings.currentTemplate = Object.keys(settings.templates)[0];
-            saveSettings();
-            updateTemplateSelect();
-            showNotification(`Шаблон "${name}" удалён`, 'info');
-        });
+        // Add template
+        document.getElementById('yd-pl-add-template').addEventListener('click', addNewTemplate);
 
         // Reset filters
-        document.getElementById('yd-pl-reset-filters').addEventListener('click', resetAllFilters);
+        document.getElementById('yd-pl-reset-filters').addEventListener('click', () => {
+            ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+                'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+            saveCurrentFilters();
+            highlightMatchingRows();
+            showNotification('Фильтры сброшены', 'info');
+        });
 
         // Main buttons
         document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
         document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
 
-        // Toggle mode styling
+        // Mode toggle
         document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
             radio.addEventListener('change', () => {
-                document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
-                radio.closest('.yd-pl-toggle').classList.add('active');
-                updatePreview();
+                document.querySelectorAll('.yd-pl-mode-option').forEach(o => o.classList.remove('active'));
+                radio.closest('.yd-pl-mode-option').classList.add('active');
+                settings.mode = radio.value;
+                saveSettings();
+                highlightMatchingRows();
             });
         });
 
-        // Live preview on input change
-        ['yd-pl-domain-patterns', 'yd-pl-min-clicks', 'yd-pl-min-ctr', 'yd-pl-max-cpc', 'yd-pl-max-spend'].forEach(id => {
+        // Live preview on filter change
+        const filterIds = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'];
+        filterIds.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                el.addEventListener('input', debounce(updatePreview, 300));
+                el.addEventListener('input', debounce(() => {
+                    saveCurrentFilters();
+                    highlightMatchingRows();
+                }, 300));
             }
         });
 
-        // Stats observer
+        // Observer for table changes
         const tbody = document.querySelector('tbody');
         if (tbody) {
-            new MutationObserver(() => {
+            new MutationObserver(debounce(() => {
                 updateStats();
-                updatePreview();
-            }).observe(tbody, { childList: true, subtree: true, attributes: true });
+                highlightMatchingRows();
+            }, 200)).observe(tbody, { childList: true, subtree: true, attributes: true });
         }
     }
 
-    function updatePillCount() {
-        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
-        const el = document.getElementById('yd-pl-pill-count');
-        if (el) el.textContent = checked;
+    function updatePillIndicator() {
+        const indicator = document.getElementById('yd-pl-pill-indicator');
+        const countEl = document.getElementById('yd-pl-pill-count');
+
+        const template = getCurrentTemplate();
+        const hasFilters = (template.patterns.length > 0) ||
+            Object.values(settings.filters).some(v => v !== '');
+
+        if (indicator) {
+            indicator.style.display = hasFilters ? 'block' : 'none';
+        }
+
+        if (countEl) {
+            countEl.textContent = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+        }
     }
 
-    function debounce(fn, delay) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
-
-    // ==================== DRAG & RESIZE ====================
     function makeDraggable(element, handle) {
         let isDragging = false;
         let startX, startY, startLeft, startTop;
 
         handle.addEventListener('mousedown', (e) => {
-            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('textarea')) return;
+            if (e.target.closest('button') || e.target.closest('input')) return;
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -8129,66 +8262,15 @@
         });
 
         document.addEventListener('mouseup', () => {
-            if (isDragging && element.id === 'yd-pl-panel') {
+            if (isDragging) {
                 settings.panelPosition = {
                     top: element.style.top,
-                    right: 'auto',
-                    left: element.style.left
+                    left: element.style.left,
+                    right: 'auto'
                 };
                 saveSettings();
             }
             isDragging = false;
-            document.body.style.userSelect = '';
-        });
-    }
-
-    function makeResizable(panel) {
-        const handles = panel.querySelectorAll('.yd-pl-resize-handle');
-        let isResizing = false;
-        let startX, startY, startW, startH, startL, startT, direction;
-
-        handles.forEach(handle => {
-            handle.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                isResizing = true;
-                direction = handle.dataset.resize;
-                startX = e.clientX;
-                startY = e.clientY;
-                const rect = panel.getBoundingClientRect();
-                startW = rect.width;
-                startH = rect.height;
-                startL = rect.left;
-                startT = rect.top;
-                document.body.style.userSelect = 'none';
-            });
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
-            if (direction.includes('e')) panel.style.width = Math.max(280, startW + dx) + 'px';
-            if (direction.includes('w')) {
-                panel.style.width = Math.max(280, startW - dx) + 'px';
-                panel.style.left = (startL + dx) + 'px';
-            }
-            if (direction.includes('s')) panel.style.height = Math.max(300, startH + dy) + 'px';
-            if (direction.includes('n')) {
-                panel.style.height = Math.max(300, startH - dy) + 'px';
-                panel.style.top = (startT + dy) + 'px';
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                settings.panelSize = {
-                    width: parseInt(panel.style.width),
-                    height: parseInt(panel.style.height)
-                };
-                saveSettings();
-            }
-            isResizing = false;
             document.body.style.userSelect = '';
         });
     }
@@ -8200,40 +8282,61 @@
         const style = document.createElement('style');
         style.id = 'yd-pl-styles';
         style.textContent = `
-            /* ===== ПАНЕЛЬ ПЛОЩАДОК ===== */
+            /* CSS Variables - унифицированы с модулем запросов */
+            :root {
+                --yd-primary: #205598;
+                --yd-primary-light: #2d6cb5;
+                --yd-accent: #E46924;
+                --yd-success: #28a745;
+                --yd-danger: #dc3545;
+                --yd-bg: #ffffff;
+                --yd-bg-secondary: #F9FAFB;
+                --yd-border: #E1E4E8;
+                --yd-text: #333333;
+                --yd-text-secondary: #6B7280;
+                --yd-text-muted: #9CA3AF;
+            }
+
+            /* Подсветка строк в таблице */
+            tbody tr.yd-pl-highlight {
+                background: rgba(32, 85, 152, 0.08) !important;
+                outline: 1px solid rgba(32, 85, 152, 0.2);
+            }
+
+            /* Панель */
             #yd-pl-panel {
                 position: fixed;
                 z-index: 9999999;
-                background: #ffffff;
-                border: 1px solid #E1E4E8;
+                background: var(--yd-bg);
+                border: 1px solid var(--yd-border);
                 border-radius: 12px;
                 box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Roboto', system-ui, sans-serif;
-                font-size: 14px;
-                color: #333;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                font-size: 13px;
+                color: var(--yd-text);
                 display: flex;
                 flex-direction: column;
+                width: 340px;
+                max-height: 90vh;
                 overflow: hidden;
-                min-width: 280px;
-                min-height: 300px;
             }
 
             #yd-pl-panel.yd-pl-panel-minimizing {
                 transform: scale(0.3);
                 opacity: 0;
-                transition: all 0.3s ease;
+                transition: all 0.2s ease;
             }
 
             #yd-pl-panel * { box-sizing: border-box; }
 
-            /* Header - идентичен модулю запросов */
+            /* Header */
             .yd-pl-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 padding: 10px 14px;
-                background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
-                border-bottom: 1px solid #E1E4E8;
+                background: linear-gradient(135deg, var(--yd-bg-secondary) 0%, #F3F4F6 100%);
+                border-bottom: 1px solid var(--yd-border);
                 cursor: grab;
                 flex-shrink: 0;
             }
@@ -8246,25 +8349,10 @@
                 gap: 10px;
             }
 
-            .yd-pl-logo { flex-shrink: 0; }
-
-            .yd-pl-title-group {
-                display: flex;
-                flex-direction: column;
-                line-height: 1.2;
-            }
-
             .yd-pl-title {
                 font-weight: 600;
                 font-size: 14px;
-                color: #205598;
-            }
-
-            .yd-pl-subtitle {
-                font-size: 10px;
-                color: #9CA3AF;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
+                color: var(--yd-primary);
             }
 
             .yd-pl-header-right {
@@ -8275,7 +8363,7 @@
 
             .yd-pl-badge {
                 font-size: 11px;
-                color: #205598;
+                color: var(--yd-primary);
                 background: #E3F2FD;
                 padding: 3px 8px;
                 border-radius: 10px;
@@ -8287,9 +8375,9 @@
                 border: none;
                 padding: 6px;
                 cursor: pointer;
-                color: #9CA3AF;
+                color: var(--yd-text-muted);
                 border-radius: 6px;
-                transition: all 0.15s ease;
+                transition: all 0.15s;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -8297,39 +8385,22 @@
 
             .yd-pl-icon-btn:hover {
                 background: rgba(32, 85, 152, 0.1);
-                color: #205598;
-            }
-
-            .yd-pl-icon-btn-sm {
-                background: none;
-                border: none;
-                padding: 4px;
-                cursor: pointer;
-                color: #9CA3AF;
-                border-radius: 4px;
-                transition: all 0.15s ease;
-            }
-
-            .yd-pl-icon-btn-sm:hover {
-                background: rgba(32, 85, 152, 0.1);
-                color: #205598;
+                color: var(--yd-primary);
             }
 
             /* Body */
             .yd-pl-body {
                 flex: 1;
-                padding: 12px;
                 overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
+                padding: 12px 14px;
             }
 
             .yd-pl-section {
-                background: #FAFBFC;
-                border: 1px solid #E1E4E8;
-                border-radius: 8px;
-                padding: 10px;
+                margin-bottom: 14px;
+            }
+
+            .yd-pl-section-compact {
+                margin-bottom: 8px;
             }
 
             .yd-pl-section-header {
@@ -8341,138 +8412,318 @@
 
             .yd-pl-section-label {
                 font-size: 10px;
-                font-weight: 700;
-                color: #6b7280;
+                font-weight: 600;
+                color: var(--yd-text-secondary);
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }
 
-            .yd-pl-section-actions {
+            .yd-pl-section-label-muted {
+                font-size: 10px;
+                font-weight: 500;
+                color: var(--yd-text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .yd-pl-link-btn {
+                background: none;
+                border: none;
+                color: var(--yd-primary);
+                font-size: 11px;
+                cursor: pointer;
+                padding: 2px 6px;
+                border-radius: 4px;
+            }
+
+            .yd-pl-link-btn:hover {
+                background: rgba(32, 85, 152, 0.1);
+            }
+
+            /* Chips */
+            .yd-pl-chips-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding: 8px;
+                background: var(--yd-bg-secondary);
+                border: 1px solid var(--yd-border);
+                border-radius: 8px;
+                min-height: 36px;
+            }
+
+            .yd-pl-chips-small {
+                padding: 6px;
+                min-height: 32px;
+            }
+
+            .yd-pl-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px 8px;
+                background: var(--yd-primary);
+                color: white;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+
+            .yd-pl-chip-white {
+                background: var(--yd-success);
+            }
+
+            .yd-pl-chip-remove {
+                background: none;
+                border: none;
+                color: rgba(255,255,255,0.7);
+                cursor: pointer;
+                font-size: 14px;
+                line-height: 1;
+                padding: 0 2px;
+            }
+
+            .yd-pl-chip-remove:hover {
+                color: white;
+            }
+
+            .yd-pl-chip-input {
+                flex: 1;
+                min-width: 80px;
+                border: none;
+                background: transparent;
+                font-size: 11px;
+                outline: none;
+                color: var(--yd-text);
+            }
+
+            .yd-pl-hint {
+                font-size: 10px;
+                color: var(--yd-text-muted);
+                margin-top: 6px;
+            }
+
+            .yd-pl-hint code {
+                background: var(--yd-bg-secondary);
+                padding: 1px 4px;
+                border-radius: 3px;
+                font-family: monospace;
+            }
+
+            /* Collapsible */
+            .yd-pl-collapsible {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.2s ease;
+                margin-bottom: 0;
+            }
+
+            .yd-pl-collapsible.open {
+                max-height: 200px;
+                margin-bottom: 14px;
+            }
+
+            /* Templates list */
+            .yd-pl-templates-list {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .yd-pl-template-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 10px;
+                background: var(--yd-bg-secondary);
+                border: 1px solid transparent;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+
+            .yd-pl-template-item:hover {
+                border-color: var(--yd-border);
+            }
+
+            .yd-pl-template-item.active {
+                border-color: var(--yd-primary);
+                background: #E3F2FD;
+            }
+
+            .yd-pl-template-info {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .yd-pl-template-name {
+                font-size: 12px;
+                font-weight: 500;
+                color: var(--yd-text);
+                outline: none;
+            }
+
+            .yd-pl-template-name:focus {
+                background: white;
+                padding: 2px 4px;
+                margin: -2px -4px;
+                border-radius: 3px;
+            }
+
+            .yd-pl-template-patterns {
+                font-size: 10px;
+                color: var(--yd-text-muted);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .yd-pl-template-actions {
                 display: flex;
                 gap: 4px;
             }
 
-            .yd-pl-label-sm {
-                font-size: 11px;
-                color: #6b7280;
-                margin-bottom: 4px;
-                display: block;
-            }
-
-            .yd-pl-select {
-                width: 100%;
-                padding: 8px 10px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 13px;
-                background: #fff;
+            .yd-pl-template-copy,
+            .yd-pl-template-delete {
+                background: none;
+                border: none;
+                padding: 4px;
                 cursor: pointer;
+                color: var(--yd-text-muted);
+                border-radius: 4px;
             }
 
-            .yd-pl-select:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+            .yd-pl-template-copy:hover { color: var(--yd-primary); }
+            .yd-pl-template-delete:hover { color: var(--yd-danger); }
+
+            .yd-pl-icon-btn-sm {
+                background: none;
+                border: none;
+                padding: 4px;
+                cursor: pointer;
+                color: var(--yd-text-muted);
+                border-radius: 4px;
             }
 
-            .yd-pl-field-group {
-                margin-bottom: 10px;
+            .yd-pl-icon-btn-sm:hover {
+                color: var(--yd-primary);
+                background: rgba(32, 85, 152, 0.1);
             }
 
-            .yd-pl-textarea {
-                width: 100%;
-                padding: 8px 10px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 12px;
-                font-family: inherit;
-                resize: vertical;
-                min-height: 50px;
-            }
-
-            .yd-pl-textarea:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
-            }
-
-            .yd-pl-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
+            /* Filters grid */
+            .yd-pl-filters-grid {
+                display: flex;
+                flex-direction: column;
                 gap: 8px;
-                margin-bottom: 10px;
             }
 
-            .yd-pl-field { }
-
-            .yd-pl-input-sm {
-                width: 100%;
-                padding: 6px 8px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 12px;
-            }
-
-            .yd-pl-input-sm:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
-            }
-
-            .yd-pl-mode-row {
+            .yd-pl-filter-row {
                 display: flex;
                 align-items: center;
                 gap: 10px;
             }
 
-            .yd-pl-toggle-group {
+            .yd-pl-filter-label {
+                width: 70px;
+                font-size: 12px;
+                color: var(--yd-text-secondary);
+                flex-shrink: 0;
+            }
+
+            .yd-pl-filter-range {
                 display: flex;
-                background: #E5E7EB;
+                align-items: center;
+                gap: 6px;
+                flex: 1;
+            }
+
+            .yd-pl-input-sm {
+                width: 70px;
+                padding: 6px 8px;
+                border: 1px solid var(--yd-border);
                 border-radius: 6px;
-                padding: 2px;
+                font-size: 12px;
+                text-align: center;
+                background: var(--yd-bg);
+                -moz-appearance: textfield;
             }
 
-            .yd-pl-toggle {
-                padding: 4px 10px;
+            .yd-pl-input-sm::-webkit-outer-spin-button,
+            .yd-pl-input-sm::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+
+            .yd-pl-input-sm:focus {
+                border-color: var(--yd-primary);
+                outline: none;
+            }
+
+            .yd-pl-range-sep {
+                color: var(--yd-text-muted);
+                font-size: 12px;
+            }
+
+            /* Mode toggle */
+            .yd-pl-mode-toggle {
+                display: flex;
+                margin-top: 10px;
+                background: var(--yd-bg-secondary);
+                border-radius: 8px;
+                padding: 3px;
+            }
+
+            .yd-pl-mode-option {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 6px 10px;
                 font-size: 11px;
-                color: #6b7280;
-                border-radius: 4px;
+                color: var(--yd-text-secondary);
+                border-radius: 6px;
                 cursor: pointer;
-                transition: all 0.15s ease;
+                transition: all 0.15s;
             }
 
-            .yd-pl-toggle input { display: none; }
+            .yd-pl-mode-option input {
+                display: none;
+            }
 
-            .yd-pl-toggle.active {
-                background: #fff;
-                color: #205598;
-                font-weight: 600;
+            .yd-pl-mode-option.active {
+                background: var(--yd-bg);
+                color: var(--yd-primary);
+                font-weight: 500;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
 
-            .yd-pl-preview {
+            /* Preview */
+            .yd-pl-preview-count {
                 text-align: center;
+                font-size: 11px;
+                color: var(--yd-text-muted);
                 padding: 8px;
-                font-size: 12px;
-                color: #9CA3AF;
-                background: #F9FAFB;
+                background: var(--yd-bg-secondary);
                 border-radius: 6px;
+                margin-top: 8px;
             }
 
-            .yd-pl-preview.yd-pl-preview-active {
-                color: #28a745;
-                background: #E8F5E9;
+            .yd-pl-preview-count.active {
+                color: var(--yd-primary);
+                background: #E3F2FD;
                 font-weight: 500;
             }
 
-            /* Footer - идентичен модулю запросов */
+            /* Footer */
             .yd-pl-footer {
                 display: flex;
                 gap: 8px;
-                padding: 12px;
-                border-top: 1px solid #E1E4E8;
-                background: #FAFBFC;
-                flex-shrink: 0;
+                padding: 12px 14px;
+                border-top: 1px solid var(--yd-border);
+                background: var(--yd-bg);
             }
 
             .yd-pl-btn-primary {
@@ -8482,185 +8733,111 @@
                 justify-content: center;
                 gap: 8px;
                 padding: 10px 16px;
-                background: linear-gradient(135deg, #205598, #1a4578);
-                color: #fff;
+                background: var(--yd-primary);
+                color: white;
                 border: none;
                 border-radius: 8px;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 600;
                 cursor: pointer;
-                transition: all 0.2s ease;
+                transition: all 0.2s;
             }
 
             .yd-pl-btn-primary:hover {
-                background: linear-gradient(135deg, #1a4578, #153a60);
+                background: var(--yd-primary-light);
                 transform: translateY(-1px);
                 box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3);
             }
 
-            .yd-pl-btn-secondary {
-                padding: 10px 12px;
-                background: #F3F4F6;
-                color: #6b7280;
-                border: 1px solid #E1E4E8;
-                border-radius: 8px;
-                cursor: pointer;
-                transition: all 0.15s ease;
+            .yd-pl-btn-icon {
+                flex: 0 0 auto;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            }
-
-            .yd-pl-btn-secondary:hover {
-                background: #E5E7EB;
-                color: #333;
-            }
-
-            /* Help Tooltip */
-            .yd-pl-help-tooltip {
-                position: absolute;
-                top: 50px;
-                right: 10px;
-                background: #1F2937;
-                color: #fff;
-                padding: 12px;
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                color: var(--yd-text-secondary);
+                background: var(--yd-bg-secondary);
+                border: 1px solid var(--yd-border);
                 border-radius: 8px;
-                font-size: 12px;
-                z-index: 10;
-                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-                min-width: 200px;
+                cursor: pointer;
+                transition: all 0.2s;
             }
 
-            .yd-pl-help-title {
-                font-weight: 600;
-                margin-bottom: 8px;
-                color: #E5E7EB;
+            .yd-pl-btn-icon:hover {
+                background: var(--yd-bg);
+                border-color: var(--yd-danger);
+                color: var(--yd-danger);
             }
 
-            .yd-pl-help-row {
-                margin-bottom: 4px;
-                color: #D1D5DB;
-            }
-
-            .yd-pl-help-row kbd {
-                background: #374151;
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-size: 11px;
-                margin-right: 6px;
-            }
-
-            .yd-pl-help-divider {
-                height: 1px;
-                background: #374151;
-                margin: 8px 0;
-            }
-
-            /* Resize handles */
-            .yd-pl-resize-handle {
-                position: absolute;
-                background: transparent;
-            }
-
-            .yd-pl-resize-n { top: 0; left: 10px; right: 10px; height: 6px; cursor: n-resize; }
-            .yd-pl-resize-s { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: s-resize; }
-            .yd-pl-resize-e { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: e-resize; }
-            .yd-pl-resize-w { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: w-resize; }
-            .yd-pl-resize-se { right: 0; bottom: 0; width: 12px; height: 12px; cursor: se-resize; }
-
-            /* Floating Pill */
+            /* Pill */
             .yd-pl-pill {
                 position: fixed;
-                bottom: 80px;
+                bottom: 20px;
                 right: 20px;
-                z-index: 9999998;
-                background: #ffffff;
-                border: 1px solid #E1E4E8;
-                border-radius: 20px;
-                padding: 8px 14px;
+                z-index: 9999999;
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+                padding: 10px 16px;
+                background: var(--yd-bg);
+                border: 1px solid var(--yd-border);
+                border-radius: 24px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.15);
                 cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                color: #205598;
-                transition: all 0.2s ease;
+                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--yd-primary);
+                transition: all 0.2s;
             }
 
             .yd-pl-pill:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.2);
             }
 
-            .yd-pl-pill-badge {
-                background: #E46924;
-                color: #fff;
-                padding: 2px 6px;
-                border-radius: 10px;
-                font-size: 10px;
-                font-weight: 600;
+            .yd-pl-pill-indicator {
+                width: 8px;
+                height: 8px;
+                background: var(--yd-accent);
+                border-radius: 50%;
             }
 
             /* Notification */
             .yd-pl-notification {
                 position: fixed;
-                bottom: 120px;
+                bottom: 80px;
                 right: 20px;
                 z-index: 99999999;
-                padding: 10px 16px;
+                padding: 12px 20px;
+                background: var(--yd-text);
+                color: white;
                 border-radius: 8px;
                 font-size: 13px;
-                font-weight: 500;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-                animation: yd-pl-notify-in 0.3s ease;
+                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: yd-pl-slide-up 0.3s ease;
             }
 
-            .yd-pl-notification-success { background: #10B981; color: #fff; }
-            .yd-pl-notification-error { background: #EF4444; color: #fff; }
-            .yd-pl-notification-info { background: #3B82F6; color: #fff; }
+            .yd-pl-notification-success { background: var(--yd-success); }
+            .yd-pl-notification-error { background: var(--yd-danger); }
+            .yd-pl-notification-hide { opacity: 0; transform: translateY(10px); transition: all 0.3s; }
 
-            .yd-pl-notification-hide {
-                animation: yd-pl-notify-out 0.3s ease forwards;
+            @keyframes yd-pl-slide-up {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
             }
-
-            @keyframes yd-pl-notify-in {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-
-            @keyframes yd-pl-notify-out {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-
-            /* Scrollbar */
-            .yd-pl-body::-webkit-scrollbar { width: 6px; }
-            .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
-            .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
         `;
-
         document.head.appendChild(style);
     }
 
-    // ==================== ГОРЯЧИЕ КЛАВИШИ ====================
-    document.addEventListener('keydown', e => {
-        if (e.altKey && e.key.toLowerCase() === 'p') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                clearAllSelections();
-            } else {
-                selectPlacements();
-            }
-        }
-    });
-
-    // ==================== ЗАПУСК ====================
+    // ==================== INIT ====================
     function init() {
         if (document.body) {
             createControlPanel();
-            console.log("[YD-PL] ✅ Модуль площадок загружен (v2.0)");
+            console.log("[YD-PL] ✅ Модуль площадок v3.0 загружен");
         } else {
             setTimeout(init, 200);
         }
@@ -8670,37 +8847,39 @@
 
 })();
 
-// ==================== МОДУЛЬ: СПИСОК КАМПАНИЙ ====================
-// Добавляет пункт "Статистика" с popover-меню (эталон Яндекс Директа)
-// Работает на странице списка кампаний
+
+
+// ==================== ������: ������ �������� ====================
+// ��������� ����� "����������" � popover-���� (������ ������ �������)
+// �������� �� �������� ������ ��������
 (function () {
     'use strict';
 
-    // === Проверка URL: страница списка кампаний ===
+    // === �������� URL: �������� ������ �������� ===
     const url = location.href.toLowerCase();
 
-    // Активация: содержит /dna/ или /wizard/
+    // ���������: �������� /dna/ ��� /wizard/
     if (!url.includes('/dna/') && !url.includes('/wizard/') && !url.includes('direct.yandex.ru')) {
         return;
     }
 
-    // Исключения: страницы редактирования
+    // ����������: �������� ��������������
     if (url.includes('/edit') || url.includes('/groups') || url.includes('/ads')) {
         return;
     }
 
-    // Исключения: страницы статистики
+    // ����������: �������� ����������
     if (url.includes('stat_type=') || url.includes('cmd=showcampstat') || url.includes('cmd=showstat')) {
         return;
     }
 
-    console.log("[YD-CL] 🚀 Модуль списка кампаний инициализируется...");
+    console.log("[YD-CL] ?? ������ ������ �������� ����������������...");
 
-    // ==================== СОСТОЯНИЕ ====================
+    // ==================== ��������� ====================
     let activePopover = null;
     let activeTriggerId = null;
 
-    // ==================== УТИЛИТЫ ДЛЯ ДАТ ====================
+    // ==================== ������� ��� ��� ====================
     function getDateRange() {
         const today = new Date();
         const fromDate = new Date();
@@ -8727,7 +8906,7 @@
         }
     }
 
-    // ==================== ИЗВЛЕЧЕНИЕ ДАННЫХ КАМПАНИИ ====================
+    // ==================== ���������� ������ �������� ====================
     function extractCampaignInfo(cell) {
         const links = cell.querySelectorAll('a[href]');
         let cid = null;
@@ -8770,23 +8949,23 @@
         popover.className = 'yd-cl-popover';
         popover.innerHTML = `
             <a href="${buildStatsUrl(cid, ulogin, 'pages')}" target="_blank" class="yd-cl-popover-item">
-                По площадкам
+                �� ���������
             </a>
             <a href="${buildStatsUrl(cid, ulogin, 'queries')}" target="_blank" class="yd-cl-popover-item">
-                Поисковые запросы
+                ��������� �������
             </a>
         `;
 
         document.body.appendChild(popover);
 
-        // Позиционирование относительно триггера
+        // ���������������� ������������ ��������
         const rect = trigger.getBoundingClientRect();
         const popoverRect = popover.getBoundingClientRect();
 
         let top = rect.bottom + window.scrollY + 4;
         let left = rect.left + window.scrollX;
 
-        // Проверка выхода за правый край
+        // �������� ������ �� ������ ����
         if (left + popoverRect.width > window.innerWidth) {
             left = window.innerWidth - popoverRect.width - 8;
         }
@@ -8794,7 +8973,7 @@
         popover.style.top = top + 'px';
         popover.style.left = left + 'px';
 
-        // Анимация появления
+        // �������� ���������
         requestAnimationFrame(() => {
             popover.classList.add('yd-cl-popover-visible');
         });
@@ -8808,21 +8987,21 @@
 
         const triggerId = `${cid}_trigger`;
 
-        // Если этот же popover открыт — закрываем
+        // ���� ���� �� popover ������ � ���������
         if (activeTriggerId === triggerId) {
             closePopover();
             return;
         }
 
-        // Закрываем предыдущий
+        // ��������� ����������
         closePopover();
 
-        // Открываем новый
+        // ��������� �����
         activePopover = createPopover(trigger, cid, ulogin);
         activeTriggerId = triggerId;
     }
 
-    // ==================== СОЗДАНИЕ ТРИГГЕРА ====================
+    // ==================== �������� �������� ====================
     function createStatsTrigger(cell) {
         const { cid, ulogin } = extractCampaignInfo(cell);
 
@@ -8830,15 +9009,15 @@
             return null;
         }
 
-        // Триггер — только текст, как у Яндекса
+        // ������� � ������ �����, ��� � �������
         const trigger = document.createElement('span');
         trigger.className = 'dc-Link dc-Link_color_supplementary';
         trigger.setAttribute('role', 'link');
         trigger.setAttribute('data-yd-cl-stats-trigger', 'true');
         trigger.setAttribute('data-cid', cid);
-        trigger.textContent = 'Статистика';
+        trigger.textContent = '����������';
         trigger.style.cursor = 'pointer';
-        trigger.style.marginLeft = '8px'; // Отступ от предыдущего элемента
+        trigger.style.marginLeft = '8px'; // ������ �� ����������� ��������
 
         trigger.addEventListener('click', (e) => {
             handleTriggerClick(e, trigger, cid, ulogin);
@@ -8847,26 +9026,26 @@
         return trigger;
     }
 
-    // ==================== ОБРАБОТКА ЯЧЕЕК ====================
+    // ==================== ��������� ����� ====================
     function processCell(cell) {
-        // Уже добавлен кастомный триггер
+        // ��� �������� ��������� �������
         if (cell.querySelector('[data-yd-cl-stats-trigger]')) {
             return;
         }
 
-        // Есть нативный триггер Яндекса
+        // ���� �������� ������� �������
         if (cell.querySelector('[data-testid="CampaignStatisticsTrigger"]')) {
             return;
         }
 
-        // Ищем ссылки "Перейти" и "Редактировать"
+        // ���� ������ "�������" � "�������������"
         const allLinks = cell.querySelectorAll('.dc-Link');
         let lastActionLink = null;
 
         for (const link of allLinks) {
             const text = link.textContent.trim();
-            if (text === 'Перейти' || text === 'Редактировать') {
-                lastActionLink = link; // Запоминаем последнюю
+            if (text === '�������' || text === '�������������') {
+                lastActionLink = link; // ���������� ���������
             }
         }
 
@@ -8874,32 +9053,32 @@
             return;
         }
 
-        // Добавляем триггер ПОСЛЕ последней ссылки действия
+        // ��������� ������� ����� ��������� ������ ��������
         const trigger = createStatsTrigger(cell);
         if (trigger) {
-            // Вставляем после lastActionLink
+            // ��������� ����� lastActionLink
             if (lastActionLink.nextSibling) {
                 lastActionLink.parentNode.insertBefore(trigger, lastActionLink.nextSibling);
             } else {
                 lastActionLink.parentNode.appendChild(trigger);
             }
 
-            // Добавляем класс для расширения ширины ячейки
+            // ��������� ����� ��� ���������� ������ ������
             cell.classList.add('yd-cl-expanded-cell');
         }
     }
 
 
 
-    // ==================== НАБЛЮДАТЕЛЬ ====================
+    // ==================== ����������� ====================
     function scanAndProcess() {
-        // Проверяем наличие Grid.Row — признак страницы списка
+        // ��������� ������� Grid.Row � ������� �������� ������
         const rows = document.querySelectorAll('[data-testid^="Grid.Row-"]');
         if (rows.length === 0) {
             return;
         }
 
-        // Ищем ячейки с названиями кампаний
+        // ���� ������ � ���������� ��������
         const cells = document.querySelectorAll('[data-testid$="_name-with-links"]');
 
         cells.forEach(cell => {
@@ -8921,18 +9100,18 @@
         return observer;
     }
 
-    // ==================== ГЛОБАЛЬНЫЕ СОБЫТИЯ ====================
+    // ==================== ���������� ������� ====================
     function setupGlobalEvents() {
-        // Закрытие popover по клику вне
+        // �������� popover �� ����� ���
         document.addEventListener('click', (e) => {
             if (!activePopover) return;
 
-            // Клик внутри popover — не закрываем (ссылки сами откроются)
+            // ���� ������ popover � �� ��������� (������ ���� ���������)
             if (activePopover.contains(e.target)) {
                 return;
             }
 
-            // Клик по триггеру обрабатывается отдельно
+            // ���� �� �������� �������������� ��������
             if (e.target.hasAttribute('data-yd-cl-stats-trigger')) {
                 return;
             }
@@ -8940,25 +9119,25 @@
             closePopover();
         });
 
-        // Закрытие по Escape
+        // �������� �� Escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closePopover();
             }
         });
 
-        // Закрытие при скролле
+        // �������� ��� �������
         window.addEventListener('scroll', closePopover, { passive: true });
     }
 
-    // ==================== СТИЛИ ====================
+    // ==================== ����� ====================
     function injectStyles() {
         if (document.getElementById('yd-cl-styles')) return;
 
         const style = document.createElement('style');
         style.id = 'yd-cl-styles';
         style.textContent = `
-            /* Popover — рендерится в body */
+            /* Popover � ���������� � body */
             .yd-cl-popover {
                 position: absolute;
                 z-index: 10000;
@@ -8978,7 +9157,7 @@
                 transform: translateY(0);
             }
 
-            /* Пункты popover */
+            /* ������ popover */
             .yd-cl-popover-item {
                 display: block;
                 padding: 10px 16px;
@@ -9003,19 +9182,19 @@
                 border-radius: 0 0 6px 6px;
             }
 
-            /* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
-            /* Ячейки данных */
+            /* ���������� ���� ����� ������� "��������" ��� ������������� ������ */
+            /* ������ ������ */
             [data-testid$="_name-with-links"] {
                 min-width: 280px !important;
             }
 
-            /* Заголовок столбца "Название" */
+            /* ��������� ������� "��������" */
             [data-testid="Grid.Header-name"],
             [data-testid*="Header"][data-testid*="name"] {
                 min-width: 280px !important;
             }
 
-            /* Контейнер действий — nowrap для одной строки */
+            /* ��������� �������� � nowrap ��� ����� ������ */
             [data-testid$="_name-with-links"] .dc-Stack_type_horizontal {
                 flex-wrap: nowrap !important;
                 white-space: nowrap;
@@ -9026,7 +9205,7 @@
         document.head.appendChild(style);
     }
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    // ==================== ������������� ====================
     function init() {
         if (!document.body) {
             setTimeout(init, 200);
@@ -9037,17 +9216,18 @@
         setupGlobalEvents();
         setupObserver();
 
-        // Сканирование с задержками для React
+        // ������������ � ���������� ��� React
         setTimeout(scanAndProcess, 500);
         setTimeout(scanAndProcess, 1500);
         setTimeout(scanAndProcess, 3000);
 
-        console.log("[YD-CL] ✅ Модуль списка кампаний загружен (v2.0 — эталон)");
+        console.log("[YD-CL] ? ������ ������ �������� �������� (v2.0 � ������)");
     }
 
     init();
 
 })();
+
 
 
 
