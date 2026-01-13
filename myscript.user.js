@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.185.1
+// @version 1.186.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -8751,7 +8751,14 @@
             }
 
             /* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
+            /* Ячейки данных */
             [data-testid$="_name-with-links"] {
+                min-width: 280px !important;
+            }
+
+            /* Заголовок столбца "Название" */
+            [data-testid="Grid.Header-name"],
+            [data-testid*="Header"][data-testid*="name"] {
                 min-width: 280px !important;
             }
 
@@ -8788,6 +8795,7 @@
     init();
 
 })();
+
 
 
 
