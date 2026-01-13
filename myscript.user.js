@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.184.6
+// @version 1.185.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -8750,13 +8750,13 @@
                 border-radius: 0 0 6px 6px;
             }
 
-            /* Расширение ячейки для 3 действий */
-            .yd-cl-expanded-cell {
+            /* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
+            [data-testid$="_name-with-links"] {
                 min-width: 280px !important;
             }
 
             /* Контейнер действий — nowrap для одной строки */
-            .yd-cl-expanded-cell .dc-Stack_type_horizontal {
+            [data-testid$="_name-with-links"] .dc-Stack_type_horizontal {
                 flex-wrap: nowrap !important;
                 white-space: nowrap;
             }
@@ -8788,6 +8788,7 @@
     init();
 
 })();
+
 
 
 
