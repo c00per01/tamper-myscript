@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.192.1
+// @version 1.193.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7500,52 +7500,65 @@
 
 })();
 // ==================== МОДУЛЬ: ПЛОЩАДКИ (stat_type=pages) ====================
-// Автоматическое выделение площадок по правилам
-// Работает только на страницах с stat_type=pages
+// Полностью переработанный модуль в стиле Apple
 (function () {
     'use strict';
 
-    // === Проверка: панель появляется только если stat_type=pages ===
-    if (!location.href.toLowerCase().includes("stat_type=pages")) {
-        return;
-    }
+    if (!location.href.toLowerCase().includes("stat_type=pages")) return;
 
-    console.log("[YD-PL] 🚀 Модуль площадок инициализируется...");
+    console.log("[YD-PL] 🚀 Модуль площадок v3.0");
 
     // ==================== КОНСТАНТЫ ====================
-    const STORAGE_KEY = 'yd-pl-settings';
-    const DEFAULT_TEMPLATES = {
-        'Стандарт': 'com., dsp, puzzle, game, teskin',
-        'Мобильные': 'com., android, ios, app, mobile',
-        'Игры': 'game, puzzle, play, casino, slot'
-    };
+    const STORAGE_KEY = 'yd-pl-settings-v3';
 
     // ==================== СОСТОЯНИЕ ====================
     let settings = loadSettings();
 
-
     function loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                return JSON.parse(saved);
-            }
+            if (saved) return JSON.parse(saved);
         } catch (e) {
-            console.error('[YD-PL] Ошибка загрузки настроек:', e);
+            console.error('[YD-PL] Ошибка загрузки:', e);
         }
+        return getDefaultSettings();
+    }
+
+    function getDefaultSettings() {
         return {
-            templates: { ...DEFAULT_TEMPLATES },
-            currentTemplate: 'Стандарт',
             panelPosition: { top: '15px', right: '15px' },
-            panelSize: { width: 340, height: 420 },
+            panelSize: { width: 360, height: 480 },
+            templatesCollapsed: true,
             filters: {
-                domains: DEFAULT_TEMPLATES['Стандарт'],
-                minClicks: '',
-                minCtr: '',
-                maxCpc: '',
-                maxSpend: ''
+                patterns: [
+                    { value: 'com.', position: 'start' },
+                    { value: 'dsp', position: 'any' },
+                    { value: 'game', position: 'any' }
+                ],
+                clicksMin: '', clicksMax: '',
+                ctrMin: '', ctrMax: '',
+                cpcMin: '', cpcMax: '',
+                spendMin: '', spendMax: ''
             },
-            mode: 'and'
+            whitelist: [],
+            templates: [
+                {
+                    name: 'Мобильные приложения', patterns: [
+                        { value: 'com.', position: 'start' },
+                        { value: 'android', position: 'any' },
+                        { value: 'ios', position: 'any' }
+                    ]
+                },
+                {
+                    name: 'Игры и казино', patterns: [
+                        { value: 'game', position: 'any' },
+                        { value: 'puzzle', position: 'any' },
+                        { value: 'casino', position: 'any' }
+                    ]
+                }
+            ],
+            currentTemplate: null,
+            mode: 'or'
         };
     }
 
@@ -7553,19 +7566,14 @@
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
-            console.error('[YD-PL] Ошибка сохранения настроек:', e);
+            console.error('[YD-PL] Ошибка сохранения:', e);
         }
     }
 
     // ==================== УТИЛИТЫ ====================
     function parseNumber(text) {
         if (!text) return NaN;
-        return parseFloat(
-            text.replace(/\u00A0/g, ' ')
-                .replace(/\s+/g, '')
-                .replace(',', '.')
-                .replace(/[^0-9.\-]/g, '')
-        );
+        return parseFloat(text.replace(/\u00A0/g, '').replace(/\s+/g, '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
     }
 
     function isGreyElement(el) {
@@ -7574,143 +7582,174 @@
         const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
         if (!m) return false;
         const [r, g, b] = m.slice(1).map(Number);
-        const diffRG = Math.abs(r - g);
-        const diffGB = Math.abs(g - b);
-        const diffRB = Math.abs(r - b);
-        if (diffRG > 10 || diffGB > 10 || diffRB > 10) return false;
-        return (r + g + b) / 3 > 80;
+        return Math.abs(r - g) <= 10 && Math.abs(g - b) <= 10 && (r + g + b) / 3 > 80;
     }
 
-    function getValNum(id) {
-        const el = document.getElementById(id);
-        if (!el) return null;
-        const val = el.value.trim();
-        return val ? Number(val.replace(',', '.')) : null;
+    function debounce(fn, delay) {
+        let timer;
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
     }
 
-    // ==================== ПОДСЧЁТ ПЛОЩАДОК ====================
-    function countMatchingRows() {
+    // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
+    function getFiltersFromUI() {
+        const patterns = [];
+        document.querySelectorAll('.yd-pl-pattern-item').forEach(item => {
+            const input = item.querySelector('input[type="text"]');
+            const posBtn = item.querySelector('.yd-pl-pos-btn.active');
+            if (input && input.value.trim()) {
+                patterns.push({
+                    value: input.value.trim().toLowerCase(),
+                    position: posBtn ? posBtn.dataset.pos : 'any'
+                });
+            }
+        });
+
+        return {
+            patterns,
+            clicksMin: document.getElementById('yd-pl-clicks-min')?.value || '',
+            clicksMax: document.getElementById('yd-pl-clicks-max')?.value || '',
+            ctrMin: document.getElementById('yd-pl-ctr-min')?.value || '',
+            ctrMax: document.getElementById('yd-pl-ctr-max')?.value || '',
+            cpcMin: document.getElementById('yd-pl-cpc-min')?.value || '',
+            cpcMax: document.getElementById('yd-pl-cpc-max')?.value || '',
+            spendMin: document.getElementById('yd-pl-spend-min')?.value || '',
+            spendMax: document.getElementById('yd-pl-spend-max')?.value || ''
+        };
+    }
+
+    function getWhitelistFromUI() {
+        const input = document.getElementById('yd-pl-whitelist');
+        if (!input) return [];
+        return input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    }
+
+    function matchesPattern(domain, pattern) {
+        const val = pattern.value.toLowerCase();
+        const dom = domain.toLowerCase();
+        if (pattern.position === 'start') return dom.startsWith(val);
+        if (pattern.position === 'end') return dom.endsWith(val);
+        return dom.includes(val);
+    }
+
+    function isWhitelisted(domain, whitelist) {
+        const dom = domain.toLowerCase();
+        return whitelist.some(w => dom.includes(w));
+    }
+
+    function checkRow(row, filters, whitelist, mode) {
+        const tds = row.querySelectorAll('td');
+        if (tds.length < 6) return false;
+
+        const domainCell = tds[0];
+        const domainEl = domainCell.querySelector('a') || domainCell;
+        if (isGreyElement(domainEl)) return false;
+
+        const domain = domainEl.textContent.trim().toLowerCase();
+
+        // Проверка белого списка
+        if (isWhitelisted(domain, whitelist)) return false;
+
+        const clicks = parseNumber(tds[2].textContent);
+        const ctr = parseNumber(tds[3].textContent);
+        const spend = parseNumber(tds[4].textContent);
+        const cpc = parseNumber(tds[5].textContent);
+
+        const conditions = [];
+
+        // Паттерны доменов
+        if (filters.patterns.length > 0) {
+            const patternMatch = filters.patterns.some(p => matchesPattern(domain, p));
+            conditions.push(patternMatch);
+        }
+
+        // Числовые фильтры (диапазоны)
+        if (filters.clicksMin) conditions.push(clicks >= Number(filters.clicksMin));
+        if (filters.clicksMax) conditions.push(clicks <= Number(filters.clicksMax));
+        if (filters.ctrMin) conditions.push(ctr >= Number(filters.ctrMin));
+        if (filters.ctrMax) conditions.push(ctr <= Number(filters.ctrMax));
+        if (filters.cpcMin) conditions.push(cpc >= Number(filters.cpcMin));
+        if (filters.cpcMax) conditions.push(cpc <= Number(filters.cpcMax));
+        if (filters.spendMin) conditions.push(spend >= Number(filters.spendMin));
+        if (filters.spendMax) conditions.push(spend <= Number(filters.spendMax));
+
+        if (conditions.length === 0) return false;
+        return mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
+    }
+
+    function getMatchingRows() {
+        const filters = getFiltersFromUI();
+        const whitelist = getWhitelistFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
         const rows = document.querySelectorAll('tbody tr');
-        const domainInput = document.getElementById('yd-pl-domain-patterns');
-        const domainPatterns = domainInput ? domainInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-
-        const minClicks = getValNum('yd-pl-min-clicks');
-        const minCtr = getValNum('yd-pl-min-ctr');
-        const maxCpc = getValNum('yd-pl-max-cpc');
-        const maxSpend = getValNum('yd-pl-max-spend');
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
-
-        let count = 0;
+        const matching = [];
 
         rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (!checkbox || checkbox.disabled) return;
-
-            const tds = row.querySelectorAll('td');
-            if (tds.length < 6) return;
-
-            const domainCell = tds[0];
-            const domainEl = domainCell.querySelector('a') || domainCell;
-            if (isGreyElement(domainEl)) return;
-
-            const clicks = parseNumber(tds[2].textContent);
-            const ctr = parseNumber(tds[3].textContent);
-            const spend = parseNumber(tds[4].textContent);
-            const cpc = parseNumber(tds[5].textContent);
-
-            const conditions = [];
-
-            if (domainPatterns.length > 0) {
-                const domain = domainEl.textContent.trim().toLowerCase();
-                const ok = domainPatterns.some(p => {
-                    if (!p) return false;
-                    if (p === 'com.') return domain.startsWith('com.');
-                    return domain.startsWith(p) || domain.includes(p);
-                });
-                conditions.push(ok);
+            if (checkRow(row, filters, whitelist, mode) && !checkbox.checked) {
+                matching.push(row);
             }
-
-            if (minClicks !== null) conditions.push(clicks >= minClicks);
-            if (minCtr !== null) conditions.push(ctr >= minCtr);
-            if (maxCpc !== null) conditions.push(cpc <= maxCpc);
-            if (maxSpend !== null) conditions.push(spend <= maxSpend);
-
-            if (conditions.length === 0) return;
-
-            const pass = mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
-            if (pass && !checkbox.checked) count++;
         });
 
-        return count;
+        return matching;
     }
 
-    // ==================== ЛОГИКА ВЫДЕЛЕНИЯ ====================
+    // ==================== UI: ПОДСВЕТКА PREVIEW ====================
+    function updatePreviewHighlight() {
+        // Снять старую подсветку
+        document.querySelectorAll('.yd-pl-row-preview').forEach(row => {
+            row.classList.remove('yd-pl-row-preview');
+        });
+
+        const matching = getMatchingRows();
+        matching.forEach(row => row.classList.add('yd-pl-row-preview'));
+
+        // Обновить счётчик
+        const previewEl = document.getElementById('yd-pl-preview');
+        if (previewEl) {
+            if (matching.length > 0) {
+                previewEl.textContent = `Будет выделено: ${matching.length}`;
+                previewEl.className = 'yd-pl-preview yd-pl-preview-active';
+            } else {
+                previewEl.textContent = 'Нет совпадений';
+                previewEl.className = 'yd-pl-preview';
+            }
+        }
+
+        updateStats();
+        saveCurrentFilters();
+    }
+
+    function updateStats() {
+        const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
+        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+        const statsEl = document.getElementById('yd-pl-stats');
+        if (statsEl) statsEl.textContent = `${checked} / ${total}`;
+    }
+
+    function saveCurrentFilters() {
+        settings.filters = getFiltersFromUI();
+        settings.whitelist = getWhitelistFromUI();
+        settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        saveSettings();
+    }
+
+    // ==================== ДЕЙСТВИЯ ====================
     function selectPlacements() {
-        const rows = document.querySelectorAll('tbody tr');
-        if (!rows.length) {
-            showNotification('Строк не найдено', 'error');
+        const matching = getMatchingRows();
+        if (matching.length === 0) {
+            showNotification('Нет площадок для выделения', 'info');
             return;
         }
 
-        const domainInput = document.getElementById('yd-pl-domain-patterns');
-        const domainPatterns = domainInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-
-        const minClicks = getValNum('yd-pl-min-clicks');
-        const minCtr = getValNum('yd-pl-min-ctr');
-        const maxCpc = getValNum('yd-pl-max-cpc');
-        const maxSpend = getValNum('yd-pl-max-spend');
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
-
-        let count = 0;
-
-        rows.forEach(row => {
+        matching.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
-            if (!checkbox) return;
-
-            const tds = row.querySelectorAll('td');
-            if (tds.length < 6) return;
-
-            const domainCell = tds[0];
-            const domainEl = domainCell.querySelector('a') || domainCell;
-            if (isGreyElement(domainEl)) return;
-
-            const clicks = parseNumber(tds[2].textContent);
-            const ctr = parseNumber(tds[3].textContent);
-            const spend = parseNumber(tds[4].textContent);
-            const cpc = parseNumber(tds[5].textContent);
-
-            const conditions = [];
-
-            if (domainPatterns.length > 0) {
-                const domain = domainEl.textContent.trim().toLowerCase();
-                const ok = domainPatterns.some(p => {
-                    if (!p) return false;
-                    if (p === 'com.') return domain.startsWith('com.');
-                    return domain.startsWith(p) || domain.includes(p);
-                });
-                conditions.push(ok);
-            }
-
-            if (minClicks !== null) conditions.push(clicks >= minClicks);
-            if (minCtr !== null) conditions.push(ctr >= minCtr);
-            if (maxCpc !== null) conditions.push(cpc <= maxCpc);
-            if (maxSpend !== null) conditions.push(spend <= maxSpend);
-
-            if (conditions.length === 0) return;
-
-            const pass = mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
-
-            if (!pass) return;
-
-            if (!checkbox.checked && !checkbox.disabled) {
-                checkbox.click();
-                count++;
-            }
+            if (checkbox && !checkbox.checked) checkbox.click();
         });
 
-        showNotification(`Выделено: ${count}`, 'success');
-        updateStats();
-        saveCurrentFilters();
+        showNotification(`Выделено: ${matching.length}`, 'success');
+        updatePreviewHighlight();
     }
 
     function clearAllSelections() {
@@ -7723,49 +7762,7 @@
             }
         });
         showNotification(`Снято: ${count}`, 'info');
-        updateStats();
-    }
-
-    function resetAllFilters() {
-        document.getElementById('yd-pl-domain-patterns').value = '';
-        document.getElementById('yd-pl-min-clicks').value = '';
-        document.getElementById('yd-pl-min-ctr').value = '';
-        document.getElementById('yd-pl-max-cpc').value = '';
-        document.getElementById('yd-pl-max-spend').value = '';
-        document.querySelector('input[name="yd-pl-mode"][value="and"]').checked = true;
-        updatePreview();
-        showNotification('Фильтры сброшены', 'info');
-    }
-
-    function saveCurrentFilters() {
-        settings.filters = {
-            domains: document.getElementById('yd-pl-domain-patterns').value,
-            minClicks: document.getElementById('yd-pl-min-clicks').value,
-            minCtr: document.getElementById('yd-pl-min-ctr').value,
-            maxCpc: document.getElementById('yd-pl-max-cpc').value,
-            maxSpend: document.getElementById('yd-pl-max-spend').value
-        };
-        settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'and';
-        saveSettings();
-    }
-
-    // ==================== UI ====================
-    function updateStats() {
-        const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
-        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
-        const statsEl = document.getElementById('yd-pl-stats');
-        if (statsEl) {
-            statsEl.textContent = `${checked} / ${total}`;
-        }
-    }
-
-    function updatePreview() {
-        const count = countMatchingRows();
-        const previewEl = document.getElementById('yd-pl-preview');
-        if (previewEl) {
-            previewEl.textContent = count > 0 ? `Будет выделено: ${count}` : 'Нет совпадений';
-            previewEl.className = count > 0 ? 'yd-pl-preview yd-pl-preview-active' : 'yd-pl-preview';
-        }
+        updatePreviewHighlight();
     }
 
     function showNotification(message, type = 'info') {
@@ -7784,23 +7781,106 @@
         }, 2000);
     }
 
-    function updateTemplateSelect() {
-        const select = document.getElementById('yd-pl-template-select');
-        if (!select) return;
-        select.innerHTML = '';
-        for (const name of Object.keys(settings.templates)) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            if (name === settings.currentTemplate) opt.selected = true;
-            select.appendChild(opt);
+    // ==================== UI: ПАТТЕРНЫ ====================
+    function createPatternItem(pattern = { value: '', position: 'any' }) {
+        const div = document.createElement('div');
+        div.className = 'yd-pl-pattern-item';
+        div.innerHTML = `
+            <input type="text" class="yd-pl-pattern-input" value="${pattern.value}" placeholder="домен...">
+            <div class="yd-pl-pos-group">
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'start' ? 'active' : ''}" data-pos="start" title="Строго в начале">^</button>
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'any' ? 'active' : ''}" data-pos="any" title="В любом месте">*</button>
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'end' ? 'active' : ''}" data-pos="end" title="Строго в конце">$</button>
+            </div>
+            <button type="button" class="yd-pl-pattern-remove" title="Удалить">×</button>
+        `;
+
+        // События
+        div.querySelector('input').addEventListener('input', debounce(updatePreviewHighlight, 300));
+        div.querySelectorAll('.yd-pl-pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                div.querySelectorAll('.yd-pl-pos-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                updatePreviewHighlight();
+            });
+        });
+        div.querySelector('.yd-pl-pattern-remove').addEventListener('click', () => {
+            div.remove();
+            updatePreviewHighlight();
+        });
+
+        return div;
+    }
+
+    function renderPatterns() {
+        const container = document.getElementById('yd-pl-patterns-list');
+        if (!container) return;
+        container.innerHTML = '';
+        settings.filters.patterns.forEach(p => container.appendChild(createPatternItem(p)));
+        if (settings.filters.patterns.length === 0) {
+            container.appendChild(createPatternItem());
         }
     }
 
-    // ==================== СОЗДАНИЕ ПАНЕЛИ ====================
-    function createControlPanel() {
-        if (document.getElementById('yd-pl-panel')) return;
+    // ==================== UI: ШАБЛОНЫ ====================
+    function renderTemplates() {
+        const container = document.getElementById('yd-pl-templates-list');
+        if (!container) return;
+        container.innerHTML = '';
 
+        settings.templates.forEach((tpl, idx) => {
+            const div = document.createElement('div');
+            div.className = 'yd-pl-template-item';
+            div.innerHTML = `
+                <span class="yd-pl-template-name">${tpl.name}</span>
+                <div class="yd-pl-template-actions">
+                    <button class="yd-pl-tpl-apply" title="Применить">✓</button>
+                    <button class="yd-pl-tpl-copy" title="Копировать">⧉</button>
+                    <button class="yd-pl-tpl-delete" title="Удалить">×</button>
+                </div>
+            `;
+
+            div.querySelector('.yd-pl-tpl-apply').addEventListener('click', () => {
+                settings.filters.patterns = [...tpl.patterns];
+                renderPatterns();
+                updatePreviewHighlight();
+                showNotification(`Шаблон "${tpl.name}" применён`, 'success');
+            });
+
+            div.querySelector('.yd-pl-tpl-copy').addEventListener('click', () => {
+                const newName = prompt('Имя нового шаблона:', tpl.name + ' (копия)');
+                if (!newName) return;
+                settings.templates.push({ name: newName, patterns: [...tpl.patterns] });
+                saveSettings();
+                renderTemplates();
+                showNotification(`Шаблон скопирован`, 'success');
+            });
+
+            div.querySelector('.yd-pl-tpl-delete').addEventListener('click', () => {
+                if (!confirm(`Удалить шаблон "${tpl.name}"?`)) return;
+                settings.templates.splice(idx, 1);
+                saveSettings();
+                renderTemplates();
+                showNotification(`Шаблон удалён`, 'info');
+            });
+
+            // Редактирование имени по двойному клику
+            div.querySelector('.yd-pl-template-name').addEventListener('dblclick', () => {
+                const newName = prompt('Новое имя шаблона:', tpl.name);
+                if (newName) {
+                    tpl.name = newName;
+                    saveSettings();
+                    renderTemplates();
+                }
+            });
+
+            container.appendChild(div);
+        });
+    }
+
+    // ==================== СОЗДАНИЕ ПАНЕЛИ ====================
+    function createPanel() {
+        if (document.getElementById('yd-pl-panel')) return;
         injectStyles();
 
         const panel = document.createElement('div');
@@ -7815,20 +7895,10 @@
                         <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
                         <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
                     </svg>
-                    <div class="yd-pl-title-group">
-                        <span class="yd-pl-title">YD Helper</span>
-                        <span class="yd-pl-subtitle">Площадки</span>
-                    </div>
+                    <span class="yd-pl-title">YD Helper</span>
                 </div>
                 <div class="yd-pl-header-right">
                     <span id="yd-pl-stats" class="yd-pl-badge">0 / 0</span>
-                    <button id="yd-pl-help-btn" class="yd-pl-icon-btn" title="Справка">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                    </button>
                     <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -7838,91 +7908,104 @@
             </div>
 
             <!-- Body -->
-            <div id="yd-pl-panel-body" class="yd-pl-body">
-                <!-- Секция: ШАБЛОНЫ -->
-                <div class="yd-pl-section">
-                    <div class="yd-pl-section-header">
-                        <span class="yd-pl-section-label">ШАБЛОНЫ</span>
-                        <div class="yd-pl-section-actions">
-                            <button id="yd-pl-template-save" class="yd-pl-icon-btn-sm" title="Сохранить текущие настройки как шаблон">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                            </button>
-                            <button id="yd-pl-template-delete" class="yd-pl-icon-btn-sm" title="Удалить шаблон">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"/>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <select id="yd-pl-template-select" class="yd-pl-select"></select>
-                </div>
-
-                <!-- Секция: ФИЛЬТРЫ -->
+            <div class="yd-pl-body">
+                <!-- Фильтры по показателям -->
                 <div class="yd-pl-section">
                     <div class="yd-pl-section-header">
                         <span class="yd-pl-section-label">ФИЛЬТРЫ</span>
-                        <button id="yd-pl-reset-filters" class="yd-pl-icon-btn-sm" title="Сбросить все фильтры">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
-                            </svg>
-                        </button>
+                        <div class="yd-pl-mode-toggle">
+                            <label class="yd-pl-toggle ${settings.mode === 'or' ? 'active' : ''}">
+                                <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                                <span>ИЛИ</span>
+                            </label>
+                            <label class="yd-pl-toggle ${settings.mode === 'and' ? 'active' : ''}">
+                                <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                                <span>И</span>
+                            </label>
+                        </div>
                     </div>
-                    
-                    <!-- Домены -->
-                    <div class="yd-pl-field-group">
-                        <label class="yd-pl-label-sm">Паттерны доменов</label>
-                        <textarea id="yd-pl-domain-patterns" class="yd-pl-textarea" rows="2" 
-                            placeholder="com., dsp, puzzle, game...">${settings.filters.domains}</textarea>
+
+                    <!-- Паттерны доменов -->
+                    <div class="yd-pl-subsection">
+                        <div class="yd-pl-subsection-header">
+                            <span>Домены</span>
+                            <button id="yd-pl-add-pattern" class="yd-pl-btn-add">+ Добавить</button>
+                        </div>
+                        <div id="yd-pl-patterns-list" class="yd-pl-patterns-list"></div>
+                        <div class="yd-pl-hint">^ = начало, * = везде, $ = конец</div>
                     </div>
 
                     <!-- Числовые фильтры -->
-                    <div class="yd-pl-grid">
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Мин. кликов</label>
-                            <input id="yd-pl-min-clicks" class="yd-pl-input-sm" type="number" min="0" 
-                                placeholder="—" value="${settings.filters.minClicks}">
+                    <div class="yd-pl-metrics-grid">
+                        <div class="yd-pl-metric">
+                            <label>Клики</label>
+                            <div class="yd-pl-range">
+                                <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
+                                <span>—</span>
+                                <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
+                            </div>
                         </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Мин. CTR %</label>
-                            <input id="yd-pl-min-ctr" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.minCtr}">
+                        <div class="yd-pl-metric">
+                            <label>CTR %</label>
+                            <div class="yd-pl-range">
+                                <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
+                                <span>—</span>
+                                <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
+                            </div>
                         </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Макс. CPC ₽</label>
-                            <input id="yd-pl-max-cpc" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.maxCpc}">
+                        <div class="yd-pl-metric">
+                            <label>CPC ₽</label>
+                            <div class="yd-pl-range">
+                                <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
+                                <span>—</span>
+                                <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
+                            </div>
                         </div>
-                        <div class="yd-pl-field">
-                            <label class="yd-pl-label-sm">Макс. расход ₽</label>
-                            <input id="yd-pl-max-spend" class="yd-pl-input-sm" type="number" min="0" step="0.01" 
-                                placeholder="—" value="${settings.filters.maxSpend}">
-                        </div>
-                    </div>
-
-                    <!-- Режим -->
-                    <div class="yd-pl-mode-row">
-                        <span class="yd-pl-label-sm">Условия:</span>
-                        <div class="yd-pl-toggle-group">
-                            <label class="yd-pl-toggle ${settings.mode === 'and' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
-                                <span>И (все)</span>
-                            </label>
-                            <label class="yd-pl-toggle ${settings.mode === 'or' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
-                                <span>ИЛИ (любое)</span>
-                            </label>
+                        <div class="yd-pl-metric">
+                            <label>Расход ₽</label>
+                            <div class="yd-pl-range">
+                                <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
+                                <span>—</span>
+                                <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Предпросмотр -->
-                <div id="yd-pl-preview" class="yd-pl-preview">Введите фильтры...</div>
+                <!-- Белый список (исключения) -->
+                <div class="yd-pl-section yd-pl-section-compact">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-label">ИСКЛЮЧЕНИЯ</span>
+                    </div>
+                    <input type="text" id="yd-pl-whitelist" class="yd-pl-input" 
+                        placeholder="yandex, google, vk..." 
+                        value="${settings.whitelist.join(', ')}"
+                        title="Домены, которые никогда не выделяются">
+                    <div class="yd-pl-hint">Домены через запятую (не выделяются)</div>
+                </div>
+
+                <!-- Шаблоны (сворачиваемая секция) -->
+                <div class="yd-pl-accordion ${settings.templatesCollapsed ? '' : 'open'}">
+                    <div class="yd-pl-accordion-header" id="yd-pl-templates-toggle">
+                        <span class="yd-pl-section-label">ШАБЛОНЫ</span>
+                        <svg class="yd-pl-accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </div>
+                    <div class="yd-pl-accordion-content">
+                        <div id="yd-pl-templates-list" class="yd-pl-templates-list"></div>
+                        <button id="yd-pl-save-template" class="yd-pl-btn-save-template">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Сохранить текущие фильтры
+                        </button>
+                        <div class="yd-pl-hint">Двойной клик — переименовать</div>
+                    </div>
+                </div>
+
+                <!-- Preview -->
+                <div id="yd-pl-preview" class="yd-pl-preview">Настройте фильтры...</div>
             </div>
 
             <!-- Footer -->
@@ -7933,41 +8016,26 @@
                     </svg>
                     <span>Выделить</span>
                 </button>
-                <button id="yd-pl-clear" class="yd-pl-btn-secondary" title="Снять все галочки">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
+                <button id="yd-pl-clear" class="yd-pl-btn-icon" title="Снять все галочки">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>
 
-            <!-- Help Tooltip -->
-            <div id="yd-pl-help-tooltip" class="yd-pl-help-tooltip" style="display:none;">
-                <div class="yd-pl-help-title">Горячие клавиши</div>
-                <div class="yd-pl-help-row"><kbd>Alt+P</kbd> — выделить по фильтрам</div>
-                <div class="yd-pl-help-row"><kbd>Alt+Shift+P</kbd> — снять все галочки</div>
-                <div class="yd-pl-help-divider"></div>
-                <div class="yd-pl-help-row">com. — строго с начала домена</div>
-                <div class="yd-pl-help-row">dsp — вхождение в любом месте</div>
-            </div>
-
             <!-- Resize handles -->
-            <div class="yd-pl-resize-handle yd-pl-resize-n" data-resize="n"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-s" data-resize="s"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-e" data-resize="e"></div>
-            <div class="yd-pl-resize-handle yd-pl-resize-w" data-resize="w"></div>
             <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
         `;
 
         document.body.appendChild(panel);
 
-        // Применить размер и позицию
+        // Позиция и размер
         panel.style.width = settings.panelSize.width + 'px';
         panel.style.height = settings.panelSize.height + 'px';
         panel.style.top = settings.panelPosition.top;
         panel.style.right = settings.panelPosition.right;
 
-        // Floating Pill
+        // Pill
         const pill = document.createElement('div');
         pill.id = 'yd-pl-pill';
         pill.className = 'yd-pl-pill';
@@ -7977,33 +8045,26 @@
                 <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
                 <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
             </svg>
-            <span>Площадки</span>
             <span id="yd-pl-pill-count" class="yd-pl-pill-badge">0</span>
+            <span id="yd-pl-pill-filters" class="yd-pl-pill-filters"></span>
         `;
         document.body.appendChild(pill);
 
         // Инициализация
-        updateTemplateSelect();
-        updateStats();
-        setTimeout(updatePreview, 100);
-
-        // Event Listeners
+        renderPatterns();
+        renderTemplates();
         setupEventListeners(panel, pill);
         makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
-        makeDraggable(pill, pill);
         makeResizable(panel);
+        setTimeout(updatePreviewHighlight, 100);
     }
 
     function setupEventListeners(panel, pill) {
         // Toggle panel
         document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
-            panel.classList.add('yd-pl-panel-minimizing');
-            setTimeout(() => {
-                panel.style.display = 'none';
-                panel.classList.remove('yd-pl-panel-minimizing');
-                pill.style.display = 'flex';
-                updatePillCount();
-            }, 200);
+            panel.style.display = 'none';
+            pill.style.display = 'flex';
+            updatePill();
         });
 
         pill.addEventListener('click', () => {
@@ -8011,74 +8072,49 @@
             panel.style.display = 'flex';
         });
 
-        // Help tooltip
-        const helpBtn = document.getElementById('yd-pl-help-btn');
-        const helpTooltip = document.getElementById('yd-pl-help-tooltip');
-        helpBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            helpTooltip.style.display = helpTooltip.style.display === 'none' ? 'block' : 'none';
-        });
-        document.addEventListener('click', () => {
-            helpTooltip.style.display = 'none';
+        // Add pattern
+        document.getElementById('yd-pl-add-pattern').addEventListener('click', () => {
+            document.getElementById('yd-pl-patterns-list').appendChild(createPatternItem());
         });
 
-        // Template select
-        document.getElementById('yd-pl-template-select').addEventListener('change', (e) => {
-            const name = e.target.value;
-            settings.currentTemplate = name;
-            document.getElementById('yd-pl-domain-patterns').value = settings.templates[name] || '';
+        // Templates accordion
+        document.getElementById('yd-pl-templates-toggle').addEventListener('click', () => {
+            const acc = document.querySelector('.yd-pl-accordion');
+            acc.classList.toggle('open');
+            settings.templatesCollapsed = !acc.classList.contains('open');
             saveSettings();
-            updatePreview();
         });
 
-        // Template save
-        document.getElementById('yd-pl-template-save').addEventListener('click', () => {
-            const name = prompt('Название шаблона:', 'Мой шаблон');
+        // Save template
+        document.getElementById('yd-pl-save-template').addEventListener('click', () => {
+            const name = prompt('Название шаблона:', 'Новый шаблон');
             if (!name) return;
-            settings.templates[name] = document.getElementById('yd-pl-domain-patterns').value;
-            settings.currentTemplate = name;
+            const filters = getFiltersFromUI();
+            settings.templates.push({ name, patterns: [...filters.patterns] });
             saveSettings();
-            updateTemplateSelect();
+            renderTemplates();
             showNotification(`Шаблон "${name}" сохранён`, 'success');
         });
-
-        // Template delete
-        document.getElementById('yd-pl-template-delete').addEventListener('click', () => {
-            const name = document.getElementById('yd-pl-template-select').value;
-            if (Object.keys(DEFAULT_TEMPLATES).includes(name)) {
-                showNotification('Встроенные шаблоны нельзя удалить', 'error');
-                return;
-            }
-            if (!confirm(`Удалить шаблон "${name}"?`)) return;
-            delete settings.templates[name];
-            settings.currentTemplate = Object.keys(settings.templates)[0];
-            saveSettings();
-            updateTemplateSelect();
-            showNotification(`Шаблон "${name}" удалён`, 'info');
-        });
-
-        // Reset filters
-        document.getElementById('yd-pl-reset-filters').addEventListener('click', resetAllFilters);
 
         // Main buttons
         document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
         document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
 
-        // Toggle mode styling
+        // Mode toggle
         document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
             radio.addEventListener('change', () => {
                 document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
                 radio.closest('.yd-pl-toggle').classList.add('active');
-                updatePreview();
+                updatePreviewHighlight();
             });
         });
 
-        // Live preview on input change
-        ['yd-pl-domain-patterns', 'yd-pl-min-clicks', 'yd-pl-min-ctr', 'yd-pl-max-cpc', 'yd-pl-max-spend'].forEach(id => {
+        // Live preview
+        const inputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max', 'yd-pl-whitelist'];
+        inputs.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', debounce(updatePreview, 300));
-            }
+            if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
         });
 
         // Stats observer
@@ -8086,32 +8122,36 @@
         if (tbody) {
             new MutationObserver(() => {
                 updateStats();
-                updatePreview();
+                updatePreviewHighlight();
             }).observe(tbody, { childList: true, subtree: true, attributes: true });
         }
     }
 
-    function updatePillCount() {
+    function updatePill() {
         const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
-        const el = document.getElementById('yd-pl-pill-count');
-        if (el) el.textContent = checked;
+        const countEl = document.getElementById('yd-pl-pill-count');
+        if (countEl) countEl.textContent = checked;
+
+        // Показать индикатор активных фильтров
+        const filters = getFiltersFromUI();
+        const hasFilters = filters.patterns.length > 0 ||
+            filters.clicksMin || filters.clicksMax ||
+            filters.ctrMin || filters.ctrMax ||
+            filters.cpcMin || filters.cpcMax ||
+            filters.spendMin || filters.spendMax;
+
+        const filtersEl = document.getElementById('yd-pl-pill-filters');
+        if (filtersEl) {
+            filtersEl.textContent = hasFilters ? '●' : '';
+            filtersEl.style.display = hasFilters ? 'inline' : 'none';
+        }
     }
 
-    function debounce(fn, delay) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
-
-    // ==================== DRAG & RESIZE ====================
     function makeDraggable(element, handle) {
-        let isDragging = false;
-        let startX, startY, startLeft, startTop;
+        let isDragging = false, startX, startY, startLeft, startTop;
 
         handle.addEventListener('mousedown', (e) => {
-            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('textarea')) return;
+            if (e.target.closest('button, input, select')) return;
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -8129,12 +8169,8 @@
         });
 
         document.addEventListener('mouseup', () => {
-            if (isDragging && element.id === 'yd-pl-panel') {
-                settings.panelPosition = {
-                    top: element.style.top,
-                    right: 'auto',
-                    left: element.style.left
-                };
+            if (isDragging) {
+                settings.panelPosition = { top: element.style.top, right: 'auto', left: element.style.left };
                 saveSettings();
             }
             isDragging = false;
@@ -8143,49 +8179,29 @@
     }
 
     function makeResizable(panel) {
-        const handles = panel.querySelectorAll('.yd-pl-resize-handle');
-        let isResizing = false;
-        let startX, startY, startW, startH, startL, startT, direction;
+        const handle = panel.querySelector('.yd-pl-resize-se');
+        let isResizing = false, startX, startY, startW, startH;
 
-        handles.forEach(handle => {
-            handle.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                isResizing = true;
-                direction = handle.dataset.resize;
-                startX = e.clientX;
-                startY = e.clientY;
-                const rect = panel.getBoundingClientRect();
-                startW = rect.width;
-                startH = rect.height;
-                startL = rect.left;
-                startT = rect.top;
-                document.body.style.userSelect = 'none';
-            });
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = panel.getBoundingClientRect();
+            startW = rect.width;
+            startH = rect.height;
+            document.body.style.userSelect = 'none';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
-            if (direction.includes('e')) panel.style.width = Math.max(280, startW + dx) + 'px';
-            if (direction.includes('w')) {
-                panel.style.width = Math.max(280, startW - dx) + 'px';
-                panel.style.left = (startL + dx) + 'px';
-            }
-            if (direction.includes('s')) panel.style.height = Math.max(300, startH + dy) + 'px';
-            if (direction.includes('n')) {
-                panel.style.height = Math.max(300, startH - dy) + 'px';
-                panel.style.top = (startT + dy) + 'px';
-            }
+            panel.style.width = Math.max(300, startW + e.clientX - startX) + 'px';
+            panel.style.height = Math.max(350, startH + e.clientY - startY) + 'px';
         });
 
         document.addEventListener('mouseup', () => {
             if (isResizing) {
-                settings.panelSize = {
-                    width: parseInt(panel.style.width),
-                    height: parseInt(panel.style.height)
-                };
+                settings.panelSize = { width: parseInt(panel.style.width), height: parseInt(panel.style.height) };
                 saveSettings();
             }
             isResizing = false;
@@ -8200,442 +8216,165 @@
         const style = document.createElement('style');
         style.id = 'yd-pl-styles';
         style.textContent = `
-            /* ===== ПАНЕЛЬ ПЛОЩАДОК ===== */
+            /* CSS переменные - идентичны модулю запросов */
+            #yd-pl-panel {
+                --yd-primary: #205598;
+                --yd-primary-light: #2a6bc0;
+                --yd-accent: #E46924;
+                --yd-bg: #ffffff;
+                --yd-bg-secondary: #F9FAFB;
+                --yd-border: #E1E4E8;
+                --yd-text: #333;
+                --yd-text-secondary: #6b7280;
+                --yd-text-muted: #9CA3AF;
+                --yd-success: #10B981;
+                --yd-danger: #EF4444;
+            }
+
             #yd-pl-panel {
                 position: fixed;
                 z-index: 9999999;
-                background: #ffffff;
-                border: 1px solid #E1E4E8;
+                background: var(--yd-bg);
+                border: 1px solid var(--yd-border);
                 border-radius: 12px;
-                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Roboto', system-ui, sans-serif;
-                font-size: 14px;
-                color: #333;
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                font-size: 13px;
+                color: var(--yd-text);
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
-                min-width: 280px;
-                min-height: 300px;
-            }
-
-            #yd-pl-panel.yd-pl-panel-minimizing {
-                transform: scale(0.3);
-                opacity: 0;
-                transition: all 0.3s ease;
+                min-width: 300px;
+                min-height: 350px;
             }
 
             #yd-pl-panel * { box-sizing: border-box; }
 
-            /* Header - идентичен модулю запросов */
             .yd-pl-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 padding: 10px 14px;
-                background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
-                border-bottom: 1px solid #E1E4E8;
+                background: linear-gradient(135deg, var(--yd-bg-secondary) 0%, #F3F4F6 100%);
+                border-bottom: 1px solid var(--yd-border);
                 cursor: grab;
-                flex-shrink: 0;
             }
 
             .yd-pl-header:active { cursor: grabbing; }
 
-            .yd-pl-header-left {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-
-            .yd-pl-logo { flex-shrink: 0; }
-
-            .yd-pl-title-group {
-                display: flex;
-                flex-direction: column;
-                line-height: 1.2;
-            }
-
-            .yd-pl-title {
-                font-weight: 600;
-                font-size: 14px;
-                color: #205598;
-            }
-
-            .yd-pl-subtitle {
-                font-size: 10px;
-                color: #9CA3AF;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-
-            .yd-pl-header-right {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
-
-            .yd-pl-badge {
-                font-size: 11px;
-                color: #205598;
-                background: #E3F2FD;
-                padding: 3px 8px;
-                border-radius: 10px;
-                font-weight: 600;
-            }
+            .yd-pl-header-left { display: flex; align-items: center; gap: 10px; }
+            .yd-pl-title { font-weight: 600; font-size: 14px; color: var(--yd-primary); }
+            .yd-pl-header-right { display: flex; align-items: center; gap: 6px; }
+            .yd-pl-badge { font-size: 11px; color: var(--yd-primary); background: #E3F2FD; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
 
             .yd-pl-icon-btn {
-                background: none;
-                border: none;
-                padding: 6px;
-                cursor: pointer;
-                color: #9CA3AF;
-                border-radius: 6px;
-                transition: all 0.15s ease;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                background: none; border: none; padding: 6px; cursor: pointer;
+                color: var(--yd-text-muted); border-radius: 6px; transition: all 0.15s;
+                display: flex; align-items: center; justify-content: center;
             }
+            .yd-pl-icon-btn:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
 
-            .yd-pl-icon-btn:hover {
-                background: rgba(32, 85, 152, 0.1);
-                color: #205598;
-            }
-
-            .yd-pl-icon-btn-sm {
-                background: none;
-                border: none;
-                padding: 4px;
-                cursor: pointer;
-                color: #9CA3AF;
-                border-radius: 4px;
-                transition: all 0.15s ease;
-            }
-
-            .yd-pl-icon-btn-sm:hover {
-                background: rgba(32, 85, 152, 0.1);
-                color: #205598;
-            }
-
-            /* Body */
-            .yd-pl-body {
-                flex: 1;
-                padding: 12px;
-                overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-            }
+            .yd-pl-body { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 
             .yd-pl-section {
-                background: #FAFBFC;
-                border: 1px solid #E1E4E8;
+                background: var(--yd-bg-secondary);
+                border: 1px solid var(--yd-border);
                 border-radius: 8px;
                 padding: 10px;
             }
 
-            .yd-pl-section-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 8px;
-            }
+            .yd-pl-section-compact { padding: 8px 10px; }
 
-            .yd-pl-section-label {
-                font-size: 10px;
-                font-weight: 700;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
+            .yd-pl-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+            .yd-pl-section-label { font-size: 10px; font-weight: 700; color: var(--yd-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
 
-            .yd-pl-section-actions {
-                display: flex;
-                gap: 4px;
-            }
-
-            .yd-pl-label-sm {
-                font-size: 11px;
-                color: #6b7280;
-                margin-bottom: 4px;
-                display: block;
-            }
-
-            .yd-pl-select {
-                width: 100%;
-                padding: 8px 10px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 13px;
-                background: #fff;
-                cursor: pointer;
-            }
-
-            .yd-pl-select:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
-            }
-
-            .yd-pl-field-group {
-                margin-bottom: 10px;
-            }
-
-            .yd-pl-textarea {
-                width: 100%;
-                padding: 8px 10px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 12px;
-                font-family: inherit;
-                resize: vertical;
-                min-height: 50px;
-            }
-
-            .yd-pl-textarea:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
-            }
-
-            .yd-pl-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-                margin-bottom: 10px;
-            }
-
-            .yd-pl-field { }
-
-            .yd-pl-input-sm {
-                width: 100%;
-                padding: 6px 8px;
-                border: 1px solid #E1E4E8;
-                border-radius: 6px;
-                font-size: 12px;
-            }
-
-            .yd-pl-input-sm:focus {
-                outline: none;
-                border-color: #205598;
-                box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
-            }
-
-            .yd-pl-mode-row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-
-            .yd-pl-toggle-group {
-                display: flex;
-                background: #E5E7EB;
-                border-radius: 6px;
-                padding: 2px;
-            }
-
-            .yd-pl-toggle {
-                padding: 4px 10px;
-                font-size: 11px;
-                color: #6b7280;
-                border-radius: 4px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-            }
-
+            .yd-pl-mode-toggle { display: flex; background: #E5E7EB; border-radius: 6px; padding: 2px; }
+            .yd-pl-toggle { padding: 4px 10px; font-size: 11px; color: var(--yd-text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.15s; }
             .yd-pl-toggle input { display: none; }
+            .yd-pl-toggle.active { background: #fff; color: var(--yd-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-            .yd-pl-toggle.active {
-                background: #fff;
-                color: #205598;
-                font-weight: 600;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            }
+            .yd-pl-subsection { margin-bottom: 10px; }
+            .yd-pl-subsection-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; color: var(--yd-text-secondary); }
+            .yd-pl-btn-add { font-size: 11px; color: var(--yd-primary); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+            .yd-pl-btn-add:hover { background: rgba(32, 85, 152, 0.1); }
 
-            .yd-pl-preview {
-                text-align: center;
-                padding: 8px;
-                font-size: 12px;
-                color: #9CA3AF;
-                background: #F9FAFB;
-                border-radius: 6px;
-            }
+            .yd-pl-patterns-list { display: flex; flex-direction: column; gap: 6px; }
+            .yd-pl-pattern-item { display: flex; align-items: center; gap: 6px; }
+            .yd-pl-pattern-input { flex: 1; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
+            .yd-pl-pattern-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
 
-            .yd-pl-preview.yd-pl-preview-active {
-                color: #28a745;
-                background: #E8F5E9;
-                font-weight: 500;
-            }
+            .yd-pl-pos-group { display: flex; background: #E5E7EB; border-radius: 4px; }
+            .yd-pl-pos-btn { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-secondary); border-radius: 4px; }
+            .yd-pl-pos-btn.active { background: #fff; color: var(--yd-primary); font-weight: 600; }
+            .yd-pl-pos-btn:hover:not(.active) { background: rgba(255,255,255,0.5); }
 
-            /* Footer - идентичен модулю запросов */
-            .yd-pl-footer {
-                display: flex;
-                gap: 8px;
-                padding: 12px;
-                border-top: 1px solid #E1E4E8;
-                background: #FAFBFC;
-                flex-shrink: 0;
-            }
+            .yd-pl-pattern-remove { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; color: var(--yd-text-muted); font-size: 16px; border-radius: 4px; }
+            .yd-pl-pattern-remove:hover { background: rgba(239, 68, 68, 0.1); color: var(--yd-danger); }
 
-            .yd-pl-btn-primary {
-                flex: 1;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                padding: 10px 16px;
-                background: linear-gradient(135deg, #205598, #1a4578);
-                color: #fff;
-                border: none;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            }
+            .yd-pl-hint { font-size: 10px; color: var(--yd-text-muted); margin-top: 4px; }
 
-            .yd-pl-btn-primary:hover {
-                background: linear-gradient(135deg, #1a4578, #153a60);
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3);
-            }
+            .yd-pl-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .yd-pl-metric label { display: block; font-size: 11px; color: var(--yd-text-secondary); margin-bottom: 4px; }
+            .yd-pl-range { display: flex; align-items: center; gap: 4px; }
+            .yd-pl-range input { width: 100%; padding: 5px 6px; border: 1px solid var(--yd-border); border-radius: 5px; font-size: 12px; text-align: center; }
+            .yd-pl-range input:focus { outline: none; border-color: var(--yd-primary); }
+            .yd-pl-range input::-webkit-inner-spin-button { -webkit-appearance: none; }
+            .yd-pl-range span { color: var(--yd-text-muted); font-size: 11px; }
 
-            .yd-pl-btn-secondary {
-                padding: 10px 12px;
-                background: #F3F4F6;
-                color: #6b7280;
-                border: 1px solid #E1E4E8;
-                border-radius: 8px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
+            .yd-pl-input { width: 100%; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
+            .yd-pl-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
 
-            .yd-pl-btn-secondary:hover {
-                background: #E5E7EB;
-                color: #333;
-            }
+            /* Accordion */
+            .yd-pl-accordion { background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; }
+            .yd-pl-accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; }
+            .yd-pl-accordion-arrow { transition: transform 0.2s; color: var(--yd-text-muted); }
+            .yd-pl-accordion.open .yd-pl-accordion-arrow { transform: rotate(180deg); }
+            .yd-pl-accordion-content { display: none; padding: 0 10px 10px; }
+            .yd-pl-accordion.open .yd-pl-accordion-content { display: block; }
 
-            /* Help Tooltip */
-            .yd-pl-help-tooltip {
-                position: absolute;
-                top: 50px;
-                right: 10px;
-                background: #1F2937;
-                color: #fff;
-                padding: 12px;
-                border-radius: 8px;
-                font-size: 12px;
-                z-index: 10;
-                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-                min-width: 200px;
-            }
+            .yd-pl-templates-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+            .yd-pl-template-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #fff; border: 1px solid var(--yd-border); border-radius: 6px; }
+            .yd-pl-template-name { font-size: 12px; cursor: pointer; }
+            .yd-pl-template-name:hover { color: var(--yd-primary); }
+            .yd-pl-template-actions { display: flex; gap: 4px; }
+            .yd-pl-template-actions button { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-muted); border-radius: 4px; }
+            .yd-pl-template-actions button:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
+            .yd-pl-tpl-delete:hover { background: rgba(239, 68, 68, 0.1) !important; color: var(--yd-danger) !important; }
 
-            .yd-pl-help-title {
-                font-weight: 600;
-                margin-bottom: 8px;
-                color: #E5E7EB;
-            }
+            .yd-pl-btn-save-template { width: 100%; padding: 6px; font-size: 11px; color: var(--yd-text-secondary); background: #fff; border: 1px dashed var(--yd-border); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+            .yd-pl-btn-save-template:hover { border-color: var(--yd-primary); color: var(--yd-primary); }
 
-            .yd-pl-help-row {
-                margin-bottom: 4px;
-                color: #D1D5DB;
-            }
+            .yd-pl-preview { text-align: center; padding: 8px; font-size: 12px; color: var(--yd-text-muted); background: var(--yd-bg-secondary); border-radius: 6px; }
+            .yd-pl-preview.yd-pl-preview-active { color: var(--yd-success); background: #E8F5E9; font-weight: 500; }
 
-            .yd-pl-help-row kbd {
-                background: #374151;
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-size: 11px;
-                margin-right: 6px;
-            }
+            .yd-pl-footer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--yd-border); background: var(--yd-bg); }
+            .yd-pl-btn-primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: var(--yd-primary); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+            .yd-pl-btn-primary:hover { background: var(--yd-primary-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3); }
 
-            .yd-pl-help-divider {
-                height: 1px;
-                background: #374151;
-                margin: 8px 0;
-            }
+            .yd-pl-btn-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; cursor: pointer; color: var(--yd-text-secondary); transition: all 0.2s; }
+            .yd-pl-btn-icon:hover { background: var(--yd-bg); border-color: var(--yd-primary); color: var(--yd-primary); }
 
-            /* Resize handles */
-            .yd-pl-resize-handle {
-                position: absolute;
-                background: transparent;
-            }
+            .yd-pl-resize-se { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: se-resize; }
 
-            .yd-pl-resize-n { top: 0; left: 10px; right: 10px; height: 6px; cursor: n-resize; }
-            .yd-pl-resize-s { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: s-resize; }
-            .yd-pl-resize-e { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: e-resize; }
-            .yd-pl-resize-w { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: w-resize; }
-            .yd-pl-resize-se { right: 0; bottom: 0; width: 12px; height: 12px; cursor: se-resize; }
+            /* Pill */
+            .yd-pl-pill { position: fixed; bottom: 80px; right: 20px; z-index: 9999998; background: #fff; border: 1px solid var(--yd-border); border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); cursor: pointer; font-size: 12px; color: var(--yd-primary); transition: all 0.2s; }
+            .yd-pl-pill:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); }
+            .yd-pl-pill-badge { background: var(--yd-accent); color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+            .yd-pl-pill-filters { color: var(--yd-success); font-size: 10px; }
 
-            /* Floating Pill */
-            .yd-pl-pill {
-                position: fixed;
-                bottom: 80px;
-                right: 20px;
-                z-index: 9999998;
-                background: #ffffff;
-                border: 1px solid #E1E4E8;
-                border-radius: 20px;
-                padding: 8px 14px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                color: #205598;
-                transition: all 0.2s ease;
-            }
+            /* Preview подсветка строк в таблице */
+            tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
+            tbody tr.yd-pl-row-preview td { background: transparent !important; }
 
-            .yd-pl-pill:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-            }
-
-            .yd-pl-pill-badge {
-                background: #E46924;
-                color: #fff;
-                padding: 2px 6px;
-                border-radius: 10px;
-                font-size: 10px;
-                font-weight: 600;
-            }
-
-            /* Notification */
-            .yd-pl-notification {
-                position: fixed;
-                bottom: 120px;
-                right: 20px;
-                z-index: 99999999;
-                padding: 10px 16px;
-                border-radius: 8px;
-                font-size: 13px;
-                font-weight: 500;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-                animation: yd-pl-notify-in 0.3s ease;
-            }
-
+            /* Notifications */
+            .yd-pl-notification { position: fixed; bottom: 120px; right: 20px; z-index: 99999999; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); animation: yd-pl-notify-in 0.3s ease; }
             .yd-pl-notification-success { background: #10B981; color: #fff; }
             .yd-pl-notification-error { background: #EF4444; color: #fff; }
             .yd-pl-notification-info { background: #3B82F6; color: #fff; }
+            .yd-pl-notification-hide { animation: yd-pl-notify-out 0.3s ease forwards; }
+            @keyframes yd-pl-notify-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes yd-pl-notify-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 
-            .yd-pl-notification-hide {
-                animation: yd-pl-notify-out 0.3s ease forwards;
-            }
-
-            @keyframes yd-pl-notify-in {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-
-            @keyframes yd-pl-notify-out {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-
-            /* Scrollbar */
             .yd-pl-body::-webkit-scrollbar { width: 6px; }
             .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
             .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
@@ -8644,31 +8383,19 @@
         document.head.appendChild(style);
     }
 
-    // ==================== ГОРЯЧИЕ КЛАВИШИ ====================
-    document.addEventListener('keydown', e => {
-        if (e.altKey && e.key.toLowerCase() === 'p') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                clearAllSelections();
-            } else {
-                selectPlacements();
-            }
-        }
-    });
-
     // ==================== ЗАПУСК ====================
-    function init() {
-        if (document.body) {
-            createControlPanel();
-            console.log("[YD-PL] ✅ Модуль площадок загружен (v2.0)");
-        } else {
-            setTimeout(init, 200);
-        }
+    if (document.body) {
+        createPanel();
+        console.log("[YD-PL] ✅ Модуль площадок v3.0 загружен");
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            createPanel();
+            console.log("[YD-PL] ✅ Модуль площадок v3.0 загружен");
+        });
     }
 
-    init();
-
 })();
+
 
 // ==================== МОДУЛЬ: СПИСОК КАМПАНИЙ ====================
 // Добавляет пункт "Статистика" с popover-меню (эталон Яндекс Директа)
@@ -9048,6 +8775,7 @@
     init();
 
 })();
+
 
 
 
