@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.190.1
+// @version 1.190.2
 // @description  ������ userscript � ����� � Antigravity, ������� Deploy
 // @match        https://*/*
 // @grant        none
@@ -9227,6 +9227,7 @@
     init();
 
 })();
+
 
 
 
