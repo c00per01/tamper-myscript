@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.13
+// @version 1.193.14
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7712,15 +7712,13 @@
         const matching = getMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // Обновить счётчик
-        const previewEl = document.getElementById('yd-pl-preview');
-        if (previewEl) {
+        // Обновить текст кнопки с количеством совпадений
+        const applyText = document.getElementById('yd-pl-apply-text');
+        if (applyText) {
             if (matching.length > 0) {
-                previewEl.textContent = `Будет выделено: ${matching.length}`;
-                previewEl.className = 'yd-pl-preview yd-pl-preview-active';
+                applyText.textContent = `Выделить ${matching.length}`;
             } else {
-                previewEl.textContent = 'Нет совпадений';
-                previewEl.className = 'yd-pl-preview';
+                applyText.textContent = 'Выделить';
             }
         }
 
@@ -7965,11 +7963,11 @@
                     <div id="yd-pl-chips" class="yd-pl-chips"></div>
                     <div class="yd-pl-input-row">
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                            placeholder="Введите домен и нажмите Enter">
-                        <select id="yd-pl-position-select" class="yd-pl-position-select" title="Где искать">
-                            <option value="any">Везде</option>
-                            <option value="start">В начале</option>
-                            <option value="end">В конце</option>
+                            placeholder="Введите домен и Enter">
+                        <select id="yd-pl-position-select" class="yd-pl-position-select" title="Условие фильтрации">
+                            <option value="any" selected>Содержит</option>
+                            <option value="start">Начинается с</option>
+                            <option value="end">Оканчивается на</option>
                         </select>
                     </div>
                 </div>
@@ -8023,9 +8021,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Preview -->
-                <div id="yd-pl-preview" class="yd-pl-preview">Настройте фильтры...</div>
             </div>
 
             <!-- Footer -->
@@ -8034,9 +8029,14 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <polyline points="20 6 9 17 4 12"/>
                     </svg>
-                    <span>Выделить</span>
+                    <span id="yd-pl-apply-text">Выделить</span>
                 </button>
-                <button id="yd-pl-clear" class="yd-pl-btn-secondary" title="Снять все галочки">
+                <button id="yd-pl-reset" class="yd-pl-btn-icon" title="Сбросить все фильтры">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                </button>
+                <button id="yd-pl-clear" class="yd-pl-btn-icon" title="Снять все галочки">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -8176,6 +8176,26 @@
         // Main buttons
         document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
         document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
+
+        // Reset кнопка - очистка всех фильтров
+        const resetBtn = document.getElementById('yd-pl-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                settings.filters.patterns = [];
+                settings.whitelist = [];
+                ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+                    'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                const whitelist = document.getElementById('yd-pl-whitelist');
+                if (whitelist) whitelist.value = '';
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+                showNotification('Фильтры сброшены', 'info');
+            });
+        }
 
         // Live preview для числовых фильтров
         const numericInputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
@@ -8325,18 +8345,18 @@
             top: 80px;
             right: 20px;
             z-index: 9999999;
-            min-width: 320px;
+            width: 300px;
+            min-width: 280px;
             max-width: 450px;
             background: var(--yd-bg);
-            border-radius: 14px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            border-radius: 12px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
             font-size: 13px;
             color: var(--yd-text);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            resize: both;
         }
 
         #yd-pl-panel * { box-sizing: border-box; }
@@ -8446,14 +8466,15 @@
         .yd-pl-domain-input:focus::placeholder { opacity: 0; }
         
         .yd-pl-position-select {
-            padding: 8px 10px;
+            padding: 8px 6px;
             border: 1px solid var(--yd-border);
-            border-radius: 8px;
-            font-size: 12px;
+            border-radius: 6px;
+            font-size: 11px;
             color: var(--yd-text-secondary);
             background: var(--yd-bg);
             cursor: pointer;
-            min-width: 90px;
+            width: 110px;
+            flex-shrink: 0;
         }
         .yd-pl-position-select:focus { outline: none; border-color: var(--yd-primary); }
 
@@ -8491,24 +8512,24 @@
             gap: 8px;
         }
         .yd-pl-filter-label { 
-            width: 80px;
+            width: 60px;
             flex-shrink: 0;
-            font-size: 12px; 
+            font-size: 11px; 
             color: var(--yd-text-secondary); 
         }
         .yd-pl-range-inputs {
             display: flex;
             flex: 1;
-            gap: 6px;
+            gap: 4px;
         }
         .yd-pl-range-inputs input,
         .yd-pl-filter-row input[type="number"] {
             flex: 1;
             min-width: 0;
-            padding: 8px;
+            padding: 6px 4px;
             border: 1px solid var(--yd-border);
-            border-radius: 6px;
-            font-size: 12px;
+            border-radius: 5px;
+            font-size: 11px;
             text-align: center;
             background: var(--yd-bg);
             color: var(--yd-text);
@@ -8537,26 +8558,11 @@
         .yd-pl-whitelist-input:focus::placeholder { opacity: 0; }
         .yd-pl-whitelist-input:focus { outline: none; border-color: var(--yd-primary); }
 
-        /* Preview */
-        .yd-pl-preview { 
-            text-align: center; 
-            padding: 10px; 
-            font-size: 12px; 
-            color: var(--yd-text-muted); 
-            background: var(--yd-bg-secondary); 
-            border-radius: 8px;
-        }
-        .yd-pl-preview.yd-pl-preview-active { 
-            color: var(--yd-success); 
-            background: rgba(16, 185, 129, 0.1); 
-            font-weight: 600; 
-        }
-
         /* Footer */
         .yd-pl-footer { 
             display: flex; 
-            gap: 8px; 
-            padding: 12px 14px; 
+            gap: 6px; 
+            padding: 10px 12px; 
             border-top: 1px solid var(--yd-border); 
         }
         .yd-pl-btn-primary { 
@@ -8565,7 +8571,7 @@
             align-items: center; 
             justify-content: center; 
             gap: 6px; 
-            padding: 10px 14px; 
+            padding: 10px 12px; 
             background: var(--yd-primary); 
             color: #fff; 
             border: none; 
@@ -8582,9 +8588,9 @@
         }
         .yd-pl-btn-primary:active { transform: translateY(0); }
 
-        .yd-pl-btn-secondary { 
-            width: 40px; 
-            height: 40px; 
+        .yd-pl-btn-icon { 
+            width: 36px; 
+            height: 36px; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
@@ -8595,8 +8601,12 @@
             color: var(--yd-text-secondary); 
             transition: all 0.15s; 
         }
-        .yd-pl-btn-secondary:hover { 
+        .yd-pl-btn-icon:hover { 
             background: var(--yd-bg); 
+            border-color: var(--yd-primary); 
+            color: var(--yd-primary); 
+        }
+        #yd-pl-clear:hover {
             border-color: var(--yd-danger); 
             color: var(--yd-danger); 
         }
