@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.1
+// @version 1.193.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7543,18 +7543,36 @@
             whitelist: [],
             templates: [
                 {
-                    name: 'Мобильные приложения', patterns: [
-                        { value: 'com.', position: 'start' },
-                        { value: 'android', position: 'any' },
-                        { value: 'ios', position: 'any' }
-                    ]
+                    name: 'Мобильные приложения',
+                    filters: {
+                        patterns: [
+                            { value: 'com.', position: 'start' },
+                            { value: 'android', position: 'any' },
+                            { value: 'ios', position: 'any' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    whitelist: [],
+                    mode: 'or'
                 },
                 {
-                    name: 'Игры и казино', patterns: [
-                        { value: 'game', position: 'any' },
-                        { value: 'puzzle', position: 'any' },
-                        { value: 'casino', position: 'any' }
-                    ]
+                    name: 'Игры и казино',
+                    filters: {
+                        patterns: [
+                            { value: 'game', position: 'any' },
+                            { value: 'puzzle', position: 'any' },
+                            { value: 'casino', position: 'any' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    whitelist: [],
+                    mode: 'or'
                 }
             ],
             currentTemplate: null,
@@ -7822,6 +7840,32 @@
         }
     }
 
+    // Применить числовые фильтры и whitelist из settings в UI
+    function applyFiltersToUI() {
+        const f = settings.filters;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+
+        setVal('yd-pl-clicks-min', f.clicksMin);
+        setVal('yd-pl-clicks-max', f.clicksMax);
+        setVal('yd-pl-ctr-min', f.ctrMin);
+        setVal('yd-pl-ctr-max', f.ctrMax);
+        setVal('yd-pl-cpc-min', f.cpcMin);
+        setVal('yd-pl-cpc-max', f.cpcMax);
+        setVal('yd-pl-spend-min', f.spendMin);
+        setVal('yd-pl-spend-max', f.spendMax);
+
+        const whitelistEl = document.getElementById('yd-pl-whitelist');
+        if (whitelistEl) whitelistEl.value = settings.whitelist.join(', ');
+
+        // Mode toggle
+        const modeRadio = document.querySelector(`input[name="yd-pl-mode"][value="${settings.mode}"]`);
+        if (modeRadio) {
+            modeRadio.checked = true;
+            document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
+            modeRadio.closest('.yd-pl-toggle')?.classList.add('active');
+        }
+    }
+
     // ==================== UI: ШАБЛОНЫ ====================
     function renderTemplates() {
         const container = document.getElementById('yd-pl-templates-list');
@@ -7834,15 +7878,27 @@
             div.innerHTML = `
                 <span class="yd-pl-template-name">${tpl.name}</span>
                 <div class="yd-pl-template-actions">
-                    <button class="yd-pl-tpl-apply" title="Применить">✓</button>
+                    <button class="yd-pl-tpl-apply" title="Применить все настройки">✓</button>
                     <button class="yd-pl-tpl-copy" title="Копировать">⧉</button>
                     <button class="yd-pl-tpl-delete" title="Удалить">×</button>
                 </div>
             `;
 
+            // Применить шаблон — загружает ВСЕ настройки
             div.querySelector('.yd-pl-tpl-apply').addEventListener('click', () => {
-                settings.filters.patterns = [...tpl.patterns];
+                // Применяем все настройки из шаблона
+                if (tpl.filters) {
+                    settings.filters = JSON.parse(JSON.stringify(tpl.filters));
+                } else if (tpl.patterns) {
+                    // Обратная совместимость со старыми шаблонами
+                    settings.filters.patterns = [...tpl.patterns];
+                }
+                if (tpl.whitelist) settings.whitelist = [...tpl.whitelist];
+                if (tpl.mode) settings.mode = tpl.mode;
+
+                // Обновить UI
                 renderPatterns();
+                applyFiltersToUI();
                 updatePreviewHighlight();
                 showNotification(`Шаблон "${tpl.name}" применён`, 'success');
             });
@@ -7850,7 +7906,13 @@
             div.querySelector('.yd-pl-tpl-copy').addEventListener('click', () => {
                 const newName = prompt('Имя нового шаблона:', tpl.name + ' (копия)');
                 if (!newName) return;
-                settings.templates.push({ name: newName, patterns: [...tpl.patterns] });
+                // Копируем все настройки
+                settings.templates.push({
+                    name: newName,
+                    filters: tpl.filters ? JSON.parse(JSON.stringify(tpl.filters)) : { patterns: [...(tpl.patterns || [])] },
+                    whitelist: tpl.whitelist ? [...tpl.whitelist] : [],
+                    mode: tpl.mode || 'or'
+                });
                 saveSettings();
                 renderTemplates();
                 showNotification(`Шаблон скопирован`, 'success');
@@ -7941,7 +8003,6 @@
                             <label>Клики</label>
                             <div class="yd-pl-range">
                                 <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
-                                <span>—</span>
                                 <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
                             </div>
                         </div>
@@ -7949,7 +8010,6 @@
                             <label>CTR %</label>
                             <div class="yd-pl-range">
                                 <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
-                                <span>—</span>
                                 <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
                             </div>
                         </div>
@@ -7957,7 +8017,6 @@
                             <label>CPC ₽</label>
                             <div class="yd-pl-range">
                                 <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
-                                <span>—</span>
                                 <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
                             </div>
                         </div>
@@ -7965,14 +8024,13 @@
                             <label>Расход ₽</label>
                             <div class="yd-pl-range">
                                 <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
-                                <span>—</span>
                                 <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                             </div>
                         </div>
                     </div>
-                </div>
+                </div >
 
-                <!-- Белый список (исключения) -->
+                < !--Белый список(исключения)-- >
                 <div class="yd-pl-section yd-pl-section-compact">
                     <div class="yd-pl-section-header">
                         <span class="yd-pl-section-label">ИСКЛЮЧЕНИЯ</span>
@@ -7984,7 +8042,7 @@
                     <div class="yd-pl-hint">Домены через запятую (не выделяются)</div>
                 </div>
 
-                <!-- Шаблоны (сворачиваемая секция) -->
+                <!--Шаблоны(сворачиваемая секция) -->
                 <div class="yd-pl-accordion ${settings.templatesCollapsed ? '' : 'open'}">
                     <div class="yd-pl-accordion-header" id="yd-pl-templates-toggle">
                         <span class="yd-pl-section-label">ШАБЛОНЫ</span>
@@ -8004,11 +8062,11 @@
                     </div>
                 </div>
 
-                <!-- Preview -->
-                <div id="yd-pl-preview" class="yd-pl-preview">Настройте фильтры...</div>
-            </div>
+                <!--Preview -->
+            <div id="yd-pl-preview" class="yd-pl-preview">Настройте фильтры...</div>
+            </div >
 
-            <!-- Footer -->
+            < !--Footer -->
             <div class="yd-pl-footer">
                 <button id="yd-pl-apply" class="yd-pl-btn-primary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -8023,7 +8081,7 @@
                 </button>
             </div>
 
-            <!-- Resize handles -->
+            <!--Resize handles-- >
             <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
         `;
 
@@ -8041,10 +8099,10 @@
         pill.className = 'yd-pl-pill';
         pill.style.display = 'none';
         pill.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 100 100">
+            < svg width = "16" height = "16" viewBox = "0 0 100 100" >
                 <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
                 <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
-            </svg>
+            </svg >
             <span id="yd-pl-pill-count" class="yd-pl-pill-badge">0</span>
             <span id="yd-pl-pill-filters" class="yd-pl-pill-filters"></span>
         `;
@@ -8085,12 +8143,19 @@
             saveSettings();
         });
 
-        // Save template
+        // Save template — сохраняет ВСЕ настройки
         document.getElementById('yd-pl-save-template').addEventListener('click', () => {
             const name = prompt('Название шаблона:', 'Новый шаблон');
             if (!name) return;
             const filters = getFiltersFromUI();
-            settings.templates.push({ name, patterns: [...filters.patterns] });
+            const whitelist = getWhitelistFromUI();
+            const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+            settings.templates.push({
+                name,
+                filters: JSON.parse(JSON.stringify(filters)),
+                whitelist: [...whitelist],
+                mode
+            });
             saveSettings();
             renderTemplates();
             showNotification(`Шаблон "${name}" сохранён`, 'success');
@@ -8216,169 +8281,172 @@
         const style = document.createElement('style');
         style.id = 'yd-pl-styles';
         style.textContent = `
-            /* CSS переменные - идентичны модулю запросов */
-            #yd-pl-panel {
-                --yd-primary: #205598;
-                --yd-primary-light: #2a6bc0;
-                --yd-accent: #E46924;
-                --yd-bg: #ffffff;
-                --yd-bg-secondary: #F9FAFB;
-                --yd-border: #E1E4E8;
-                --yd-text: #333;
-                --yd-text-secondary: #6b7280;
-                --yd-text-muted: #9CA3AF;
-                --yd-success: #10B981;
-                --yd-danger: #EF4444;
-            }
+        /* CSS переменные - идентичны модулю запросов */
+        #yd - pl - panel {
+            --yd - primary: #205598;
+            --yd - primary - light: #2a6bc0;
+            --yd - accent: #E46924;
+            --yd - bg: #ffffff;
+            --yd - bg - secondary: #F9FAFB;
+            --yd - border: #E1E4E8;
+            --yd - text: #333;
+            --yd - text - secondary: #6b7280;
+            --yd - text - muted: #9CA3AF;
+            --yd - success: #10B981;
+            --yd - danger: #EF4444;
+        }
 
-            #yd-pl-panel {
-                position: fixed;
-                z-index: 9999999;
-                background: var(--yd-bg);
-                border: 1px solid var(--yd-border);
-                border-radius: 12px;
-                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                font-size: 13px;
-                color: var(--yd-text);
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                min-width: 300px;
-                min-height: 350px;
-            }
+        #yd - pl - panel {
+            position: fixed;
+            z - index: 9999999;
+            background: var(--yd - bg);
+            border: 1px solid var(--yd - border);
+            border - radius: 12px;
+            box - shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+            font - family: -apple - system, BlinkMacSystemFont, 'Segoe UI', sans - serif;
+            font - size: 13px;
+            color: var(--yd - text);
+            display: flex;
+            flex - direction: column;
+            overflow: hidden;
+            min - width: 300px;
+            min - height: 350px;
+        }
 
-            #yd-pl-panel * { box-sizing: border-box; }
+        #yd - pl - panel * { box- sizing: border - box;
+    }
 
-            .yd-pl-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 10px 14px;
-                background: linear-gradient(135deg, var(--yd-bg-secondary) 0%, #F3F4F6 100%);
-                border-bottom: 1px solid var(--yd-border);
-                cursor: grab;
-            }
+            .yd - pl - header {
+        display: flex;
+        justify - content: space - between;
+        align - items: center;
+        padding: 10px 14px;
+        background: linear - gradient(135deg, var(--yd - bg - secondary) 0 %, #F3F4F6 100 %);
+        border - bottom: 1px solid var(--yd - border);
+        cursor: grab;
+    }
 
-            .yd-pl-header:active { cursor: grabbing; }
+            .yd - pl - header:active { cursor: grabbing; }
 
-            .yd-pl-header-left { display: flex; align-items: center; gap: 10px; }
-            .yd-pl-title { font-weight: 600; font-size: 14px; color: var(--yd-primary); }
-            .yd-pl-header-right { display: flex; align-items: center; gap: 6px; }
-            .yd-pl-badge { font-size: 11px; color: var(--yd-primary); background: #E3F2FD; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
+            .yd - pl - header - left { display: flex; align - items: center; gap: 10px; }
+            .yd - pl - title { font - weight: 600; font - size: 14px; color: var(--yd - primary); }
+            .yd - pl - header - right { display: flex; align - items: center; gap: 6px; }
+            .yd - pl - badge { font - size: 11px; color: var(--yd - primary); background: #E3F2FD; padding: 3px 8px; border - radius: 10px; font - weight: 600; }
 
-            .yd-pl-icon-btn {
-                background: none; border: none; padding: 6px; cursor: pointer;
-                color: var(--yd-text-muted); border-radius: 6px; transition: all 0.15s;
-                display: flex; align-items: center; justify-content: center;
-            }
-            .yd-pl-icon-btn:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
+            .yd - pl - icon - btn {
+        background: none; border: none; padding: 6px; cursor: pointer;
+        color: var(--yd - text - muted); border - radius: 6px; transition: all 0.15s;
+        display: flex; align - items: center; justify - content: center;
+    }
+            .yd - pl - icon - btn:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd - primary); }
 
-            .yd-pl-body { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+            .yd - pl - body { flex: 1; padding: 12px; overflow - y: auto; display: flex; flex - direction: column; gap: 10px; }
 
-            .yd-pl-section {
-                background: var(--yd-bg-secondary);
-                border: 1px solid var(--yd-border);
-                border-radius: 8px;
-                padding: 10px;
-            }
+            .yd - pl - section {
+        background: var(--yd - bg - secondary);
+        border: 1px solid var(--yd - border);
+        border - radius: 8px;
+        padding: 10px;
+    }
 
-            .yd-pl-section-compact { padding: 8px 10px; }
+            .yd - pl - section - compact { padding: 8px 10px; }
 
-            .yd-pl-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-            .yd-pl-section-label { font-size: 10px; font-weight: 700; color: var(--yd-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+            .yd - pl - section - header { display: flex; justify - content: space - between; align - items: center; margin - bottom: 8px; }
+            .yd - pl - section - label { font - size: 10px; font - weight: 700; color: var(--yd - text - secondary); text - transform: uppercase; letter - spacing: 0.5px; }
 
-            .yd-pl-mode-toggle { display: flex; background: #E5E7EB; border-radius: 6px; padding: 2px; }
-            .yd-pl-toggle { padding: 4px 10px; font-size: 11px; color: var(--yd-text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.15s; }
-            .yd-pl-toggle input { display: none; }
-            .yd-pl-toggle.active { background: #fff; color: var(--yd-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+            .yd - pl - mode - toggle { display: flex; background: #E5E7EB; border - radius: 6px; padding: 2px; }
+            .yd - pl - toggle { padding: 4px 10px; font - size: 11px; color: var(--yd - text - secondary); border - radius: 4px; cursor: pointer; transition: all 0.15s; }
+            .yd - pl - toggle input { display: none; }
+            .yd - pl - toggle.active { background: #fff; color: var(--yd - primary); font - weight: 600; box - shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
 
-            .yd-pl-subsection { margin-bottom: 10px; }
-            .yd-pl-subsection-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; color: var(--yd-text-secondary); }
-            .yd-pl-btn-add { font-size: 11px; color: var(--yd-primary); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
-            .yd-pl-btn-add:hover { background: rgba(32, 85, 152, 0.1); }
+            .yd - pl - subsection { margin - bottom: 10px; }
+            .yd - pl - subsection - header { display: flex; justify - content: space - between; align - items: center; margin - bottom: 6px; font - size: 11px; color: var(--yd - text - secondary); }
+            .yd - pl - btn - add { font - size: 11px; color: var(--yd - primary); background: none; border: none; cursor: pointer; padding: 2px 6px; border - radius: 4px; }
+            .yd - pl - btn - add:hover { background: rgba(32, 85, 152, 0.1); }
 
-            .yd-pl-patterns-list { display: flex; flex-direction: column; gap: 6px; }
-            .yd-pl-pattern-item { display: flex; align-items: center; gap: 6px; }
-            .yd-pl-pattern-input { flex: 1; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
-            .yd-pl-pattern-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
+            .yd - pl - patterns - list { display: flex; flex - direction: column; gap: 6px; }
+            .yd - pl - pattern - item { display: flex; align - items: center; gap: 6px; }
+            .yd - pl - pattern - input { flex: 1; padding: 6px 8px; border: 1px solid var(--yd - border); border - radius: 6px; font - size: 12px; }
+            .yd - pl - pattern - input:focus { outline: none; border - color: var(--yd - primary); box - shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
 
-            .yd-pl-pos-group { display: flex; background: #E5E7EB; border-radius: 4px; }
-            .yd-pl-pos-btn { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-secondary); border-radius: 4px; }
-            .yd-pl-pos-btn.active { background: #fff; color: var(--yd-primary); font-weight: 600; }
-            .yd-pl-pos-btn:hover:not(.active) { background: rgba(255,255,255,0.5); }
+            .yd - pl - pos - group { display: flex; background: #E5E7EB; border - radius: 4px; }
+            .yd - pl - pos - btn { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; font - size: 12px; color: var(--yd - text - secondary); border - radius: 4px; }
+            .yd - pl - pos - btn.active { background: #fff; color: var(--yd - primary); font - weight: 600; }
+            .yd - pl - pos - btn: hover: not(.active) { background: rgba(255, 255, 255, 0.5); }
 
-            .yd-pl-pattern-remove { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; color: var(--yd-text-muted); font-size: 16px; border-radius: 4px; }
-            .yd-pl-pattern-remove:hover { background: rgba(239, 68, 68, 0.1); color: var(--yd-danger); }
+            .yd - pl - pattern - remove { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; color: var(--yd - text - muted); font - size: 16px; border - radius: 4px; }
+            .yd - pl - pattern - remove:hover { background: rgba(239, 68, 68, 0.1); color: var(--yd - danger); }
 
-            .yd-pl-hint { font-size: 10px; color: var(--yd-text-muted); margin-top: 4px; }
+            .yd - pl - hint { font - size: 10px; color: var(--yd - text - muted); margin - top: 4px; }
 
-            .yd-pl-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-            .yd-pl-metric label { display: block; font-size: 11px; color: var(--yd-text-secondary); margin-bottom: 4px; }
-            .yd-pl-range { display: flex; align-items: center; gap: 4px; }
-            .yd-pl-range input { width: 100%; padding: 5px 6px; border: 1px solid var(--yd-border); border-radius: 5px; font-size: 12px; text-align: center; }
-            .yd-pl-range input:focus { outline: none; border-color: var(--yd-primary); }
-            .yd-pl-range input::-webkit-inner-spin-button { -webkit-appearance: none; }
-            .yd-pl-range span { color: var(--yd-text-muted); font-size: 11px; }
+            .yd - pl - metrics - grid { display: grid; grid - template - columns: 1fr 1fr; gap: 8px; }
+            .yd - pl - metric label { display: block; font - size: 11px; color: var(--yd - text - secondary); margin - bottom: 4px; }
+            .yd - pl - range { display: flex; align - items: center; gap: 4px; }
+            .yd - pl - range input { width: 100 %; padding: 5px 6px; border: 1px solid var(--yd - border); border - radius: 5px; font - size: 12px; text - align: center; }
+            .yd - pl - range input:focus { outline: none; border - color: var(--yd - primary); }
+            .yd - pl - range input:: -webkit - inner - spin - button,
+            .yd - pl - range input:: -webkit - outer - spin - button { -webkit - appearance: none; margin: 0; }
+            .yd - pl - range input[type = "number"] { -moz - appearance: textfield; }
 
-            .yd-pl-input { width: 100%; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
-            .yd-pl-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
+            .yd - pl - input { width: 100 %; padding: 6px 8px; border: 1px solid var(--yd - border); border - radius: 6px; font - size: 12px; }
+            .yd - pl - input:focus { outline: none; border - color: var(--yd - primary); box - shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
 
             /* Accordion */
-            .yd-pl-accordion { background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; }
-            .yd-pl-accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; }
-            .yd-pl-accordion-arrow { transition: transform 0.2s; color: var(--yd-text-muted); }
-            .yd-pl-accordion.open .yd-pl-accordion-arrow { transform: rotate(180deg); }
-            .yd-pl-accordion-content { display: none; padding: 0 10px 10px; }
-            .yd-pl-accordion.open .yd-pl-accordion-content { display: block; }
+            .yd - pl - accordion { background: var(--yd - bg - secondary); border: 1px solid var(--yd - border); border - radius: 8px; }
+            .yd - pl - accordion - header { display: flex; justify - content: space - between; align - items: center; padding: 8px 10px; cursor: pointer; }
+            .yd - pl - accordion - arrow { transition: transform 0.2s; color: var(--yd - text - muted); }
+            .yd - pl - accordion.open.yd - pl - accordion - arrow { transform: rotate(180deg); }
+            .yd - pl - accordion - content { display: none; padding: 0 10px 10px; }
+            .yd - pl - accordion.open.yd - pl - accordion - content { display: block; }
 
-            .yd-pl-templates-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-            .yd-pl-template-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #fff; border: 1px solid var(--yd-border); border-radius: 6px; }
-            .yd-pl-template-name { font-size: 12px; cursor: pointer; }
-            .yd-pl-template-name:hover { color: var(--yd-primary); }
-            .yd-pl-template-actions { display: flex; gap: 4px; }
-            .yd-pl-template-actions button { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-muted); border-radius: 4px; }
-            .yd-pl-template-actions button:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
-            .yd-pl-tpl-delete:hover { background: rgba(239, 68, 68, 0.1) !important; color: var(--yd-danger) !important; }
+            .yd - pl - templates - list { display: flex; flex - direction: column; gap: 4px; margin - bottom: 8px; }
+            .yd - pl - template - item { display: flex; justify - content: space - between; align - items: center; padding: 6px 8px; background: #fff; border: 1px solid var(--yd - border); border - radius: 6px; }
+            .yd - pl - template - name { font - size: 12px; cursor: pointer; }
+            .yd - pl - template - name:hover { color: var(--yd - primary); }
+            .yd - pl - template - actions { display: flex; gap: 4px; }
+            .yd - pl - template - actions button { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; font - size: 12px; color: var(--yd - text - muted); border - radius: 4px; }
+            .yd - pl - template - actions button:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd - primary); }
+            .yd - pl - tpl - delete:hover { background: rgba(239, 68, 68, 0.1)!important; color: var(--yd - danger)!important; }
 
-            .yd-pl-btn-save-template { width: 100%; padding: 6px; font-size: 11px; color: var(--yd-text-secondary); background: #fff; border: 1px dashed var(--yd-border); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-            .yd-pl-btn-save-template:hover { border-color: var(--yd-primary); color: var(--yd-primary); }
+            .yd - pl - btn - save - template { width: 100 %; padding: 6px; font - size: 11px; color: var(--yd - text - secondary); background: #fff; border: 1px dashed var(--yd - border); border - radius: 6px; cursor: pointer; display: flex; align - items: center; justify - content: center; gap: 6px; }
+            .yd - pl - btn - save - template:hover { border - color: var(--yd - primary); color: var(--yd - primary); }
 
-            .yd-pl-preview { text-align: center; padding: 8px; font-size: 12px; color: var(--yd-text-muted); background: var(--yd-bg-secondary); border-radius: 6px; }
-            .yd-pl-preview.yd-pl-preview-active { color: var(--yd-success); background: #E8F5E9; font-weight: 500; }
+            .yd - pl - preview { text - align: center; padding: 8px; font - size: 12px; color: var(--yd - text - muted); background: var(--yd - bg - secondary); border - radius: 6px; }
+            .yd - pl - preview.yd - pl - preview - active { color: var(--yd - success); background: #E8F5E9; font - weight: 500; }
 
-            .yd-pl-footer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--yd-border); background: var(--yd-bg); }
-            .yd-pl-btn-primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: var(--yd-primary); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-            .yd-pl-btn-primary:hover { background: var(--yd-primary-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3); }
+            .yd - pl - footer { display: flex; gap: 8px; padding: 12px; border - top: 1px solid var(--yd - border); background: var(--yd - bg); }
+            .yd - pl - btn - primary { flex: 1; display: flex; align - items: center; justify - content: center; gap: 8px; padding: 10px; background: var(--yd - primary); color: #fff; border: none; border - radius: 8px; font - size: 14px; font - weight: 600; cursor: pointer; transition: all 0.2s; }
+            .yd - pl - btn - primary:hover { background: var(--yd - primary - light); transform: translateY(-1px); box - shadow: 0 4px 12px rgba(32, 85, 152, 0.3); }
 
-            .yd-pl-btn-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; cursor: pointer; color: var(--yd-text-secondary); transition: all 0.2s; }
-            .yd-pl-btn-icon:hover { background: var(--yd-bg); border-color: var(--yd-primary); color: var(--yd-primary); }
+            .yd - pl - btn - icon { width: 40px; height: 40px; display: flex; align - items: center; justify - content: center; background: var(--yd - bg - secondary); border: 1px solid var(--yd - border); border - radius: 8px; cursor: pointer; color: var(--yd - text - secondary); transition: all 0.2s; }
+            .yd - pl - btn - icon:hover { background: var(--yd - bg); border - color: var(--yd - primary); color: var(--yd - primary); }
 
-            .yd-pl-resize-se { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: se-resize; }
+            .yd - pl - resize - se { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: se - resize; }
 
             /* Pill */
-            .yd-pl-pill { position: fixed; bottom: 80px; right: 20px; z-index: 9999998; background: #fff; border: 1px solid var(--yd-border); border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); cursor: pointer; font-size: 12px; color: var(--yd-primary); transition: all 0.2s; }
-            .yd-pl-pill:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); }
-            .yd-pl-pill-badge { background: var(--yd-accent); color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-            .yd-pl-pill-filters { color: var(--yd-success); font-size: 10px; }
+            .yd - pl - pill { position: fixed; bottom: 80px; right: 20px; z - index: 9999998; background: #fff; border: 1px solid var(--yd - border); border - radius: 20px; padding: 8px 14px; display: flex; align - items: center; gap: 8px; box - shadow: 0 4px 16px rgba(0, 0, 0, 0.12); cursor: pointer; font - size: 12px; color: var(--yd - primary); transition: all 0.2s; }
+            .yd - pl - pill:hover { transform: translateY(-2px); box - shadow: 0 6px 20px rgba(0, 0, 0, 0.15); }
+            .yd - pl - pill - badge { background: var(--yd - accent); color: #fff; padding: 2px 6px; border - radius: 10px; font - size: 10px; font - weight: 600; }
+            .yd - pl - pill - filters { color: var(--yd - success); font - size: 10px; }
 
             /* Preview подсветка строк в таблице */
-            tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
-            tbody tr.yd-pl-row-preview td { background: transparent !important; }
+            tbody tr.yd - pl - row - preview { background: rgba(16, 185, 129, 0.08)!important; }
+            tbody tr.yd - pl - row - preview td { background: transparent!important; }
 
             /* Notifications */
-            .yd-pl-notification { position: fixed; bottom: 120px; right: 20px; z-index: 99999999; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); animation: yd-pl-notify-in 0.3s ease; }
-            .yd-pl-notification-success { background: #10B981; color: #fff; }
-            .yd-pl-notification-error { background: #EF4444; color: #fff; }
-            .yd-pl-notification-info { background: #3B82F6; color: #fff; }
-            .yd-pl-notification-hide { animation: yd-pl-notify-out 0.3s ease forwards; }
-            @keyframes yd-pl-notify-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-            @keyframes yd-pl-notify-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+            .yd - pl - notification { position: fixed; bottom: 120px; right: 20px; z - index: 99999999; padding: 10px 16px; border - radius: 8px; font - size: 13px; font - weight: 500; box - shadow: 0 4px 16px rgba(0, 0, 0, 0.15); animation: yd - pl - notify -in 0.3s ease; }
+            .yd - pl - notification - success { background: #10B981; color: #fff; }
+            .yd - pl - notification - error { background: #EF4444; color: #fff; }
+            .yd - pl - notification - info { background: #3B82F6; color: #fff; }
+            .yd - pl - notification - hide { animation: yd - pl - notify - out 0.3s ease forwards; }
+    @keyframes yd - pl - notify -in { from { transform: translateX(100 %); opacity: 0; } to { transform: translateX(0); opacity: 1; }
+}
+            @keyframes yd - pl - notify - out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100 %); opacity: 0; } }
 
-            .yd-pl-body::-webkit-scrollbar { width: 6px; }
-            .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
-            .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
-        `;
+            .yd - pl - body:: -webkit - scrollbar { width: 6px; }
+            .yd - pl - body:: -webkit - scrollbar - track { background: transparent; }
+            .yd - pl - body:: -webkit - scrollbar - thumb { background: rgba(0, 0, 0, 0.15); border - radius: 3px; }
+`;
 
         document.head.appendChild(style);
     }
@@ -8448,9 +8516,9 @@
         const baseUrl = 'https://direct.yandex.ru/registered/main.pl';
 
         if (statType === 'pages') {
-            return `${baseUrl}?cmd=showCampStat&stat_type=pages&group=none&with_nds=0&cid=${cid}&ulogin=${ulogin}&y1=${dates.y1}&m1=${dates.m1}&d1=${dates.d1}&y2=${dates.y2}&m2=${dates.m2}&d2=${dates.d2}&isStat=1`;
+            return `${baseUrl}?cmd = showCampStat & stat_type=pages & group=none & with_nds=0 & cid=${cid}& ulogin=${ulogin}& y1=${dates.y1}& m1=${dates.m1}& d1=${dates.d1}& y2=${dates.y2}& m2=${dates.m2}& d2=${dates.d2}& isStat=1`;
         } else {
-            return `${baseUrl}?cmd=showStat&stat_type=search_queries&cid=${cid}&ulogin=${ulogin}&date_from=${dates.y1}-${String(dates.m1).padStart(2, '0')}-${String(dates.d1).padStart(2, '0')}&date_to=${dates.y2}-${String(dates.m2).padStart(2, '0')}-${String(dates.d2).padStart(2, '0')}&group_by=day&goal_id=0&attribution=LAC&page_size=100`;
+            return `${baseUrl}?cmd = showStat & stat_type=search_queries & cid=${cid}& ulogin=${ulogin}& date_from=${dates.y1} -${String(dates.m1).padStart(2, '0')} -${String(dates.d1).padStart(2, '0')}& date_to=${dates.y2} -${String(dates.m2).padStart(2, '0')} -${String(dates.d2).padStart(2, '0')}& group_by=day & goal_id=0 & attribution=LAC & page_size=100`;
         }
     }
 
@@ -8496,13 +8564,13 @@
         const popover = document.createElement('div');
         popover.className = 'yd-cl-popover';
         popover.innerHTML = `
-            <a href="${buildStatsUrl(cid, ulogin, 'pages')}" target="_blank" class="yd-cl-popover-item">
-                По площадкам
-            </a>
-            <a href="${buildStatsUrl(cid, ulogin, 'queries')}" target="_blank" class="yd-cl-popover-item">
-                Поисковые запросы
-            </a>
-        `;
+    < a href = "${buildStatsUrl(cid, ulogin, 'pages')}" target = "_blank" class="yd-cl-popover-item" >
+        По площадкам
+            </a >
+    <a href="${buildStatsUrl(cid, ulogin, 'queries')}" target="_blank" class="yd-cl-popover-item">
+        Поисковые запросы
+    </a>
+`;
 
         document.body.appendChild(popover);
 
@@ -8533,7 +8601,7 @@
         e.preventDefault();
         e.stopPropagation();
 
-        const triggerId = `${cid}_trigger`;
+        const triggerId = `${cid} _trigger`;
 
         // Если этот же popover открыт — закрываем
         if (activeTriggerId === triggerId) {
@@ -8685,69 +8753,69 @@
         const style = document.createElement('style');
         style.id = 'yd-cl-styles';
         style.textContent = `
-            /* Popover — рендерится в body */
-            .yd-cl-popover {
-                position: absolute;
-                z-index: 10000;
-                background: #fff;
-                border: 1px solid #e5e5e5;
-                border-radius: 8px;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-                padding: 4px 0;
-                min-width: 180px;
-                opacity: 0;
-                transform: translateY(-4px);
-                transition: opacity 0.15s ease, transform 0.15s ease;
-            }
+    /* Popover — рендерится в body */
+    .yd - cl - popover {
+    position: absolute;
+    z - index: 10000;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border - radius: 8px;
+    box - shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 4px 0;
+    min - width: 180px;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
 
-            .yd-cl-popover-visible {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            .yd - cl - popover - visible {
+    opacity: 1;
+    transform: translateY(0);
+}
 
             /* Пункты popover */
-            .yd-cl-popover-item {
-                display: block;
-                padding: 10px 16px;
-                color: #000;
-                text-decoration: none;
-                font-size: 13px;
-                line-height: 18px;
-                white-space: nowrap;
-                transition: background-color 0.1s ease;
-            }
+            .yd - cl - popover - item {
+    display: block;
+    padding: 10px 16px;
+    color: #000;
+    text - decoration: none;
+    font - size: 13px;
+    line - height: 18px;
+    white - space: nowrap;
+    transition: background - color 0.1s ease;
+}
 
-            .yd-cl-popover-item:hover {
-                background-color: #f5f5f5;
-                text-decoration: none;
-            }
+            .yd - cl - popover - item:hover {
+    background - color: #f5f5f5;
+    text - decoration: none;
+}
 
-            .yd-cl-popover-item:first-child {
-                border-radius: 6px 6px 0 0;
-            }
+            .yd - cl - popover - item: first - child {
+    border - radius: 6px 6px 0 0;
+}
 
-            .yd-cl-popover-item:last-child {
-                border-radius: 0 0 6px 6px;
-            }
+            .yd - cl - popover - item: last - child {
+    border - radius: 0 0 6px 6px;
+}
 
-            /* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
-            /* Ячейки данных */
-            [data-testid$="_name-with-links"] {
-                min-width: 280px !important;
-            }
+/* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
+/* Ячейки данных */
+[data - testid$="_name-with-links"] {
+    min - width: 280px!important;
+}
 
-            /* Заголовок столбца "Название" */
-            [data-testid="Grid.Header-name"],
-            [data-testid*="Header"][data-testid*="name"] {
-                min-width: 280px !important;
-            }
+/* Заголовок столбца "Название" */
+[data - testid="Grid.Header-name"],
+    [data - testid*="Header"][data - testid*= "name"] {
+    min - width: 280px!important;
+}
 
-            /* Контейнер действий — nowrap для одной строки */
-            [data-testid$="_name-with-links"] .dc-Stack_type_horizontal {
-                flex-wrap: nowrap !important;
-                white-space: nowrap;
-            }
-        `;
+/* Контейнер действий — nowrap для одной строки */
+[data - testid$="_name-with-links"].dc - Stack_type_horizontal {
+    flex - wrap: nowrap!important;
+    white - space: nowrap;
+}
+`;
 
 
         document.head.appendChild(style);
