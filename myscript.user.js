@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.15
+// @version 1.193.16
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7712,15 +7712,8 @@
         const matching = getMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // Обновить текст кнопки с количеством совпадений
-        const applyText = document.getElementById('yd-pl-apply-text');
-        if (applyText) {
-            if (matching.length > 0) {
-                applyText.textContent = `Выделить ${matching.length}`;
-            } else {
-                applyText.textContent = 'Выделить';
-            }
-        }
+        // Обновить состояние кнопки
+        updateButtonState();
 
         updateStats();
         saveCurrentFilters();
@@ -7741,33 +7734,73 @@
     }
 
     // ==================== ДЕЙСТВИЯ ====================
-    function selectPlacements() {
+    let isSelectMode = true; // true = выделить, false = снять
+
+    function togglePlacements() {
         const matching = getMatchingRows();
-        if (matching.length === 0) {
-            showNotification('Нет площадок для выделения', 'info');
-            return;
+
+        if (isSelectMode) {
+            // Режим выделения
+            if (matching.length === 0) {
+                showNotification('Нет площадок для выделения', 'info');
+                return;
+            }
+            matching.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked) checkbox.click();
+            });
+            showNotification(`Выделено: ${matching.length}`, 'success');
+            isSelectMode = false;
+        } else {
+            // Режим снятия — снимаем только те что были выделены по фильтру
+            let count = 0;
+            matching.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && checkbox.checked) {
+                    checkbox.click();
+                    count++;
+                }
+            });
+            if (count > 0) {
+                showNotification(`Снято: ${count}`, 'info');
+            }
+            isSelectMode = true;
         }
 
-        matching.forEach(row => {
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            if (checkbox && !checkbox.checked) checkbox.click();
-        });
-
-        showNotification(`Выделено: ${matching.length}`, 'success');
+        updateButtonState();
         updatePreviewHighlight();
     }
 
+    function updateButtonState() {
+        const btn = document.getElementById('yd-pl-apply');
+        const icon = document.getElementById('yd-pl-apply-icon');
+        const text = document.getElementById('yd-pl-apply-text');
+
+        if (!btn || !icon || !text) return;
+
+        const matching = getMatchingRows();
+        const count = matching.length;
+
+        if (isSelectMode) {
+            // Режим выделения
+            btn.classList.remove('yd-pl-btn-deselect');
+            btn.classList.add('yd-pl-btn-primary');
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+            text.textContent = count > 0 ? `Выделить ${count}` : 'Выделить';
+        } else {
+            // Режим снятия
+            btn.classList.remove('yd-pl-btn-primary');
+            btn.classList.add('yd-pl-btn-deselect');
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
+            text.textContent = count > 0 ? `Снять ${count}` : 'Снять';
+        }
+    }
+
+    // Для совместимости
+    function selectPlacements() { togglePlacements(); }
     function clearAllSelections() {
-        let count = 0;
-        document.querySelectorAll('tbody tr').forEach(row => {
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            if (checkbox && checkbox.checked && !checkbox.disabled) {
-                checkbox.click();
-                count++;
-            }
-        });
-        showNotification(`Снято: ${count}`, 'info');
-        updatePreviewHighlight();
+        isSelectMode = false;
+        togglePlacements();
     }
 
     function showNotification(message, type = 'info') {
@@ -8026,19 +8059,16 @@
             <!-- Footer -->
             <div class="yd-pl-footer">
                 <button id="yd-pl-apply" class="yd-pl-btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                    <span id="yd-pl-apply-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </span>
                     <span id="yd-pl-apply-text">Выделить</span>
                 </button>
                 <button id="yd-pl-reset" class="yd-pl-btn-icon" title="Сбросить все фильтры">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                </button>
-                <button id="yd-pl-clear" class="yd-pl-btn-icon" title="Снять все галочки">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>
@@ -8173,9 +8203,8 @@
             });
         }
 
-        // Main buttons
-        document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
-        document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
+        // Main button
+        document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
 
         // Reset кнопка - очистка всех фильтров
         const resetBtn = document.getElementById('yd-pl-reset');
@@ -8190,6 +8219,7 @@
                     });
                 const whitelist = document.getElementById('yd-pl-whitelist');
                 if (whitelist) whitelist.value = '';
+                isSelectMode = true; // Сбросить в режим выделения
                 saveSettings();
                 renderChips();
                 updatePreviewHighlight();
@@ -8588,6 +8618,30 @@
         }
         .yd-pl-btn-primary:active { transform: translateY(0); }
 
+        /* Кнопка снятия галочек */
+        .yd-pl-btn-deselect { 
+            flex: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 6px; 
+            padding: 10px 12px; 
+            background: var(--yd-accent); 
+            color: #fff; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 13px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+        }
+        .yd-pl-btn-deselect:hover { 
+            background: #D45A17; 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 12px rgba(228, 105, 36, 0.25); 
+        }
+        .yd-pl-btn-deselect:active { transform: translateY(0); }
+
         .yd-pl-btn-icon { 
             width: 36px; 
             height: 36px; 
@@ -8603,10 +8657,6 @@
         }
         .yd-pl-btn-icon:hover { 
             background: var(--yd-bg); 
-            border-color: var(--yd-primary); 
-            color: var(--yd-primary); 
-        }
-        #yd-pl-clear:hover {
             border-color: var(--yd-danger); 
             color: var(--yd-danger); 
         }
@@ -8867,12 +8917,14 @@
         trigger.setAttribute('data-yd-cl-stats-trigger', 'true');
         trigger.setAttribute('data-cid', cid);
         trigger.textContent = 'Статистика';
-        trigger.style.cursor = 'pointer';
-        trigger.style.marginLeft = '8px'; // Отступ от предыдущего элемента
+        trigger.style.cssText = 'cursor: pointer; margin-left: 8px; pointer-events: all !important; position: relative; z-index: 10;';
 
         trigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             handleTriggerClick(e, trigger, cid, ulogin);
-        });
+        }, true);
 
         return trigger;
     }
