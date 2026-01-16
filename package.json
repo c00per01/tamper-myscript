@@ -4,6 +4,10 @@
   "description": "",
   "main": "myscript.user.js",
   "scripts": {
+    "deploy": "node scripts/deploy.js",
+    "deploy:nobump": "node scripts/deploy.js --no-bump",
+    "build": "node scripts/deploy.js --no-push",
+    "store": "node scripts/build-chrome-store-zip.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

@@ -1,0 +1,81 @@
+// updateTamper_firefox.js
+// Запускает системный Firefox с указанным профилем + Tampermonkey.
+
+const { firefox } = require('playwright');
+const { execSync } = require('child_process');
+
+(async () => {
+  // Гарантированно завершаем все процессы Firefox перед запуском
+  try {
+    // Используем PowerShell команду для остановки процессов
+    execSync('powershell -Command "Stop-Process -Name firefox -ErrorAction SilentlyContinue"', { stdio: 'ignore' });
+    console.log('Old Firefox processes stopped.');
+  } catch (e) {
+    // Игнорируем ошибку, если процессов не было
+  }
+
+  const rawUrl = 'https://raw.githubusercontent.com/c00per01/tamper-myscript/main/myscript.user.js';
+
+  // === НАЧАЛО БЛОКА ЗАПУСКА ===
+  const profilePath = "C:\\Users\\Sergey01\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\automation-tamper-clean";
+  const firefoxExecutable = "C:\\Program Files\\Mozilla Firefox\\firefox.exe";
+
+  console.log("Using profile:", profilePath);
+  console.log("Using firefox executable:", firefoxExecutable);
+
+  const context = await firefox.launchPersistentContext(profilePath, {
+    executablePath: firefoxExecutable,
+    headless: false,
+    timeout: 600000,
+    args: [
+      // при необходимости можно добавить аргументы
+    ],
+    firefoxUserPrefs: {
+      // отключаем WebRender/GPU чтобы избежать shader-cache / крашей
+      "gfx.webrender.all": false,
+      "layers.acceleration.disabled": true,
+      "webgl.disabled": true,
+      "dom.ipc.processCount": 1
+    }
+  });
+  // === КОНЕЦ БЛОКА ЗАПУСКА ===
+
+  const page = await context.newPage();
+
+  try {
+    console.log('Opening raw URL:', rawUrl);
+    await page.goto(rawUrl, { waitUntil: 'load', timeout: 15000 });
+
+    const candidates = [
+      'text=Install',
+      'text=Install this script',
+      'text=Install script',
+      'text=Update',
+      'text=Install userscript',
+      'text=Установить',
+      'text=Обновить'
+    ];
+
+    let clicked = false;
+
+    for (const sel of candidates) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        console.log('Clicking:', sel);
+        await el.click();
+        clicked = true;
+        break;
+      }
+    }
+
+    if (!clicked) {
+      console.log('Install button not detected. If Firefox shows a browser-level dialog — click Install manually.');
+    }
+
+    await page.screenshot({ path: 'tamper_update_firefox_result.png', fullPage: true });
+    console.log('Saved screenshot: tamper_update_firefox_result.png');
+
+  } catch (err) {
+    console.log('Error:', err.message);
+  }
+})();

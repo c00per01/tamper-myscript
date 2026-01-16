@@ -1,0 +1,34 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icons/icon128.png",
+         "16": "icons/icon16.png",
+         "48": "icons/icon48.png"
+      },
+      "default_title": "Yandex Direct Helper"
+   },
+   "browser_specific_settings": {
+      "gecko": {
+         "id": "yandex-direct-helper@c00per01",
+         "strict_min_version": "109.0"
+      }
+   },
+   "content_scripts": [ {
+      "js": [ "content.js" ],
+      "matches": [ "https://direct.yandex.ru/*" ],
+      "run_at": "document_end"
+   } ],
+   "default_locale": "ru",
+   "description": "__MSG_extDescription__",
+   "icons": {
+      "128": "icons/icon128.png",
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvwXwwHfIUqaDwwVYzFNXYF9DR8klTNl1KG6EovkYWTgVJTHJiH512ieEjbfBlcwRcfZ5WTrGahqnrMhwMRXUCp6J8Eg29Y75Gs1rsOULZeeQs9P+lomnMnJC/8+lRAHTSjN336euqmWschwc+TwWr8xpfObfr/BwFaIUVxBPFLMr0JAoipB0DvpWl8Y+36sJoe4vDz/ZP/aeaET2JS4gIluRHT48PzSkD/d67MXa60sg+YKswroN23FDX4qyBxhQn2hk8f32jC+19naH+92N/HC3o1Uy6/zJ3uhHZ6WyLAWp57m6ZQu/ei1URUYny6qtLvILnyZngQJuZ9AXyZWmwQIDAQAB",
+   "manifest_version": 3,
+   "name": "__MSG_extName__",
+   "permissions": [ "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.190.0"
+}

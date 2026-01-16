@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Deploy to Tampermonkey (Firefox)",
+            "type": "node",
+            "request": "launch",
+            // Это запускает всю нашу команду
+            "preLaunchTask": "Deploy Userscript Full Cycle",
+            // Мы убрали заглушку echo. Теперь Antigravity просто закроется.
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        }
+    ]
+}
