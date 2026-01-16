@@ -1,9 +1,15 @@
 {
     "manifest_version": 3,
     "name": "__MSG_extName__",
-    "version": "1.0.0",
+    "version": "1.193.3",
     "description": "__MSG_extDescription__",
     "default_locale": "ru",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "yandex-direct-helper@c00per01",
+            "strict_min_version": "109.0"
+        }
+    },
     "permissions": [
         "storage"
     ],
