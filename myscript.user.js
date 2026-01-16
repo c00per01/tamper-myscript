@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.17
+// @version 1.193.18
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7746,21 +7746,25 @@
                 showNotification('Нет площадок для выделения', 'info');
                 return;
             }
+            let selected = 0;
             matching.forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && !checkbox.checked) checkbox.click();
+                if (checkbox && !checkbox.checked) {
+                    // Используем dispatchEvent чтобы избежать скролла
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                    selected++;
+                }
             });
-            showNotification(`Выделено: ${matching.length}`, 'success');
+            showNotification(`Выделено: ${selected}`, 'success');
             isSelectMode = false;
         } else {
-            // Режим снятия — снимаем только те что были выделены по фильтру
+            // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
-            matching.forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && checkbox.checked) {
-                    checkbox.click();
-                    count++;
-                }
+            document.querySelectorAll('tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                count++;
             });
             if (count > 0) {
                 showNotification(`Снято: ${count}`, 'info');
@@ -7779,21 +7783,21 @@
 
         if (!btn || !icon || !text) return;
 
-        const matching = getMatchingRows();
-        const count = matching.length;
-
         if (isSelectMode) {
-            // Режим выделения
+            // Режим выделения — показываем сколько будет выделено
+            const matching = getMatchingRows();
+            const count = matching.length;
             btn.classList.remove('yd-pl-btn-deselect');
             btn.classList.add('yd-pl-btn-primary');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
             text.textContent = count > 0 ? `Выделить ${count}` : 'Выделить';
         } else {
-            // Режим снятия
+            // Режим снятия — показываем сколько ВСЕГО выделено
+            const checkedCount = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
             btn.classList.remove('yd-pl-btn-primary');
             btn.classList.add('yd-pl-btn-deselect');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
-            text.textContent = count > 0 ? `Снять ${count}` : 'Снять';
+            text.textContent = checkedCount > 0 ? `Снять ${checkedCount}` : 'Снять';
         }
     }
 
@@ -8008,13 +8012,19 @@
 
                 <!-- Расширенные фильтры -->
                 <div class="yd-pl-expand ${settings.filtersExpanded ? 'open' : ''}">
-                    <button id="yd-pl-expand-toggle" class="yd-pl-expand-btn">
-                        <svg class="yd-pl-expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                        <span>Доп. фильтры</span>
-                        <span id="yd-pl-expand-badge" class="yd-pl-expand-badge" style="display: none;"></span>
-                    </button>
+                    <div class="yd-pl-expand-header">
+                        <button id="yd-pl-expand-toggle" class="yd-pl-expand-btn">
+                            <svg class="yd-pl-expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            <span>Доп. фильтры</span>
+                        </button>
+                        <button id="yd-pl-reset-filters" class="yd-pl-reset-icon" style="display: none;" title="Сбросить фильтры">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="yd-pl-expand-content">
                         <div class="yd-pl-filters-grid">
                             <div class="yd-pl-filter-row">
@@ -8067,12 +8077,6 @@
                         </svg>
                     </span>
                     <span id="yd-pl-apply-text">Выделить</span>
-                </button>
-                <button id="yd-pl-reset" class="yd-pl-btn-reset" title="Сбросить все фильтры (Ctrl+R)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                    <span>Сброс</span>
                 </button>
             </div>
 
@@ -8209,12 +8213,11 @@
         // Main button
         document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
 
-        // Reset кнопка - очистка всех фильтров
-        const resetBtn = document.getElementById('yd-pl-reset');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                settings.filters.patterns = [];
-                settings.whitelist = [];
+        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров и whitelist
+        const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
+        if (resetFiltersBtn) {
+            resetFiltersBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Не открывать/закрывать expand
                 ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
                     'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
                         const el = document.getElementById(id);
@@ -8222,9 +8225,9 @@
                     });
                 const whitelist = document.getElementById('yd-pl-whitelist');
                 if (whitelist) whitelist.value = '';
-                isSelectMode = true; // Сбросить в режим выделения
+                settings.whitelist = [];
+                isSelectMode = true;
                 saveSettings();
-                renderChips();
                 updatePreviewHighlight();
                 showNotification('Фильтры сброшены', 'info');
             });
@@ -8280,25 +8283,19 @@
         });
     }
 
-    // Обновление badge с числом активных фильтров
+    // Показ/скрытие иконки сброса при активных фильтрах
     function updateExpandBadge() {
-        const badge = document.getElementById('yd-pl-expand-badge');
-        if (!badge) return;
+        const resetIcon = document.getElementById('yd-pl-reset-filters');
+        if (!resetIcon) return;
 
         const filters = getFiltersFromUI();
-        let count = 0;
-        if (filters.clicksMin || filters.clicksMax) count++;
-        if (filters.ctrMin || filters.ctrMax) count++;
-        if (filters.cpcMin || filters.cpcMax) count++;
-        if (filters.spendMin || filters.spendMax) count++;
-        if (getWhitelistFromUI().length > 0) count++;
+        const hasFilters = (filters.clicksMin || filters.clicksMax) ||
+            (filters.ctrMin || filters.ctrMax) ||
+            (filters.cpcMin || filters.cpcMax) ||
+            (filters.spendMin || filters.spendMax) ||
+            (getWhitelistFromUI().length > 0);
 
-        if (count > 0) {
-            badge.textContent = count;
-            badge.style.display = 'inline';
-        } else {
-            badge.style.display = 'none';
-        }
+        resetIcon.style.display = hasFilters ? 'flex' : 'none';
     }
 
     function updatePill() {
@@ -8560,6 +8557,11 @@
 
         /* Расширяемая секция */
         .yd-pl-expand { margin-top: 4px; }
+        .yd-pl-expand-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
         .yd-pl-expand-btn {
             display: flex;
             align-items: center;
@@ -8575,13 +8577,22 @@
         .yd-pl-expand-btn:hover { color: var(--yd-primary); }
         .yd-pl-expand-arrow { transition: transform 0.2s; }
         .yd-pl-expand.open .yd-pl-expand-arrow { transform: rotate(180deg); }
-        .yd-pl-expand-badge {
-            background: var(--yd-primary);
-            color: #fff;
-            font-size: 9px;
-            padding: 2px 5px;
-            border-radius: 8px;
-            font-weight: 600;
+        .yd-pl-reset-icon {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: none;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            transition: all 0.15s;
+        }
+        .yd-pl-reset-icon:hover { 
+            color: var(--yd-danger); 
+            background: rgba(239, 68, 68, 0.1);
         }
         .yd-pl-expand-content { 
             max-height: 0;
@@ -9090,6 +9101,26 @@
 
     // ==================== ГЛОБАЛЬНЫЕ СОБЫТИЯ ====================
     function setupGlobalEvents() {
+        // Глобальный обработчик кликов по триггеру Статистика через делегирование
+        // Используем capture фазу чтобы перехватить клик ДО React
+        document.addEventListener('click', (e) => {
+            const trigger = e.target.closest('[data-yd-cl-stats-trigger]');
+            if (trigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+
+                const cid = trigger.getAttribute('data-cid');
+                const cell = trigger.closest('[data-testid$="_name-with-links"]');
+                const ulogin = cell ? extractCampaignInfo(cell).ulogin : null;
+
+                if (cid) {
+                    handleTriggerClick(e, trigger, cid, ulogin);
+                }
+                return false;
+            }
+        }, true); // capture phase!
+
         // Закрытие popover по клику вне
         document.addEventListener('click', (e) => {
             if (!activePopover) return;
@@ -9100,7 +9131,7 @@
             }
 
             // Клик по триггеру обрабатывается отдельно
-            if (e.target.hasAttribute('data-yd-cl-stats-trigger')) {
+            if (e.target.hasAttribute('data-yd-cl-stats-trigger') || e.target.closest('[data-yd-cl-stats-trigger]')) {
                 return;
             }
 
@@ -9215,6 +9246,7 @@
     init();
 
 })();
+
 
 
 
