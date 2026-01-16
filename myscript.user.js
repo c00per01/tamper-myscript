@@ -8182,13 +8182,27 @@
             if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
         });
 
-        // Stats observer
+        // Stats observer - следим только за добавлением/удалением строк, НЕ за атрибутами
+        // Это предотвращает бесконечный цикл, когда updatePreviewHighlight изменяет классы
         const tbody = document.querySelector('tbody');
         if (tbody) {
-            new MutationObserver(() => {
-                updateStats();
-                updatePreviewHighlight();
-            }).observe(tbody, { childList: true, subtree: true, attributes: true });
+            let observerTimeout = null;
+            const observer = new MutationObserver((mutations) => {
+                // Игнорируем изменения, которые мы сами вызвали (классы preview)
+                const isOurChange = mutations.every(m =>
+                    m.type === 'attributes' && m.attributeName === 'class' &&
+                    m.target.classList.contains('yd-pl-row-preview')
+                );
+                if (isOurChange) return;
+
+                // Debounce обновления
+                if (observerTimeout) clearTimeout(observerTimeout);
+                observerTimeout = setTimeout(() => {
+                    updateStats();
+                    updatePreviewHighlight();
+                }, 100);
+            });
+            observer.observe(tbody, { childList: true, subtree: true });
         }
     }
 
