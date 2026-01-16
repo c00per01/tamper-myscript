@@ -8099,10 +8099,10 @@
         pill.className = 'yd-pl-pill';
         pill.style.display = 'none';
         pill.innerHTML = `
-            < svg width = "16" height = "16" viewBox = "0 0 100 100" >
+            <svg width="16" height="16" viewBox="0 0 100 100">
                 <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
                 <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
-            </svg >
+            </svg>
             <span id="yd-pl-pill-count" class="yd-pl-pill-badge">0</span>
             <span id="yd-pl-pill-filters" class="yd-pl-pill-filters"></span>
         `;
@@ -8259,6 +8259,10 @@
 
     function makeResizable(panel) {
         const handle = panel.querySelector('.yd-pl-resize-se');
+        if (!handle) {
+            console.warn('[YD-PL] Resize handle not found');
+            return;
+        }
         let isResizing = false, startX, startY, startW, startH;
 
         handle.addEventListener('mousedown', (e) => {
@@ -8578,9 +8582,9 @@
         const popover = document.createElement('div');
         popover.className = 'yd-cl-popover';
         popover.innerHTML = `
-    < a href = "${buildStatsUrl(cid, ulogin, 'pages')}" target = "_blank" class="yd-cl-popover-item" >
-        По площадкам
-            </a >
+    <a href="${buildStatsUrl(cid, ulogin, 'pages')}" target="_blank" class="yd-cl-popover-item">
+        Площадки
+    </a>
     <a href="${buildStatsUrl(cid, ulogin, 'queries')}" target="_blank" class="yd-cl-popover-item">
         Поисковые запросы
     </a>
