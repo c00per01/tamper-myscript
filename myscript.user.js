@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.16
+// @version 1.193.17
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7712,8 +7712,9 @@
         const matching = getMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // Обновить состояние кнопки
+        // Обновить состояние кнопки и badge
         updateButtonState();
+        updateExpandBadge();
 
         updateStats();
         saveCurrentFilters();
@@ -8011,7 +8012,8 @@
                         <svg class="yd-pl-expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="6 9 12 15 18 9"/>
                         </svg>
-                        <span>Расширенные фильтры</span>
+                        <span>Доп. фильтры</span>
+                        <span id="yd-pl-expand-badge" class="yd-pl-expand-badge" style="display: none;"></span>
                     </button>
                     <div class="yd-pl-expand-content">
                         <div class="yd-pl-filters-grid">
@@ -8066,10 +8068,11 @@
                     </span>
                     <span id="yd-pl-apply-text">Выделить</span>
                 </button>
-                <button id="yd-pl-reset" class="yd-pl-btn-icon" title="Сбросить все фильтры">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button id="yd-pl-reset" class="yd-pl-btn-reset" title="Сбросить все фильтры (Ctrl+R)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                     </svg>
+                    <span>Сброс</span>
                 </button>
             </div>
 
@@ -8260,6 +8263,42 @@
             });
             observer.observe(tbody, { childList: true, subtree: true });
         }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Escape — свернуть панель
+            if (e.key === 'Escape' && panel.style.display !== 'none') {
+                panel.style.display = 'none';
+                pill.style.display = 'flex';
+                updatePill();
+            }
+            // Ctrl+Enter — toggle выделения
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                togglePlacements();
+            }
+        });
+    }
+
+    // Обновление badge с числом активных фильтров
+    function updateExpandBadge() {
+        const badge = document.getElementById('yd-pl-expand-badge');
+        if (!badge) return;
+
+        const filters = getFiltersFromUI();
+        let count = 0;
+        if (filters.clicksMin || filters.clicksMax) count++;
+        if (filters.ctrMin || filters.ctrMax) count++;
+        if (filters.cpcMin || filters.cpcMax) count++;
+        if (filters.spendMin || filters.spendMax) count++;
+        if (getWhitelistFromUI().length > 0) count++;
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     function updatePill() {
@@ -8437,26 +8476,35 @@
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
+            min-height: 0;
         }
         .yd-pl-chip {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 10px;
+            gap: 4px;
+            padding: 4px 8px;
             background: #E3F2FD;
             border: 1px solid #BBDEFB;
-            border-radius: 16px;
-            font-size: 12px;
+            border-radius: 14px;
+            font-size: 11px;
             color: var(--yd-primary);
             cursor: default;
             transition: all 0.15s;
+            animation: yd-pl-chip-in 0.2s ease;
+            max-width: 140px;
         }
         .yd-pl-chip:hover { background: #BBDEFB; }
+        .yd-pl-chip-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .yd-pl-chip-text:hover { text-decoration: underline; }
         .yd-pl-chip-pos {
-            font-size: 9px;
+            font-size: 8px;
             color: var(--yd-text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            flex-shrink: 0;
         }
         .yd-pl-chip-remove {
             display: flex;
@@ -8470,8 +8518,10 @@
             font-size: 10px;
             color: var(--yd-text-secondary);
             transition: all 0.15s;
+            flex-shrink: 0;
         }
         .yd-pl-chip-remove:hover { background: var(--yd-danger); color: #fff; }
+        @keyframes yd-pl-chip-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
         /* Поле ввода с select */
         .yd-pl-input-row {
@@ -8525,14 +8575,27 @@
         .yd-pl-expand-btn:hover { color: var(--yd-primary); }
         .yd-pl-expand-arrow { transition: transform 0.2s; }
         .yd-pl-expand.open .yd-pl-expand-arrow { transform: rotate(180deg); }
+        .yd-pl-expand-badge {
+            background: var(--yd-primary);
+            color: #fff;
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
         .yd-pl-expand-content { 
-            display: none; 
-            padding: 12px;
+            max-height: 0;
+            overflow: hidden;
+            padding: 0 12px;
             background: var(--yd-bg-secondary);
             border-radius: 10px;
             margin-top: 8px;
+            transition: max-height 0.25s ease, padding 0.25s ease;
         }
-        .yd-pl-expand.open .yd-pl-expand-content { display: block; }
+        .yd-pl-expand.open .yd-pl-expand-content { 
+            max-height: 400px; 
+            padding: 12px;
+        }
 
         /* Фильтры */
         .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 10px; }
@@ -8641,6 +8704,28 @@
             box-shadow: 0 4px 12px rgba(228, 105, 36, 0.25); 
         }
         .yd-pl-btn-deselect:active { transform: translateY(0); }
+
+        /* Кнопка сброса */
+        .yd-pl-btn-reset { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 4px;
+            padding: 8px 12px;
+            background: var(--yd-bg-secondary); 
+            border: 1px solid var(--yd-border); 
+            border-radius: 8px; 
+            cursor: pointer; 
+            color: var(--yd-text-secondary); 
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s; 
+        }
+        .yd-pl-btn-reset:hover { 
+            background: rgba(239, 68, 68, 0.1); 
+            border-color: var(--yd-danger); 
+            color: var(--yd-danger); 
+        }
 
         .yd-pl-btn-icon { 
             width: 36px; 
@@ -9130,6 +9215,7 @@
     init();
 
 })();
+
 
 
 
