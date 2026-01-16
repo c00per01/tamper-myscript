@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.9
+// @version 1.193.10
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7610,17 +7610,20 @@
 
     // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
     function getFiltersFromUI() {
+        // Получаем patterns из нового единственного поля
+        const domainInput = document.getElementById('yd-pl-domain-filter');
         const patterns = [];
-        document.querySelectorAll('.yd-pl-pattern-item').forEach(item => {
-            const input = item.querySelector('input[type="text"]');
-            const posBtn = item.querySelector('.yd-pl-pos-btn.active');
-            if (input && input.value.trim()) {
-                patterns.push({
-                    value: input.value.trim().toLowerCase(),
-                    position: posBtn ? posBtn.dataset.pos : 'any'
-                });
-            }
-        });
+        if (domainInput && domainInput.value.trim()) {
+            domainInput.value.split(',').forEach(v => {
+                const trimmed = v.trim().toLowerCase();
+                if (trimmed) {
+                    patterns.push({
+                        value: trimmed,
+                        position: 'any' // всегда "содержит"
+                    });
+                }
+            });
+        }
 
         return {
             patterns,
@@ -7743,7 +7746,7 @@
         const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
         const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
         const statsEl = document.getElementById('yd-pl-stats');
-        if (statsEl) statsEl.textContent = `${checked} / ${total}`;
+        if (statsEl) statsEl.textContent = `${checked} из ${total}`;
     }
 
     function saveCurrentFilters() {
@@ -7951,18 +7954,16 @@
             <!-- Header -->
             <div class="yd-pl-header" id="yd-pl-panel-header">
                 <div class="yd-pl-header-left">
-                    <svg class="yd-pl-logo" width="20" height="20" viewBox="0 0 100 100">
+                    <svg class="yd-pl-logo" width="18" height="18" viewBox="0 0 100 100">
                         <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
                         <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
-                        <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
-                        <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
                     </svg>
-                    <span class="yd-pl-title">YD Helper</span>
+                    <span class="yd-pl-title">Площадки</span>
                 </div>
                 <div class="yd-pl-header-right">
-                    <span id="yd-pl-stats" class="yd-pl-badge">0 / 0</span>
+                    <span id="yd-pl-stats" class="yd-pl-stats">0 из 0</span>
                     <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
                         </svg>
                     </button>
@@ -7971,117 +7972,74 @@
 
             <!-- Body -->
             <div class="yd-pl-body">
-                <!-- Фильтры по показателям -->
-                <div class="yd-pl-section">
-                    <div class="yd-pl-section-header">
-                        <span class="yd-pl-section-label">ФИЛЬТРЫ</span>
-                        <div class="yd-pl-mode-toggle">
-                            <label class="yd-pl-toggle ${settings.mode === 'or' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
-                                <span>ИЛИ</span>
-                            </label>
-                            <label class="yd-pl-toggle ${settings.mode === 'and' ? 'active' : ''}">
-                                <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
-                                <span>И</span>
-                            </label>
-                        </div>
-                    </div>
+                <!-- Главный фильтр -->
+                <input type="text" id="yd-pl-domain-filter" class="yd-pl-main-input" 
+                    placeholder="Домен содержит..." 
+                    value="${settings.filters.patterns.length > 0 ? settings.filters.patterns.map(p => p.value).join(', ') : ''}"
+                    title="Введите часть домена для фильтрации">
 
-                    <!-- Паттерны доменов -->
-                    <div class="yd-pl-subsection">
-                        <div class="yd-pl-subsection-header">
-                            <span>Домены</span>
-                            <button id="yd-pl-add-pattern" class="yd-pl-btn-add">+ Добавить</button>
-                        </div>
-                        <div id="yd-pl-patterns-list" class="yd-pl-patterns-list"></div>
-                        <div class="yd-pl-hint">^ = начало, * = везде, $ = конец</div>
-                    </div>
-
-                    <!-- Числовые фильтры -->
-                    <div class="yd-pl-metrics-grid">
-                        <div class="yd-pl-metric">
-                            <label>Клики</label>
-                            <div class="yd-pl-range">
+                <!-- Расширенные фильтры (скрыты по умолчанию) -->
+                <div class="yd-pl-expand ${settings.filtersExpanded ? 'open' : ''}">
+                    <button id="yd-pl-expand-toggle" class="yd-pl-expand-btn">
+                        <svg class="yd-pl-expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                        <span>Расширенные фильтры</span>
+                    </button>
+                    <div class="yd-pl-expand-content">
+                        <div class="yd-pl-filters-grid">
+                            <div class="yd-pl-filter-row">
+                                <span class="yd-pl-filter-label">Клики</span>
                                 <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
                                 <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
                             </div>
-                        </div>
-                        <div class="yd-pl-metric">
-                            <label>CTR %</label>
-                            <div class="yd-pl-range">
+                            <div class="yd-pl-filter-row">
+                                <span class="yd-pl-filter-label">CTR %</span>
                                 <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
                                 <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
                             </div>
-                        </div>
-                        <div class="yd-pl-metric">
-                            <label>CPC ₽</label>
-                            <div class="yd-pl-range">
+                            <div class="yd-pl-filter-row">
+                                <span class="yd-pl-filter-label">CPC ₽</span>
                                 <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
                                 <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
                             </div>
-                        </div>
-                        <div class="yd-pl-metric">
-                            <label>Расход ₽</label>
-                            <div class="yd-pl-range">
+                            <div class="yd-pl-filter-row">
+                                <span class="yd-pl-filter-label">Расход ₽</span>
                                 <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
                                 <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                             </div>
                         </div>
+                        <div class="yd-pl-divider"></div>
+                        <div class="yd-pl-exclude-row">
+                            <span class="yd-pl-filter-label">Исключить</span>
+                            <input type="text" id="yd-pl-whitelist" class="yd-pl-exclude-input" 
+                                placeholder="yandex, google..." 
+                                value="${settings.whitelist.join(', ')}"
+                                title="Домены, которые никогда не выделяются">
+                        </div>
                     </div>
                 </div>
 
-                <!-- Белый список (исключения) -->
-                <div class="yd-pl-section yd-pl-section-compact">
-                    <div class="yd-pl-section-header">
-                        <span class="yd-pl-section-label">ИСКЛЮЧЕНИЯ</span>
-                    </div>
-                    <input type="text" id="yd-pl-whitelist" class="yd-pl-input" 
-                        placeholder="yandex, google, vk..." 
-                        value="${settings.whitelist.join(', ')}"
-                        title="Домены, которые никогда не выделяются">
-                    <div class="yd-pl-hint">Домены через запятую (не выделяются)</div>
-                </div>
-
-                <!--Шаблоны(сворачиваемая секция) -->
-                <div class="yd-pl-accordion ${settings.templatesCollapsed ? '' : 'open'}">
-                    <div class="yd-pl-accordion-header" id="yd-pl-templates-toggle">
-                        <span class="yd-pl-section-label">ШАБЛОНЫ</span>
-                        <svg class="yd-pl-accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                    </div>
-                    <div class="yd-pl-accordion-content">
-                        <div id="yd-pl-templates-list" class="yd-pl-templates-list"></div>
-                        <button id="yd-pl-save-template" class="yd-pl-btn-save-template">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                            </svg>
-                            Сохранить текущие фильтры
-                        </button>
-                        <div class="yd-pl-hint">Двойной клик — переименовать</div>
-                    </div>
-                </div>
-
-                <!--Preview -->
+                <!-- Preview -->
                 <div id="yd-pl-preview" class="yd-pl-preview">Настройте фильтры...</div>
             </div>
 
             <!-- Footer -->
             <div class="yd-pl-footer">
                 <button id="yd-pl-apply" class="yd-pl-btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <polyline points="20 6 9 17 4 12"/>
                     </svg>
                     <span>Выделить</span>
                 </button>
-                <button id="yd-pl-clear" class="yd-pl-btn-icon" title="Снять все галочки">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button id="yd-pl-clear" class="yd-pl-btn-secondary" title="Снять все галочки">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>
 
-            <!-- Resize handles -->
+            <!-- Resize handle -->
             <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
         `;
 
@@ -8130,72 +8088,65 @@
             panel.style.display = 'flex';
         });
 
-        // Add pattern
-        document.getElementById('yd-pl-add-pattern').addEventListener('click', () => {
-            document.getElementById('yd-pl-patterns-list').appendChild(createPatternItem());
-        });
+        // Главный фильтр по домену
+        const domainFilter = document.getElementById('yd-pl-domain-filter');
+        if (domainFilter) {
+            domainFilter.addEventListener('input', debounce(() => {
+                // Парсим значения через запятую и сохраняем как patterns
+                const value = domainFilter.value.trim();
+                if (value) {
+                    settings.filters.patterns = value.split(',').map(v => ({
+                        value: v.trim(),
+                        position: 'any' // всегда "содержит"
+                    })).filter(p => p.value);
+                } else {
+                    settings.filters.patterns = [];
+                }
+                saveSettings();
+                updatePreviewHighlight();
+            }, 300));
+        }
 
-        // Templates accordion
-        document.getElementById('yd-pl-templates-toggle').addEventListener('click', () => {
-            const acc = document.querySelector('.yd-pl-accordion');
-            acc.classList.toggle('open');
-            settings.templatesCollapsed = !acc.classList.contains('open');
-            saveSettings();
-        });
-
-        // Save template — сохраняет ВСЕ настройки
-        document.getElementById('yd-pl-save-template').addEventListener('click', () => {
-            const name = prompt('Название шаблона:', 'Новый шаблон');
-            if (!name) return;
-            const filters = getFiltersFromUI();
-            const whitelist = getWhitelistFromUI();
-            const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
-            settings.templates.push({
-                name,
-                filters: JSON.parse(JSON.stringify(filters)),
-                whitelist: [...whitelist],
-                mode
+        // Расширенные фильтры - toggle
+        const expandToggle = document.getElementById('yd-pl-expand-toggle');
+        if (expandToggle) {
+            expandToggle.addEventListener('click', () => {
+                const expand = document.querySelector('.yd-pl-expand');
+                expand.classList.toggle('open');
+                settings.filtersExpanded = expand.classList.contains('open');
+                saveSettings();
             });
-            saveSettings();
-            renderTemplates();
-            showNotification(`Шаблон "${name}" сохранён`, 'success');
-        });
+        }
 
         // Main buttons
         document.getElementById('yd-pl-apply').addEventListener('click', selectPlacements);
         document.getElementById('yd-pl-clear').addEventListener('click', clearAllSelections);
 
-        // Mode toggle
-        document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
-            radio.addEventListener('change', () => {
-                document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
-                radio.closest('.yd-pl-toggle').classList.add('active');
-                updatePreviewHighlight();
-            });
-        });
-
-        // Live preview
-        const inputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
-            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max', 'yd-pl-whitelist'];
-        inputs.forEach(id => {
+        // Live preview для числовых фильтров
+        const numericInputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'];
+        numericInputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
         });
 
-        // Stats observer - следим только за добавлением/удалением строк, НЕ за атрибутами
-        // Это предотвращает бесконечный цикл, когда updatePreviewHighlight изменяет классы
+        // Whitelist
+        const whitelistInput = document.getElementById('yd-pl-whitelist');
+        if (whitelistInput) {
+            whitelistInput.addEventListener('input', debounce(updatePreviewHighlight, 300));
+        }
+
+        // Stats observer
         const tbody = document.querySelector('tbody');
         if (tbody) {
             let observerTimeout = null;
             const observer = new MutationObserver((mutations) => {
-                // Игнорируем изменения, которые мы сами вызвали (классы preview)
                 const isOurChange = mutations.every(m =>
                     m.type === 'attributes' && m.attributeName === 'class' &&
                     m.target.classList.contains('yd-pl-row-preview')
                 );
                 if (isOurChange) return;
 
-                // Debounce обновления
                 if (observerTimeout) clearTimeout(observerTimeout);
                 observerTimeout = setTimeout(() => {
                     updateStats();
@@ -8299,16 +8250,16 @@
         const style = document.createElement('style');
         style.id = 'yd-pl-styles';
         style.textContent = `
-        /* CSS переменные - идентичны модулю запросов */
+        /* CSS переменные */
         #yd-pl-panel {
             --yd-primary: #205598;
             --yd-primary-light: #2a6bc0;
             --yd-accent: #E46924;
             --yd-bg: #ffffff;
             --yd-bg-secondary: #F9FAFB;
-            --yd-border: #E1E4E8;
-            --yd-text: #333;
-            --yd-text-secondary: #6b7280;
+            --yd-border: #E5E7EB;
+            --yd-text: #1F2937;
+            --yd-text-secondary: #6B7280;
             --yd-text-muted: #9CA3AF;
             --yd-success: #10B981;
             --yd-danger: #EF4444;
@@ -8317,151 +8268,263 @@
         #yd-pl-panel {
             position: fixed;
             z-index: 9999999;
+            width: 320px;
             background: var(--yd-bg);
-            border: 1px solid var(--yd-border);
-            border-radius: 12px;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 13px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            font-size: 14px;
             color: var(--yd-text);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            min-width: 300px;
-            min-height: 350px;
         }
 
         #yd-pl-panel * { box-sizing: border-box; }
 
+        /* Header - минималистичный */
         .yd-pl-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 14px;
-            background: linear-gradient(135deg, var(--yd-bg-secondary) 0%, #F3F4F6 100%);
+            padding: 14px 16px;
+            background: var(--yd-bg);
             border-bottom: 1px solid var(--yd-border);
             cursor: grab;
         }
-
         .yd-pl-header:active { cursor: grabbing; }
 
         .yd-pl-header-left { display: flex; align-items: center; gap: 10px; }
-        .yd-pl-title { font-weight: 600; font-size: 14px; color: var(--yd-primary); }
-        .yd-pl-header-right { display: flex; align-items: center; gap: 6px; }
-        .yd-pl-badge { font-size: 11px; color: var(--yd-primary); background: #E3F2FD; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
+        .yd-pl-title { font-weight: 600; font-size: 15px; color: var(--yd-text); }
+        .yd-pl-header-right { display: flex; align-items: center; gap: 10px; }
+        .yd-pl-stats { font-size: 13px; color: var(--yd-text-secondary); font-weight: 500; }
 
         .yd-pl-icon-btn {
-            background: none; border: none; padding: 6px; cursor: pointer;
+            background: none; border: none; padding: 4px; cursor: pointer;
             color: var(--yd-text-muted); border-radius: 6px; transition: all 0.15s;
             display: flex; align-items: center; justify-content: center;
         }
-        .yd-pl-icon-btn:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
+        .yd-pl-icon-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--yd-text); }
 
-        .yd-pl-body { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-
-        .yd-pl-section {
-            background: var(--yd-bg-secondary);
-            border: 1px solid var(--yd-border);
-            border-radius: 8px;
-            padding: 10px;
+        /* Body */
+        .yd-pl-body { 
+            flex: 1; 
+            padding: 16px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px;
         }
 
-        .yd-pl-section-compact { padding: 8px 10px; }
+        /* Главное поле ввода */
+        .yd-pl-main-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--yd-border);
+            border-radius: 10px;
+            font-size: 14px;
+            background: var(--yd-bg);
+            transition: all 0.2s;
+        }
+        .yd-pl-main-input:focus {
+            outline: none;
+            border-color: var(--yd-primary);
+            box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+        }
+        .yd-pl-main-input::placeholder { color: var(--yd-text-muted); }
 
-        .yd-pl-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .yd-pl-section-label { font-size: 10px; font-weight: 700; color: var(--yd-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        /* Расширяемая секция */
+        .yd-pl-expand { margin-top: 4px; }
+        .yd-pl-expand-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            padding: 8px 0;
+            font-size: 13px;
+            color: var(--yd-text-secondary);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .yd-pl-expand-btn:hover { color: var(--yd-primary); }
+        .yd-pl-expand-arrow { transition: transform 0.2s; }
+        .yd-pl-expand.open .yd-pl-expand-arrow { transform: rotate(180deg); }
+        .yd-pl-expand-content { 
+            display: none; 
+            padding: 12px;
+            background: var(--yd-bg-secondary);
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+        .yd-pl-expand.open .yd-pl-expand-content { display: block; }
 
-        .yd-pl-mode-toggle { display: flex; background: #E5E7EB; border-radius: 6px; padding: 2px; }
-        .yd-pl-toggle { padding: 4px 10px; font-size: 11px; color: var(--yd-text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.15s; }
-        .yd-pl-toggle input { display: none; }
-        .yd-pl-toggle.active { background: #fff; color: var(--yd-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+        /* Фильтры в сетке */
+        .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 10px; }
+        .yd-pl-filter-row {
+            display: grid;
+            grid-template-columns: 70px 1fr 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+        .yd-pl-filter-label { font-size: 12px; color: var(--yd-text-secondary); }
+        .yd-pl-filter-row input {
+            padding: 8px 10px;
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+            background: var(--yd-bg);
+        }
+        .yd-pl-filter-row input:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-filter-row input::-webkit-inner-spin-button,
+        .yd-pl-filter-row input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .yd-pl-filter-row input[type="number"] { -moz-appearance: textfield; }
 
-        .yd-pl-subsection { margin-bottom: 10px; }
-        .yd-pl-subsection-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; color: var(--yd-text-secondary); }
-        .yd-pl-btn-add { font-size: 11px; color: var(--yd-primary); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
-        .yd-pl-btn-add:hover { background: rgba(32, 85, 152, 0.1); }
+        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 12px 0; }
 
-        .yd-pl-patterns-list { display: flex; flex-direction: column; gap: 6px; }
-        .yd-pl-pattern-item { display: flex; align-items: center; gap: 6px; }
-        .yd-pl-pattern-input { flex: 1; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
-        .yd-pl-pattern-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
+        .yd-pl-exclude-row {
+            display: grid;
+            grid-template-columns: 70px 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+        .yd-pl-exclude-input {
+            padding: 8px 10px;
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            font-size: 13px;
+            background: var(--yd-bg);
+        }
+        .yd-pl-exclude-input:focus { outline: none; border-color: var(--yd-primary); }
 
-        .yd-pl-pos-group { display: flex; background: #E5E7EB; border-radius: 4px; }
-        .yd-pl-pos-btn { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-secondary); border-radius: 4px; }
-        .yd-pl-pos-btn.active { background: #fff; color: var(--yd-primary); font-weight: 600; }
-        .yd-pl-pos-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.5); }
+        /* Preview */
+        .yd-pl-preview { 
+            text-align: center; 
+            padding: 12px; 
+            font-size: 13px; 
+            color: var(--yd-text-muted); 
+            background: var(--yd-bg-secondary); 
+            border-radius: 10px;
+        }
+        .yd-pl-preview.yd-pl-preview-active { 
+            color: var(--yd-success); 
+            background: rgba(16, 185, 129, 0.1); 
+            font-weight: 600; 
+        }
 
-        .yd-pl-pattern-remove { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; color: var(--yd-text-muted); font-size: 16px; border-radius: 4px; }
-        .yd-pl-pattern-remove:hover { background: rgba(239, 68, 68, 0.1); color: var(--yd-danger); }
+        /* Footer */
+        .yd-pl-footer { 
+            display: flex; 
+            gap: 10px; 
+            padding: 16px; 
+            border-top: 1px solid var(--yd-border); 
+        }
+        .yd-pl-btn-primary { 
+            flex: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 8px; 
+            padding: 12px 16px; 
+            background: var(--yd-primary); 
+            color: #fff; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+        }
+        .yd-pl-btn-primary:hover { 
+            background: var(--yd-primary-light); 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 12px rgba(32, 85, 152, 0.25); 
+        }
+        .yd-pl-btn-primary:active { transform: translateY(0); }
 
-        .yd-pl-hint { font-size: 10px; color: var(--yd-text-muted); margin-top: 4px; }
+        .yd-pl-btn-secondary { 
+            width: 44px; 
+            height: 44px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: var(--yd-bg-secondary); 
+            border: 1px solid var(--yd-border); 
+            border-radius: 10px; 
+            cursor: pointer; 
+            color: var(--yd-text-secondary); 
+            transition: all 0.15s; 
+        }
+        .yd-pl-btn-secondary:hover { 
+            background: var(--yd-bg); 
+            border-color: var(--yd-danger); 
+            color: var(--yd-danger); 
+        }
 
-        .yd-pl-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .yd-pl-metric label { display: block; font-size: 11px; color: var(--yd-text-secondary); margin-bottom: 4px; }
-        .yd-pl-range { display: flex; align-items: center; gap: 4px; }
-        .yd-pl-range input { width: 100%; padding: 5px 6px; border: 1px solid var(--yd-border); border-radius: 5px; font-size: 12px; text-align: center; }
-        .yd-pl-range input:focus { outline: none; border-color: var(--yd-primary); }
-        .yd-pl-range input::-webkit-inner-spin-button,
-        .yd-pl-range input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .yd-pl-range input[type="number"] { -moz-appearance: textfield; }
-
-        .yd-pl-input { width: 100%; padding: 6px 8px; border: 1px solid var(--yd-border); border-radius: 6px; font-size: 12px; }
-        .yd-pl-input:focus { outline: none; border-color: var(--yd-primary); box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1); }
-
-        /* Accordion */
-        .yd-pl-accordion { background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; }
-        .yd-pl-accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; }
-        .yd-pl-accordion-arrow { transition: transform 0.2s; color: var(--yd-text-muted); }
-        .yd-pl-accordion.open .yd-pl-accordion-arrow { transform: rotate(180deg); }
-        .yd-pl-accordion-content { display: none; padding: 0 10px 10px; }
-        .yd-pl-accordion.open .yd-pl-accordion-content { display: block; }
-
-        .yd-pl-templates-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-        .yd-pl-template-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #fff; border: 1px solid var(--yd-border); border-radius: 6px; }
-        .yd-pl-template-name { font-size: 12px; cursor: pointer; }
-        .yd-pl-template-name:hover { color: var(--yd-primary); }
-        .yd-pl-template-actions { display: flex; gap: 4px; }
-        .yd-pl-template-actions button { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--yd-text-muted); border-radius: 4px; }
-        .yd-pl-template-actions button:hover { background: rgba(32, 85, 152, 0.1); color: var(--yd-primary); }
-        .yd-pl-tpl-delete:hover { background: rgba(239, 68, 68, 0.1) !important; color: var(--yd-danger) !important; }
-
-        .yd-pl-btn-save-template { width: 100%; padding: 6px; font-size: 11px; color: var(--yd-text-secondary); background: #fff; border: 1px dashed var(--yd-border); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .yd-pl-btn-save-template:hover { border-color: var(--yd-primary); color: var(--yd-primary); }
-
-        .yd-pl-preview { text-align: center; padding: 8px; font-size: 12px; color: var(--yd-text-muted); background: var(--yd-bg-secondary); border-radius: 6px; }
-        .yd-pl-preview.yd-pl-preview-active { color: var(--yd-success); background: #E8F5E9; font-weight: 500; }
-
-        .yd-pl-footer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--yd-border); background: var(--yd-bg); }
-        .yd-pl-btn-primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: var(--yd-primary); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-        .yd-pl-btn-primary:hover { background: var(--yd-primary-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(32, 85, 152, 0.3); }
-
-        .yd-pl-btn-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--yd-bg-secondary); border: 1px solid var(--yd-border); border-radius: 8px; cursor: pointer; color: var(--yd-text-secondary); transition: all 0.2s; }
-        .yd-pl-btn-icon:hover { background: var(--yd-bg); border-color: var(--yd-primary); color: var(--yd-primary); }
-
-        .yd-pl-resize-se { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: se-resize; }
+        .yd-pl-resize-se { 
+            position: absolute; 
+            right: 4px; 
+            bottom: 4px; 
+            width: 12px; 
+            height: 12px; 
+            cursor: se-resize;
+            opacity: 0.3;
+        }
 
         /* Pill */
-        .yd-pl-pill { position: fixed; bottom: 80px; right: 20px; z-index: 9999998; background: #fff; border: 1px solid var(--yd-border); border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); cursor: pointer; font-size: 12px; color: var(--yd-primary); transition: all 0.2s; }
-        .yd-pl-pill:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); }
-        .yd-pl-pill-badge { background: var(--yd-accent); color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-        .yd-pl-pill-filters { color: var(--yd-success); font-size: 10px; }
+        .yd-pl-pill { 
+            position: fixed; 
+            bottom: 80px; 
+            right: 20px; 
+            z-index: 9999998; 
+            background: #fff; 
+            border: 1px solid var(--yd-border); 
+            border-radius: 24px; 
+            padding: 10px 16px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12); 
+            cursor: pointer; 
+            font-size: 13px; 
+            color: var(--yd-text); 
+            transition: all 0.2s; 
+        }
+        .yd-pl-pill:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15); 
+        }
+        .yd-pl-pill-badge { 
+            background: var(--yd-primary); 
+            color: #fff; 
+            padding: 3px 8px; 
+            border-radius: 12px; 
+            font-size: 11px; 
+            font-weight: 600; 
+        }
+        .yd-pl-pill-filters { color: var(--yd-success); font-size: 12px; font-weight: 600; }
 
-        /* Preview подсветка строк в таблице */
+        /* Preview подсветка */
         tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
         tbody tr.yd-pl-row-preview td { background: transparent !important; }
 
         /* Notifications */
-        .yd-pl-notification { position: fixed; bottom: 120px; right: 20px; z-index: 99999999; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); animation: yd-pl-notify-in 0.3s ease; }
-        .yd-pl-notification-success { background: #10B981; color: #fff; }
-        .yd-pl-notification-error { background: #EF4444; color: #fff; }
-        .yd-pl-notification-info { background: #3B82F6; color: #fff; }
-        .yd-pl-notification-hide { animation: yd-pl-notify-out 0.3s ease forwards; }
+        .yd-pl-notification { 
+            position: fixed; 
+            bottom: 140px; 
+            right: 20px; 
+            z-index: 99999999; 
+            padding: 12px 20px; 
+            border-radius: 10px; 
+            font-size: 13px; 
+            font-weight: 500; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); 
+            animation: yd-pl-notify-in 0.3s ease; 
+        }
+        .yd-pl-notification-success { background: var(--yd-success); color: #fff; }
+        .yd-pl-notification-error { background: var(--yd-danger); color: #fff; }
+        .yd-pl-notification-info { background: var(--yd-primary); color: #fff; }
         @keyframes yd-pl-notify-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes yd-pl-notify-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
-
-        .yd-pl-body::-webkit-scrollbar { width: 6px; }
-        .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
-        .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 3px; }
         `;
 
         document.head.appendChild(style);
