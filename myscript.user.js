@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.3
+// @version 1.193.4
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7517,7 +7517,52 @@
     function loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const data = JSON.parse(saved);
+                // Миграция старых настроек
+                const defaults = getDefaultSettings();
+
+                // Если filters.patterns отсутствует — используем дефолтные
+                if (!data.filters || !data.filters.patterns) {
+                    data.filters = data.filters || {};
+                    data.filters.patterns = defaults.filters.patterns;
+                }
+                // Добавляем недостающие поля filters
+                if (data.filters.clicksMin === undefined) data.filters.clicksMin = '';
+                if (data.filters.clicksMax === undefined) data.filters.clicksMax = '';
+                if (data.filters.ctrMin === undefined) data.filters.ctrMin = '';
+                if (data.filters.ctrMax === undefined) data.filters.ctrMax = '';
+                if (data.filters.cpcMin === undefined) data.filters.cpcMin = '';
+                if (data.filters.cpcMax === undefined) data.filters.cpcMax = '';
+                if (data.filters.spendMin === undefined) data.filters.spendMin = '';
+                if (data.filters.spendMax === undefined) data.filters.spendMax = '';
+
+                // Миграция whitelist
+                if (!data.whitelist) data.whitelist = [];
+
+                // Миграция старых шаблонов (patterns на верхнем уровне → filters)
+                if (data.templates) {
+                    data.templates = data.templates.map(tpl => {
+                        if (tpl.patterns && !tpl.filters) {
+                            return {
+                                name: tpl.name,
+                                filters: {
+                                    patterns: tpl.patterns,
+                                    clicksMin: '', clicksMax: '',
+                                    ctrMin: '', ctrMax: '',
+                                    cpcMin: '', cpcMax: '',
+                                    spendMin: '', spendMax: ''
+                                },
+                                whitelist: [],
+                                mode: 'or'
+                            };
+                        }
+                        return tpl;
+                    });
+                }
+
+                return data;
+            }
         } catch (e) {
             console.error('[YD-PL] Ошибка загрузки:', e);
         }
@@ -8843,6 +8888,7 @@
     init();
 
 })();
+
 
 
 
