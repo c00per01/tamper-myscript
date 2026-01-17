@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.18
+// @version 1.193.19
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7624,12 +7624,6 @@
         };
     }
 
-    function getWhitelistFromUI() {
-        const input = document.getElementById('yd-pl-whitelist');
-        if (!input) return [];
-        return input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    }
-
     function matchesPattern(domain, pattern) {
         const val = pattern.value.toLowerCase();
         const dom = domain.toLowerCase();
@@ -7686,7 +7680,7 @@
     function getMatchingRows() {
         const filters = getFiltersFromUI();
         const whitelist = getWhitelistFromUI();
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        const mode = settings.mode || 'or';
 
         const rows = document.querySelectorAll('tbody tr');
         const matching = [];
@@ -7715,6 +7709,7 @@
         // Обновить состояние кнопки и badge
         updateButtonState();
         updateExpandBadge();
+        addLockButtonsToRows();
 
         updateStats();
         saveCurrentFilters();
@@ -7729,8 +7724,7 @@
 
     function saveCurrentFilters() {
         settings.filters = getFiltersFromUI();
-        settings.whitelist = getWhitelistFromUI();
-        settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        // whitelist и mode уже хранятся в settings напрямую
         saveSettings();
     }
 
@@ -7879,16 +7873,12 @@
         setVal('yd-pl-spend-min', f.spendMin);
         setVal('yd-pl-spend-max', f.spendMax);
 
-        const whitelistEl = document.getElementById('yd-pl-whitelist');
-        if (whitelistEl) whitelistEl.value = settings.whitelist.join(', ');
+        // Mode toggle (новый switch)
+        const modeSwitch = document.getElementById('yd-pl-mode-switch');
+        if (modeSwitch) modeSwitch.checked = settings.mode === 'and';
 
-        // Mode toggle
-        const modeRadio = document.querySelector(`input[name="yd-pl-mode"][value="${settings.mode}"]`);
-        if (modeRadio) {
-            modeRadio.checked = true;
-            document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
-            modeRadio.closest('.yd-pl-toggle')?.classList.add('active');
-        }
+        // Счётчик белого списка
+        updateWhitelistCount();
     }
 
     // ==================== UI: ШАБЛОНЫ ====================
@@ -7965,6 +7955,126 @@
         });
     }
 
+    // ==================== БЕЛЫЙ СПИСОК ====================
+    function showWhitelistModal() {
+        // Удалить старое модальное окно если есть
+        document.getElementById('yd-pl-wl-modal')?.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'yd-pl-wl-modal';
+        modal.className = 'yd-pl-modal-overlay';
+        modal.innerHTML = `
+            <div class="yd-pl-modal">
+                <div class="yd-pl-modal-header">
+                    <span>🔒 Белый список</span>
+                    <button class="yd-pl-modal-close">×</button>
+                </div>
+                <div class="yd-pl-modal-body">
+                    <p class="yd-pl-modal-hint">Домены из этого списка никогда не будут выделены</p>
+                    <div class="yd-pl-wl-chips" id="yd-pl-wl-chips"></div>
+                    ${settings.whitelist.length === 0 ? '<p class="yd-pl-modal-empty">Список пуст. Нажмите 🔒 на строке площадки чтобы добавить.</p>' : ''}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Рендер чипов
+        const chipsContainer = modal.querySelector('#yd-pl-wl-chips');
+        settings.whitelist.forEach(domain => {
+            const chip = document.createElement('span');
+            chip.className = 'yd-pl-wl-chip';
+            chip.innerHTML = `<span>${domain}</span><button class="yd-pl-wl-chip-remove">×</button>`;
+            chip.querySelector('.yd-pl-wl-chip-remove').addEventListener('click', () => {
+                removeFromWhitelist(domain);
+                chip.remove();
+                if (settings.whitelist.length === 0) {
+                    chipsContainer.innerHTML = '<p class="yd-pl-modal-empty">Список пуст</p>';
+                }
+            });
+            chipsContainer.appendChild(chip);
+        });
+
+        // Закрытие
+        modal.querySelector('.yd-pl-modal-close').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+    }
+
+    function updateWhitelistCount() {
+        const countEl = document.getElementById('yd-pl-whitelist-count');
+        if (countEl) countEl.textContent = settings.whitelist.length;
+    }
+
+    function addToWhitelist(domain) {
+        if (!domain || settings.whitelist.includes(domain)) return false;
+        settings.whitelist.push(domain);
+        saveSettings();
+        updateWhitelistCount();
+        updatePreviewHighlight();
+        return true;
+    }
+
+    function removeFromWhitelist(domain) {
+        const idx = settings.whitelist.indexOf(domain);
+        if (idx > -1) {
+            settings.whitelist.splice(idx, 1);
+            saveSettings();
+            updateWhitelistCount();
+            updatePreviewHighlight();
+        }
+    }
+
+    function getWhitelistFromUI() {
+        return settings.whitelist;
+    }
+
+    // Добавить иконку замочка на строки таблицы
+    function addLockButtonsToRows() {
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            // Пропустить если уже есть замочек
+            if (row.querySelector('.yd-pl-lock-btn')) return;
+
+            const tds = row.querySelectorAll('td');
+            if (tds.length < 2) return;
+
+            const domainCell = tds[0];
+            const domainEl = domainCell.querySelector('a') || domainCell;
+            const domain = domainEl.textContent?.trim().toLowerCase();
+            if (!domain) return;
+
+            const lockBtn = document.createElement('button');
+            lockBtn.className = 'yd-pl-lock-btn';
+            lockBtn.title = 'Добавить в белый список';
+            lockBtn.textContent = '🔒';
+
+            // Проверить есть ли уже в whitelist
+            if (settings.whitelist.includes(domain)) {
+                lockBtn.classList.add('locked');
+                lockBtn.title = 'Убрать из белого списка';
+            }
+
+            lockBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (settings.whitelist.includes(domain)) {
+                    removeFromWhitelist(domain);
+                    lockBtn.classList.remove('locked');
+                    lockBtn.title = 'Добавить в белый список';
+                    showNotification(`${domain} удалён из белого списка`, 'info');
+                } else {
+                    addToWhitelist(domain);
+                    lockBtn.classList.add('locked');
+                    lockBtn.title = 'Убрать из белого списка';
+                    showNotification(`${domain} добавлен в белый список`, 'success');
+                }
+            });
+
+            domainEl.parentNode.insertBefore(lockBtn, domainEl.nextSibling);
+        });
+    }
+
     // ==================== СОЗДАНИЕ ПАНЕЛИ ====================
     function createPanel() {
         if (document.getElementById('yd-pl-panel')) return;
@@ -8001,13 +8111,24 @@
                     <div id="yd-pl-chips" class="yd-pl-chips"></div>
                     <div class="yd-pl-input-row">
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                            placeholder="Введите домен и Enter">
+                            placeholder="com, game, puzzle...">
                         <select id="yd-pl-position-select" class="yd-pl-position-select" title="Условие фильтрации">
                             <option value="any" selected>Содержит</option>
                             <option value="start">Начинается с</option>
-                            <option value="end">Оканчивается на</option>
+                            <option value="end">Заканчивается на</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- Toggle И/ИЛИ -->
+                <div class="yd-pl-mode-toggle">
+                    <span class="yd-pl-mode-label">Условие:</span>
+                    <label class="yd-pl-switch">
+                        <input type="checkbox" id="yd-pl-mode-switch" ${settings.mode === 'and' ? 'checked' : ''}>
+                        <span class="yd-pl-switch-slider"></span>
+                        <span class="yd-pl-switch-text yd-pl-switch-or">ИЛИ</span>
+                        <span class="yd-pl-switch-text yd-pl-switch-and">И</span>
+                    </label>
                 </div>
 
                 <!-- Расширенные фильтры -->
@@ -8026,44 +8147,35 @@
                         </button>
                     </div>
                     <div class="yd-pl-expand-content">
-                        <div class="yd-pl-filters-grid">
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">Клики</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
-                                    <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
-                                </div>
+                        <div class="yd-pl-filters-compact">
+                            <div class="yd-pl-filter-compact">
+                                <span class="yd-pl-filter-lbl">Клики</span>
+                                <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
+                                <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
                             </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">CTR %</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
-                                    <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
-                                </div>
+                            <div class="yd-pl-filter-compact">
+                                <span class="yd-pl-filter-lbl">CTR %</span>
+                                <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
+                                <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
                             </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">CPC ₽</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
-                                    <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
-                                </div>
+                            <div class="yd-pl-filter-compact">
+                                <span class="yd-pl-filter-lbl">CPC ₽</span>
+                                <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
+                                <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
                             </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">Расход</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
-                                    <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
-                                </div>
+                            <div class="yd-pl-filter-compact">
+                                <span class="yd-pl-filter-lbl">Расход</span>
+                                <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
+                                <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                             </div>
                         </div>
                         <div class="yd-pl-divider"></div>
-                        <div class="yd-pl-filter-row">
-                            <span class="yd-pl-filter-label">Белый список</span>
-                            <input type="text" id="yd-pl-whitelist" class="yd-pl-whitelist-input" 
-                                placeholder="yandex, google..." 
-                                value="${settings.whitelist.join(', ')}"
-                                title="Домены, которые никогда не выделяются">
-                        </div>
+                        <!-- Белый список как счётчик -->
+                        <button id="yd-pl-whitelist-btn" class="yd-pl-whitelist-btn">
+                            <span>🔒</span>
+                            <span id="yd-pl-whitelist-count">${settings.whitelist.length}</span>
+                            <span>защищено</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -8213,19 +8325,34 @@
         // Main button
         document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
 
-        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров и whitelist
+        // Toggle И/ИЛИ
+        const modeSwitch = document.getElementById('yd-pl-mode-switch');
+        if (modeSwitch) {
+            modeSwitch.addEventListener('change', () => {
+                settings.mode = modeSwitch.checked ? 'and' : 'or';
+                saveSettings();
+                updatePreviewHighlight();
+            });
+        }
+
+        // Кнопка белого списка
+        const whitelistBtn = document.getElementById('yd-pl-whitelist-btn');
+        if (whitelistBtn) {
+            whitelistBtn.addEventListener('click', () => {
+                showWhitelistModal();
+            });
+        }
+
+        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров
         const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
         if (resetFiltersBtn) {
             resetFiltersBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Не открывать/закрывать expand
+                e.stopPropagation();
                 ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
                     'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.value = '';
                     });
-                const whitelist = document.getElementById('yd-pl-whitelist');
-                if (whitelist) whitelist.value = '';
-                settings.whitelist = [];
                 isSelectMode = true;
                 saveSettings();
                 updatePreviewHighlight();
@@ -8240,12 +8367,6 @@
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
         });
-
-        // Whitelist
-        const whitelistInput = document.getElementById('yd-pl-whitelist');
-        if (whitelistInput) {
-            whitelistInput.addEventListener('input', debounce(updatePreviewHighlight, 300));
-        }
 
         // Stats observer
         const tbody = document.querySelector('tbody');
@@ -8411,9 +8532,9 @@
             top: 80px;
             right: 20px;
             z-index: 9999999;
-            width: 300px;
-            min-width: 280px;
-            max-width: 450px;
+            width: 280px;
+            min-width: 220px;
+            max-width: 400px;
             background: var(--yd-bg);
             border-radius: 12px;
             box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
@@ -8608,59 +8729,117 @@
             padding: 12px;
         }
 
-        /* Фильтры */
-        .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 10px; }
-        .yd-pl-filter-row {
+        /* Компактные фильтры */
+        .yd-pl-filters-compact { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 6px; 
+        }
+        .yd-pl-filter-compact {
             display: flex;
             align-items: center;
-            gap: 8px;
-        }
-        .yd-pl-filter-label { 
-            width: 60px;
-            flex-shrink: 0;
-            font-size: 11px; 
-            color: var(--yd-text-secondary); 
-        }
-        .yd-pl-range-inputs {
-            display: flex;
-            flex: 1;
             gap: 4px;
         }
-        .yd-pl-range-inputs input,
-        .yd-pl-filter-row input[type="number"] {
+        .yd-pl-filter-lbl { 
+            font-size: 9px; 
+            color: var(--yd-text-secondary);
+            width: 38px;
+            flex-shrink: 0;
+        }
+        .yd-pl-filter-compact input {
             flex: 1;
             min-width: 0;
-            padding: 6px 4px;
+            width: 100%;
+            padding: 4px 2px;
             border: 1px solid var(--yd-border);
-            border-radius: 5px;
-            font-size: 11px;
+            border-radius: 4px;
+            font-size: 10px;
             text-align: center;
             background: var(--yd-bg);
             color: var(--yd-text);
         }
-        .yd-pl-range-inputs input::placeholder,
-        .yd-pl-filter-row input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-range-inputs input:focus::placeholder,
-        .yd-pl-filter-row input:focus::placeholder { opacity: 0; }
-        .yd-pl-range-inputs input:focus,
-        .yd-pl-filter-row input:focus { outline: none; border-color: var(--yd-primary); }
-        .yd-pl-range-inputs input::-webkit-inner-spin-button,
-        .yd-pl-range-inputs input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .yd-pl-range-inputs input[type="number"] { -moz-appearance: textfield; }
+        .yd-pl-filter-compact input::placeholder { color: var(--yd-text-muted); }
+        .yd-pl-filter-compact input:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-filter-compact input::-webkit-inner-spin-button,
+        .yd-pl-filter-compact input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .yd-pl-filter-compact input[type="number"] { -moz-appearance: textfield; }
 
-        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 10px 0; }
-
-        .yd-pl-whitelist-input {
-            flex: 1;
-            padding: 8px 10px;
-            border: 1px solid var(--yd-border);
-            border-radius: 6px;
-            font-size: 12px;
-            background: var(--yd-bg);
+        /* Toggle И/ИЛИ */
+        .yd-pl-mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
         }
-        .yd-pl-whitelist-input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-whitelist-input:focus::placeholder { opacity: 0; }
-        .yd-pl-whitelist-input:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-mode-label { 
+            font-size: 11px; 
+            color: var(--yd-text-secondary); 
+        }
+        .yd-pl-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .yd-pl-switch input { display: none; }
+        .yd-pl-switch-slider {
+            width: 36px;
+            height: 18px;
+            background: var(--yd-accent);
+            border-radius: 9px;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .yd-pl-switch-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .yd-pl-switch input:checked + .yd-pl-switch-slider {
+            background: var(--yd-primary);
+        }
+        .yd-pl-switch input:checked + .yd-pl-switch-slider::before {
+            transform: translateX(18px);
+        }
+        .yd-pl-switch-text {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--yd-text-muted);
+            transition: color 0.2s;
+        }
+        .yd-pl-switch-or { color: var(--yd-accent); }
+        .yd-pl-switch input:checked ~ .yd-pl-switch-or { color: var(--yd-text-muted); }
+        .yd-pl-switch input:checked ~ .yd-pl-switch-and { color: var(--yd-primary); }
+
+        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 8px 0; }
+
+        /* Кнопка белого списка */
+        .yd-pl-whitelist-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: var(--yd-bg);
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            font-size: 11px;
+            color: var(--yd-text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            width: 100%;
+        }
+        .yd-pl-whitelist-btn:hover {
+            border-color: var(--yd-primary);
+            color: var(--yd-primary);
+        }
 
         /* Footer */
         .yd-pl-footer { 
@@ -8827,6 +9006,112 @@
         .yd-pl-body::-webkit-scrollbar { width: 5px; }
         .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
         .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
+
+        /* Модальное окно белого списка */
+        .yd-pl-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 99999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: yd-pl-fade-in 0.15s ease;
+        }
+        @keyframes yd-pl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+        .yd-pl-modal {
+            background: var(--yd-bg);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 320px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            animation: yd-pl-zoom-in 0.2s ease;
+        }
+        @keyframes yd-pl-zoom-in { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .yd-pl-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--yd-border);
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .yd-pl-modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            padding: 0 4px;
+        }
+        .yd-pl-modal-close:hover { color: var(--yd-danger); }
+        .yd-pl-modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        .yd-pl-modal-hint {
+            font-size: 11px;
+            color: var(--yd-text-muted);
+            margin: 0 0 12px;
+        }
+        .yd-pl-modal-empty {
+            font-size: 12px;
+            color: var(--yd-text-muted);
+            text-align: center;
+            padding: 20px;
+        }
+        .yd-pl-wl-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .yd-pl-wl-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: #FEF3C7;
+            border: 1px solid #FCD34D;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #92400E;
+        }
+        .yd-pl-wl-chip-remove {
+            background: none;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            color: #92400E;
+            padding: 0;
+            margin-left: 2px;
+        }
+        .yd-pl-wl-chip-remove:hover { color: var(--yd-danger); }
+
+        /* Замочек на строках таблицы */
+        .yd-pl-lock-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.5;
+            transition: opacity 0.15s;
+            margin-left: 4px;
+        }
+        .yd-pl-lock-btn:hover { opacity: 1; }
+        .yd-pl-lock-btn.locked { opacity: 1; color: #F59E0B; }
+        tbody tr:hover .yd-pl-lock-btn { display: inline-flex; }
         `;
 
         document.head.appendChild(style);
@@ -9246,6 +9531,7 @@
     init();
 
 })();
+
 
 
 
