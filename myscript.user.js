@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.20
+// @version 1.193.21
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7529,9 +7529,7 @@
             panelPosition: { top: '15px', right: '15px' },
             panelSize: { width: 360, height: 480 },
             templatesCollapsed: true,
-            filtersExpanded: false,
             filters: {
-                logic: 'AND', // по умолчанию И
                 patterns: [
                     { value: 'com.', position: 'start' },
                     { value: 'dsp', position: 'any' },
@@ -7543,7 +7541,40 @@
                 spendMin: '', spendMax: ''
             },
             whitelist: [],
-            templates: [],
+            templates: [
+                {
+                    name: 'Мобильные приложения',
+                    filters: {
+                        patterns: [
+                            { value: 'com.', position: 'start' },
+                            { value: 'android', position: 'any' },
+                            { value: 'ios', position: 'any' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    whitelist: [],
+                    mode: 'or'
+                },
+                {
+                    name: 'Игры и казино',
+                    filters: {
+                        patterns: [
+                            { value: 'game', position: 'any' },
+                            { value: 'puzzle', position: 'any' },
+                            { value: 'casino', position: 'any' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    whitelist: [],
+                    mode: 'or'
+                }
+            ],
             currentTemplate: null,
             mode: 'or'
         };
@@ -7579,11 +7610,8 @@
 
     // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
     function getFiltersFromUI() {
-        // Init logic if missing
-        if (!settings.filters.logic) settings.filters.logic = 'AND';
-
+        // Patterns берём напрямую из settings (чипы)
         return {
-            logic: settings.filters.logic,
             patterns: settings.filters.patterns || [],
             clicksMin: document.getElementById('yd-pl-clicks-min')?.value || '',
             clicksMax: document.getElementById('yd-pl-clicks-max')?.value || '',
@@ -7597,7 +7625,9 @@
     }
 
     function getWhitelistFromUI() {
-        return settings.whitelist || [];
+        const input = document.getElementById('yd-pl-whitelist');
+        if (!input) return [];
+        return input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     }
 
     function matchesPattern(domain, pattern) {
@@ -7613,7 +7643,7 @@
         return whitelist.some(w => dom.includes(w));
     }
 
-    function checkRow(row, filters, whitelist) {
+    function checkRow(row, filters, whitelist, mode) {
         const tds = row.querySelectorAll('td');
         if (tds.length < 6) return false;
 
@@ -7631,17 +7661,15 @@
         const spend = parseNumber(tds[4].textContent);
         const cpc = parseNumber(tds[5].textContent);
 
-        // Сбор всех условий
         const conditions = [];
 
-        // 1. Паттерны доменов (если есть хоть один, мы проверяем совпадение)
-        // Если паттернов нет, этот блок пропускается и не влияет на результат (считается True если нет других условий?)
-        // Логика: если паттерны ЕСТЬ, то домен ДОЛЖЕН совпадать хотя бы с одним (OR внутри группы паттернов).
+        // Паттерны доменов
         if (filters.patterns.length > 0) {
-            conditions.push(filters.patterns.some(p => matchesPattern(domain, p)));
+            const patternMatch = filters.patterns.some(p => matchesPattern(domain, p));
+            conditions.push(patternMatch);
         }
 
-        // 2. Статистика
+        // Числовые фильтры (диапазоны)
         if (filters.clicksMin) conditions.push(clicks >= Number(filters.clicksMin));
         if (filters.clicksMax) conditions.push(clicks <= Number(filters.clicksMax));
         if (filters.ctrMin) conditions.push(ctr >= Number(filters.ctrMin));
@@ -7652,18 +7680,13 @@
         if (filters.spendMax) conditions.push(spend <= Number(filters.spendMax));
 
         if (conditions.length === 0) return false;
-
-        // Применяем общую логику (И / ИЛИ) ко всем группам условий
-        if (filters.logic === 'OR') {
-            return conditions.some(Boolean);
-        } else {
-            return conditions.every(Boolean);
-        }
+        return mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
     }
 
     function getMatchingRows() {
         const filters = getFiltersFromUI();
         const whitelist = getWhitelistFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
         const rows = document.querySelectorAll('tbody tr');
         const matching = [];
@@ -7671,7 +7694,7 @@
         rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (!checkbox || checkbox.disabled) return;
-            if (checkRow(row, filters, whitelist) && !checkbox.checked) {
+            if (checkRow(row, filters, whitelist, mode) && !checkbox.checked) {
                 matching.push(row);
             }
         });
@@ -7688,10 +7711,6 @@
 
         const matching = getMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
-
-        // Обновить Whitelist иконки и UI
-        injectLockIcons();
-        // updateWhitelistUI() вызывается при кликах, но здесь тоже можно для надежности, но лучше внутри toggleWhitelistItem
 
         // Обновить состояние кнопки и badge
         updateButtonState();
@@ -7731,13 +7750,9 @@
             matching.forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && !checkbox.checked) {
-                    // Симуляция клика для React
-                    const clickEvent = new MouseEvent('click', {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    });
-                    checkbox.dispatchEvent(clickEvent);
+                    // Используем dispatchEvent чтобы избежать скролла
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                     selected++;
                 }
             });
@@ -7747,13 +7762,8 @@
             // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
             document.querySelectorAll('tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
-                // Симуляция клика для React
-                const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window
-                });
-                checkbox.dispatchEvent(clickEvent);
+                checkbox.checked = false;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                 count++;
             });
             if (count > 0) {
@@ -7764,103 +7774,6 @@
 
         updateButtonState();
         updatePreviewHighlight();
-    }
-
-    // ==================== WHITELIST LOGIC ====================
-    function injectLockIcons() {
-        const rows = document.querySelectorAll('tbody tr');
-        const whitelist = getWhitelistFromUI();
-
-        rows.forEach(row => {
-            const tds = row.querySelectorAll('td');
-            if (tds.length === 0) return;
-            const domainCell = tds[0];
-
-            // Если иконка уже есть, обновляем статус
-            let lock = domainCell.querySelector('.yd-pl-lock-icon');
-            if (!lock) {
-                lock = document.createElement('span');
-                lock.className = 'yd-pl-lock-icon';
-                lock.title = 'Добавить/Удалить из белого списка';
-                lock.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
-
-                // Добавляем после текста/ссылки
-                const content = domainCell.querySelector('a') || domainCell.firstChild;
-                if (content && content.nextSibling) {
-                    domainCell.insertBefore(lock, content.nextSibling);
-                } else {
-                    domainCell.appendChild(lock);
-                }
-
-                // Обработчик
-                lock.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const domainEl = domainCell.querySelector('a') || domainCell;
-                    // Исправление: брать только текст домена, исключая текст иконки если она внутри
-                    // Но иконка sibling.
-                    const domain = domainEl.textContent.trim().toLowerCase();
-                    toggleWhitelistItem(domain);
-                });
-            }
-
-            const domainEl = domainCell.querySelector('a') || domainCell;
-            const domain = domainEl.textContent.trim().toLowerCase();
-            const isActive = isWhitelisted(domain, whitelist);
-
-            if (isActive) {
-                lock.classList.add('active');
-                lock.style.opacity = '1';
-                lock.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>`;
-            } else {
-                lock.classList.remove('active');
-                lock.style.opacity = ''; // revert to css hover
-                lock.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
-            }
-        });
-    }
-
-    function toggleWhitelistItem(domain) {
-        if (!domain) return;
-        const index = settings.whitelist.indexOf(domain);
-        if (index === -1) {
-            settings.whitelist.push(domain);
-            showNotification(`Добавлено в белый список: ${domain}`, 'success');
-        } else {
-            settings.whitelist.splice(index, 1);
-            showNotification(`Удалено из белого списка: ${domain}`, 'info');
-        }
-        saveSettings();
-        updateWhitelistUI();
-        injectLockIcons();
-        updatePreviewHighlight();
-    }
-
-    function updateWhitelistUI() {
-        // Обновить счетчик
-        const statusEl = document.getElementById('yd-pl-whitelist-status');
-        if (statusEl) {
-            const count = settings.whitelist.length;
-            statusEl.innerHTML = `<span>🔒 ${count} защищено</span>`;
-            statusEl.style.color = count > 0 ? 'var(--yd-primary)' : 'var(--yd-text-secondary)';
-        }
-
-        // Обновить список
-        const listEl = document.getElementById('yd-pl-whitelist-list');
-        if (listEl) {
-            listEl.innerHTML = '';
-            settings.whitelist.forEach(domain => {
-                const item = document.createElement('div');
-                item.className = 'yd-pl-whitelist-item';
-                item.innerHTML = `
-                    <span style="overflow:hidden;text-overflow:ellipsis;">${domain}</span>
-                    <span class="yd-pl-whitelist-remove" title="Удалить">×</span>
-                `;
-                item.querySelector('.yd-pl-whitelist-remove').addEventListener('click', () => {
-                    toggleWhitelistItem(domain);
-                });
-                listEl.appendChild(item);
-            });
-        }
     }
 
     function updateButtonState() {
@@ -7966,109 +7879,16 @@
         setVal('yd-pl-spend-min', f.spendMin);
         setVal('yd-pl-spend-max', f.spendMax);
 
-        // Logic toggle status
-        const logic = f.logic || 'AND';
-        document.querySelectorAll('.yd-pl-logic-option').forEach(opt => {
-            if (opt.dataset.value === logic) opt.classList.add('active');
-            else opt.classList.remove('active');
-        });
+        const whitelistEl = document.getElementById('yd-pl-whitelist');
+        if (whitelistEl) whitelistEl.value = settings.whitelist.join(', ');
 
-        // Whitelist UI обновляется отдельно через updateWhitelistUI
-        updateWhitelistUI();
-    }
-
-    // ==================== UI: СОБЫТИЯ ====================
-    function setupEventListeners() {
-        // Drag & Drop
-        makeDraggable(document.getElementById('yd-pl-panel'), document.getElementById('yd-pl-panel-header'));
-
-        // Toggle panel / pill
-        document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
-            document.getElementById('yd-pl-panel').style.display = 'none';
-            document.getElementById('yd-pl-pill').style.display = 'flex';
-        });
-        document.getElementById('yd-pl-pill').addEventListener('click', () => {
-            document.getElementById('yd-pl-pill').style.display = 'none';
-            document.getElementById('yd-pl-panel').style.display = 'flex';
-            updatePreviewHighlight();
-        });
-
-        // Input домена (добавление чипа)
-        const domainInput = document.getElementById('yd-pl-domain-input');
-        if (domainInput) {
-            domainInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addPatternFromInput();
-                }
-            });
+        // Mode toggle
+        const modeRadio = document.querySelector(`input[name="yd-pl-mode"][value="${settings.mode}"]`);
+        if (modeRadio) {
+            modeRadio.checked = true;
+            document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
+            modeRadio.closest('.yd-pl-toggle')?.classList.add('active');
         }
-
-        // Logic Toggle
-        document.getElementById('yd-pl-logic-toggle')?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('yd-pl-logic-option')) {
-                const val = e.target.dataset.value;
-                settings.filters.logic = val;
-                saveSettings();
-                applyFiltersToUI(); // update visual state
-                updatePreviewHighlight();
-            }
-        });
-
-        // Whitelist Manager Toggle
-        document.getElementById('yd-pl-whitelist-status')?.addEventListener('click', () => {
-            document.getElementById('yd-pl-whitelist-manager')?.classList.toggle('open');
-        });
-
-        // Expand filters
-        document.getElementById('yd-pl-expand-toggle').addEventListener('click', () => {
-            const expand = document.querySelector('.yd-pl-expand');
-            settings.filtersExpanded = !settings.filtersExpanded;
-            if (settings.filtersExpanded) {
-                expand.classList.add('open');
-            } else {
-                expand.classList.remove('open');
-            }
-            saveSettings();
-            updatePreviewHighlight(); // Recalculate panel height if needed?
-        });
-
-        // Live preview для числовых фильтров
-        const numericInputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
-            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'];
-        numericInputs.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
-        });
-
-        // Main button
-        document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
-
-        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров и whitelist
-        const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
-        if (resetFiltersBtn) {
-            resetFiltersBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Не открывать/закрывать expand
-                ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
-                    'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) el.value = '';
-                    });
-                // Не очищаем whitelist полностью, только статы? User said "Reset filters".
-                // Let's keep whitelist intact unless explicitly requested. But previous logic cleared whitelist too.
-                // Reset also clears logic to AND? Maybe not.
-                updatePreviewHighlight();
-                showNotification('Числовые фильтры сброшены', 'info');
-            });
-        }
-
-        // Keyboard Shortcuts
-        document.addEventListener('keydown', (e) => {
-            // ... (existing shortcuts logic)
-            if (e.key === 'Escape') {
-                // Close panel logic if desired
-            }
-        });
     }
 
     // ==================== UI: ШАБЛОНЫ ====================
@@ -8181,11 +8001,11 @@
                     <div id="yd-pl-chips" class="yd-pl-chips"></div>
                     <div class="yd-pl-input-row">
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                            placeholder="Домен содержит (com, game...)">
+                            placeholder="Введите домен и Enter">
                         <select id="yd-pl-position-select" class="yd-pl-position-select" title="Условие фильтрации">
                             <option value="any" selected>Содержит</option>
                             <option value="start">Начинается с</option>
-                            <option value="end">Заканчивается на</option>
+                            <option value="end">Оканчивается на</option>
                         </select>
                     </div>
                 </div>
@@ -8206,15 +8026,6 @@
                         </button>
                     </div>
                     <div class="yd-pl-expand-content">
-                        <!-- Logic Toggle -->
-                        <div class="yd-pl-filter-row" style="justify-content: flex-end; margin-bottom: 8px;">
-                            <span style="font-size: 10px; color: var(--yd-text-muted); margin-right: 6px;">Условие:</span>
-                            <div class="yd-pl-logic-toggle" id="yd-pl-logic-toggle" title="Логика объединения фильтров">
-                                <div class="yd-pl-logic-option active" data-value="AND">И</div>
-                                <div class="yd-pl-logic-option" data-value="OR">ИЛИ</div>
-                            </div>
-                        </div>
-
                         <div class="yd-pl-filters-grid">
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">Клики</span>
@@ -8246,17 +8057,12 @@
                             </div>
                         </div>
                         <div class="yd-pl-divider"></div>
-                        
-                        <!-- Whitelist UI -->
-                        <div class="yd-pl-whitelist-row">
-                             <span class="yd-pl-filter-label">Белый список</span>
-                             <div id="yd-pl-whitelist-status" class="yd-pl-whitelist-status" title="Управление белым списком">
-                                <span>🔒 0 защищено</span>
-                             </div>
-                        </div>
-                        <div id="yd-pl-whitelist-manager" class="yd-pl-whitelist-manager">
-                            <div style="font-size: 10px; color: var(--yd-text-muted); margin-bottom: 4px;">Кликните чтобы удалить:</div>
-                            <div id="yd-pl-whitelist-list" class="yd-pl-whitelist-list"></div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Белый список</span>
+                            <input type="text" id="yd-pl-whitelist" class="yd-pl-whitelist-input" 
+                                placeholder="yandex, google..." 
+                                value="${settings.whitelist.join(', ')}"
+                                title="Домены, которые никогда не выделяются">
                         </div>
                     </div>
                 </div>
@@ -8803,31 +8609,28 @@
         }
 
         /* Фильтры */
-        .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 8px; }
+        .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 10px; }
         .yd-pl-filter-row {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 6px;
+            gap: 8px;
         }
         .yd-pl-filter-label { 
-            width: 50px;
+            width: 60px;
             flex-shrink: 0;
             font-size: 11px; 
-            color: var(--yd-text-secondary);
-            white-space: nowrap;
+            color: var(--yd-text-secondary); 
         }
         .yd-pl-range-inputs {
             display: flex;
             flex: 1;
             gap: 4px;
-            min-width: 0;
         }
-        .yd-pl-range-inputs input {
+        .yd-pl-range-inputs input,
+        .yd-pl-filter-row input[type="number"] {
             flex: 1;
             min-width: 0;
-            width: 100%;
-            padding: 4px 6px;
+            padding: 6px 4px;
             border: 1px solid var(--yd-border);
             border-radius: 5px;
             font-size: 11px;
@@ -8835,114 +8638,29 @@
             background: var(--yd-bg);
             color: var(--yd-text);
         }
-        .yd-pl-range-inputs input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-range-inputs input:focus::placeholder { opacity: 0; }
-        .yd-pl-range-inputs input:focus { outline: none; border-color: var(--yd-primary); }
-        
+        .yd-pl-range-inputs input::placeholder,
+        .yd-pl-filter-row input::placeholder { color: var(--yd-text-muted); }
+        .yd-pl-range-inputs input:focus::placeholder,
+        .yd-pl-filter-row input:focus::placeholder { opacity: 0; }
+        .yd-pl-range-inputs input:focus,
+        .yd-pl-filter-row input:focus { outline: none; border-color: var(--yd-primary); }
         .yd-pl-range-inputs input::-webkit-inner-spin-button,
         .yd-pl-range-inputs input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .yd-pl-range-inputs input[type="number"] { -moz-appearance: textfield; }
 
-        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 6px 0; }
+        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 10px 0; }
 
-        /* Whitelist & Toggle UI */
-        .yd-pl-whitelist-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .yd-pl-whitelist-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: var(--yd-text-secondary);
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: var(--yd-bg);
-            border: 1px solid var(--yd-border);
-            transition: all 0.15s;
-        }
-        .yd-pl-whitelist-status:hover {
-            border-color: var(--yd-primary);
-            color: var(--yd-primary);
-        }
-        
-        /* Logic Toggle (AND/OR) */
-        .yd-pl-logic-toggle {
-            display: flex;
-            background: var(--yd-bg-secondary);
+        .yd-pl-whitelist-input {
+            flex: 1;
+            padding: 8px 10px;
             border: 1px solid var(--yd-border);
             border-radius: 6px;
-            padding: 2px;
-            cursor: pointer;
-        }
-        .yd-pl-logic-option {
-            font-size: 10px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            color: var(--yd-text-secondary);
-            transition: all 0.2s;
-        }
-        .yd-pl-logic-option.active {
-            background: var(--yd-primary);
-            color: #fff;
-            font-weight: 600;
-        }
-
-        /* Whitelist Modal/List */
-        .yd-pl-whitelist-manager {
-            display: none;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 8px;
-            padding: 10px;
+            font-size: 12px;
             background: var(--yd-bg);
-            border-radius: 8px;
-            border: 1px solid var(--yd-border);
         }
-        .yd-pl-whitelist-manager.open { display: flex; }
-        .yd-pl-whitelist-list {
-            max-height: 120px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .yd-pl-whitelist-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
-            padding: 4px 6px;
-            background: var(--yd-bg-secondary);
-            border-radius: 4px;
-        }
-        .yd-pl-whitelist-remove {
-            cursor: pointer;
-            color: var(--yd-text-muted);
-            font-size: 14px;
-            line-height: 1;
-        }
-        .yd-pl-whitelist-remove:hover { color: var(--yd-danger); }
-
-        /* Lock Icon in Table */
-        .yd-pl-lock-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 16px; 
-            height: 16px;
-            margin-left: 6px;
-            cursor: pointer;
-            color: var(--yd-text-muted);
-            opacity: 0;
-            transition: all 0.2s;
-        }
-        tr:hover .yd-pl-lock-icon { opacity: 1; }
-        .yd-pl-lock-icon.active { opacity: 1; color: #10B981; }
-        .yd-pl-lock-icon:hover { transform: scale(1.1); }
+        .yd-pl-whitelist-input::placeholder { color: var(--yd-text-muted); }
+        .yd-pl-whitelist-input:focus::placeholder { opacity: 0; }
+        .yd-pl-whitelist-input:focus { outline: none; border-color: var(--yd-primary); }
 
         /* Footer */
         .yd-pl-footer { 
