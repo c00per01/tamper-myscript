@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.30
+// @version 1.193.32
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7670,18 +7670,19 @@
         if (!checkbox) return false;
 
         const tds = row.querySelectorAll('td');
-        if (tds.length < 5) return false;
+        if (tds.length < 7) return false; // Нужно минимум 7 ячеек: checkbox, domain, показы, клики, CTR, расход, CPC
 
-        const domainCell = tds[0];
+        // tds[0] = checkbox, tds[1] = домен, tds[2] = показы, tds[3] = клики, tds[4] = CTR, tds[5] = расход, tds[6] = CPC
+        const domainCell = tds[1];
         const domainEl = domainCell.querySelector('a') || domainCell;
         if (isGreyElement(domainEl)) return false;
 
         const domain = domainEl.textContent.trim().toLowerCase();
 
-        const clicks = parseNumber(tds[2].textContent);
-        const ctr = parseNumber(tds[3].textContent);
-        const spend = parseNumber(tds[4].textContent);
-        const cpc = parseNumber(tds[5].textContent);
+        const clicks = parseNumber(tds[3]?.textContent);
+        const ctr = parseNumber(tds[4]?.textContent);
+        const spend = parseNumber(tds[5]?.textContent);
+        const cpc = parseNumber(tds[6]?.textContent);
 
         const conditions = [];
 
@@ -7804,7 +7805,7 @@
             document.querySelectorAll('tbody tr').forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]:checked');
                 const tds = row.querySelectorAll('td');
-                if (checkbox && !checkbox.disabled && tds.length >= 5) {
+                if (checkbox && !checkbox.disabled && tds.length >= 7) {
                     clickWithoutScroll(checkbox);
                     count++;
                 }
@@ -7841,7 +7842,7 @@
             document.querySelectorAll('tbody tr').forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]:checked');
                 const tds = row.querySelectorAll('td');
-                if (checkbox && tds.length >= 5) {
+                if (checkbox && tds.length >= 7) {
                     checkedCount++;
                 }
             });
@@ -8060,84 +8061,77 @@
 
             <!-- Body -->
             <div class="yd-pl-body">
-                <!-- Фильтр по доменам — единый контейнер -->
-                <div class="yd-pl-domain-section" style="position: relative;">
+                <!-- Секция: По доменам -->
+                <div class="yd-pl-section">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-title">По доменам</span>
+                        <button id="yd-pl-clear-chips" class="yd-pl-section-action" title="Очистить" style="display: none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
                         <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
                             placeholder="Введите домен...">
                     </div>
                     <div id="yd-pl-history-dropdown" class="yd-pl-history-dropdown"></div>
-
-                    <button id="yd-pl-clear-chips" class="yd-pl-clear-chips-external" title="Очистить все фильтры" style="display: none;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                        <span>Очистить</span>
-                    </button>
                 </div>
 
-                <!-- Расширенные фильтры -->
-                <div class="yd-pl-expand">
-                    <div class="yd-pl-expand-header">
-                        <span class="yd-pl-expand-btn">Доп. фильтры</span>
-                        <button id="yd-pl-reset-filters" class="yd-pl-reset-icon" style="display: none;" title="Сбросить фильтры">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- Секция: По показателям -->
+                <div class="yd-pl-section">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-title">По показателям</span>
+                        <button id="yd-pl-reset-filters" class="yd-pl-section-action" style="display: none;" title="Сбросить">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                             </svg>
                         </button>
                     </div>
-                    <div class="yd-pl-expand-content">
-                        <div class="yd-pl-filters-grid">
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">Клики</span>
-                                <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
-                                <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
-                            </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">CTR %</span>
-                                <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
-                                <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
-                            </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">CPC ₽</span>
-                                <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
-                                <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
-                            </div>
-                            <div class="yd-pl-filter-row">
-                                <span class="yd-pl-filter-label">Расход</span>
-                                <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
-                                <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
-                            </div>
+                    <div class="yd-pl-filters-grid">
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Клики</span>
+                            <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
+                            <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
                         </div>
-                    </div>
-                </div>
-
-                <!-- Секция Условие -->
-                <div class="yd-pl-expand" style="border-top: 1px solid var(--yd-border); margin-top: 8px; padding-top: 8px; box-shadow: none; background: transparent;">
-                    <div class="yd-pl-expand-header" style="margin-bottom: 8px;">
-                        <span class="yd-pl-expand-btn" style="cursor: default;">Условие</span>
-                    </div>
-                    <div class="yd-pl-segmented-apple" style="width: 100%;">
-                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
-                        <label for="yd-pl-mode-and">Все условия</label>
-                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
-                        <label for="yd-pl-mode-or">Любое</label>
-                        <div class="yd-pl-segmented-slider"></div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CTR %</span>
+                            <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
+                            <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CPC ₽</span>
+                            <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
+                            <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Расход</span>
+                            <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
+                            <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Footer -->
+            <!-- Footer: Условие + Кнопка -->
             <div class="yd-pl-footer">
-                <button id="yd-pl-apply" class="yd-pl-btn-primary">
-                    <span id="yd-pl-apply-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                    </span>
-                    <span id="yd-pl-apply-text">Выделить (0)</span>
-                </button>
+                <div class="yd-pl-footer-row">
+                    <div class="yd-pl-mode-toggle">
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-and">И</label>
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-or">Или</label>
+                    </div>
+                    <button id="yd-pl-apply" class="yd-pl-btn-primary">
+                        <span id="yd-pl-apply-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </span>
+                        <span id="yd-pl-apply-text">Выделить (0)</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Resize handle -->
@@ -8723,6 +8717,82 @@
             display: flex;
             flex-direction: column;
             max-height: 90vh;
+        }
+
+        /* Секции */
+        .yd-pl-section {
+            padding: 12px;
+            border-bottom: 1px solid var(--yd-border);
+            position: relative;
+        }
+        .yd-pl-section:last-child { border-bottom: none; }
+        
+        .yd-pl-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .yd-pl-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--yd-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .yd-pl-section-action {
+            background: none;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .yd-pl-section-action:hover {
+            color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Footer */
+        .yd-pl-footer {
+            padding: 12px;
+            border-top: 1px solid var(--yd-border);
+            background: var(--yd-bg-secondary);
+        }
+        .yd-pl-footer-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Mode Toggle (И / Или) */
+        .yd-pl-mode-toggle {
+            display: flex;
+            background: var(--yd-border);
+            border-radius: 6px;
+            padding: 2px;
+        }
+        .yd-pl-mode-toggle input { display: none; }
+        .yd-pl-mode-toggle label {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--yd-text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .yd-pl-mode-toggle input:checked + label {
+            background: #fff;
+            color: var(--yd-text);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+
+        /* Body */
+        .yd-pl-body {
+            flex: 1;
+            overflow-y: auto;
         }
 
         /* History Dropdown */
@@ -9740,6 +9810,7 @@
     init();
 
 })();
+
 
 
 
