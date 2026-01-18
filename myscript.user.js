@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.21
+// @version 1.193.22
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7517,7 +7517,20 @@
     function loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Миграция: position → operator
+                if (parsed.filters?.patterns) {
+                    parsed.filters.patterns = parsed.filters.patterns.map(p => {
+                        if (p.position && !p.operator) {
+                            const opMap = { start: '^', end: '$', any: '*' };
+                            return { operator: opMap[p.position] || '*', value: p.value };
+                        }
+                        return p;
+                    });
+                }
+                return parsed;
+            }
         } catch (e) {
             console.error('[YD-PL] Ошибка загрузки:', e);
         }
@@ -7531,47 +7544,44 @@
             templatesCollapsed: true,
             filters: {
                 patterns: [
-                    { value: 'com.', position: 'start' },
-                    { value: 'dsp', position: 'any' },
-                    { value: 'game', position: 'any' }
+                    { operator: '^', value: 'com.' },
+                    { operator: '*', value: 'dsp' },
+                    { operator: '*', value: 'game' }
                 ],
                 clicksMin: '', clicksMax: '',
                 ctrMin: '', ctrMax: '',
                 cpcMin: '', cpcMax: '',
                 spendMin: '', spendMax: ''
             },
-            whitelist: [],
             templates: [
                 {
                     name: 'Мобильные приложения',
                     filters: {
                         patterns: [
-                            { value: 'com.', position: 'start' },
-                            { value: 'android', position: 'any' },
-                            { value: 'ios', position: 'any' }
+                            { operator: '^', value: 'com.' },
+                            { operator: '*', value: 'android' },
+                            { operator: '*', value: 'ios' }
                         ],
                         clicksMin: '', clicksMax: '',
                         ctrMin: '', ctrMax: '',
                         cpcMin: '', cpcMax: '',
                         spendMin: '', spendMax: ''
                     },
-                    whitelist: [],
                     mode: 'or'
                 },
                 {
                     name: 'Игры и казино',
                     filters: {
                         patterns: [
-                            { value: 'game', position: 'any' },
-                            { value: 'puzzle', position: 'any' },
-                            { value: 'casino', position: 'any' }
+                            { operator: '*', value: 'game' },
+                            { operator: '*', value: 'puzzle' },
+                            { operator: '*', value: 'casino' }
                         ],
                         clicksMin: '', clicksMax: '',
                         ctrMin: '', ctrMax: '',
                         cpcMin: '', cpcMax: '',
                         spendMin: '', spendMax: ''
                     },
-                    whitelist: [],
                     mode: 'or'
                 }
             ],
@@ -7624,26 +7634,35 @@
         };
     }
 
-    function getWhitelistFromUI() {
-        const input = document.getElementById('yd-pl-whitelist');
-        if (!input) return [];
-        return input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    }
-
+    // Операторы фильтрации:
+    // * = содержит (include)
+    // ! = не содержит (exclude)
+    // ^ = начинается с (include)
+    // $ = заканчивается на (include)
+    // = = равно (include)
+    // ≠ = не равно (exclude)
     function matchesPattern(domain, pattern) {
         const val = pattern.value.toLowerCase();
         const dom = domain.toLowerCase();
-        if (pattern.position === 'start') return dom.startsWith(val);
-        if (pattern.position === 'end') return dom.endsWith(val);
-        return dom.includes(val);
+        const op = pattern.operator || '*';
+
+        switch (op) {
+            case '*': return dom.includes(val);           // содержит
+            case '!': return !dom.includes(val);          // НЕ содержит
+            case '^': return dom.startsWith(val);         // начинается
+            case '$': return dom.endsWith(val);           // заканчивается
+            case '=': return dom === val;                 // равно
+            case '≠': return dom !== val;                 // НЕ равно
+            default: return dom.includes(val);
+        }
     }
 
-    function isWhitelisted(domain, whitelist) {
-        const dom = domain.toLowerCase();
-        return whitelist.some(w => dom.includes(w));
+    // Проверка: оператор исключающий?
+    function isExcludeOperator(op) {
+        return op === '!' || op === '≠';
     }
 
-    function checkRow(row, filters, whitelist, mode) {
+    function checkRow(row, filters, mode) {
         const tds = row.querySelectorAll('td');
         if (tds.length < 6) return false;
 
@@ -7653,9 +7672,6 @@
 
         const domain = domainEl.textContent.trim().toLowerCase();
 
-        // Проверка белого списка
-        if (isWhitelisted(domain, whitelist)) return false;
-
         const clicks = parseNumber(tds[2].textContent);
         const ctr = parseNumber(tds[3].textContent);
         const spend = parseNumber(tds[4].textContent);
@@ -7663,10 +7679,22 @@
 
         const conditions = [];
 
-        // Паттерны доменов
+        // Паттерны доменов — разделяем на include и exclude
         if (filters.patterns.length > 0) {
-            const patternMatch = filters.patterns.some(p => matchesPattern(domain, p));
-            conditions.push(patternMatch);
+            const includePatterns = filters.patterns.filter(p => !isExcludeOperator(p.operator));
+            const excludePatterns = filters.patterns.filter(p => isExcludeOperator(p.operator));
+
+            // Include: хотя бы один должен совпасть (OR)
+            if (includePatterns.length > 0) {
+                const hasIncludeMatch = includePatterns.some(p => matchesPattern(domain, p));
+                conditions.push(hasIncludeMatch);
+            }
+
+            // Exclude: ВСЕ должны пройти (AND) — если хоть один exclude не прошёл, строка не выбирается
+            if (excludePatterns.length > 0) {
+                const allExcludesPass = excludePatterns.every(p => matchesPattern(domain, p));
+                if (!allExcludesPass) return false; // Сразу отбрасываем
+            }
         }
 
         // Числовые фильтры (диапазоны)
@@ -7685,7 +7713,6 @@
 
     function getMatchingRows() {
         const filters = getFiltersFromUI();
-        const whitelist = getWhitelistFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
         const rows = document.querySelectorAll('tbody tr');
@@ -7694,7 +7721,7 @@
         rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (!checkbox || checkbox.disabled) return;
-            if (checkRow(row, filters, whitelist, mode) && !checkbox.checked) {
+            if (checkRow(row, filters, mode) && !checkbox.checked) {
                 matching.push(row);
             }
         });
@@ -7740,6 +7767,18 @@
     function togglePlacements() {
         const matching = getMatchingRows();
 
+        // Утилита для клика без скролла
+        function clickWithoutScroll(element) {
+            const scrollableParent = element.closest('.b-stat-platform__table-wrap') || document.scrollingElement;
+            const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
+            element.click();
+            if (scrollableParent) {
+                requestAnimationFrame(() => {
+                    scrollableParent.scrollTop = scrollTop;
+                });
+            }
+        }
+
         if (isSelectMode) {
             // Режим выделения
             if (matching.length === 0) {
@@ -7750,9 +7789,7 @@
             matching.forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && !checkbox.checked) {
-                    // Используем dispatchEvent чтобы избежать скролла
-                    checkbox.checked = true;
-                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                    clickWithoutScroll(checkbox);
                     selected++;
                 }
             });
@@ -7762,8 +7799,7 @@
             // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
             document.querySelectorAll('tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
-                checkbox.checked = false;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                clickWithoutScroll(checkbox);
                 count++;
             });
             if (count > 0) {
@@ -7865,7 +7901,7 @@
         }
     }
 
-    // Применить числовые фильтры и whitelist из settings в UI
+    // Применить числовые фильтры из settings в UI
     function applyFiltersToUI() {
         const f = settings.filters;
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -7878,9 +7914,6 @@
         setVal('yd-pl-cpc-max', f.cpcMax);
         setVal('yd-pl-spend-min', f.spendMin);
         setVal('yd-pl-spend-max', f.spendMax);
-
-        const whitelistEl = document.getElementById('yd-pl-whitelist');
-        if (whitelistEl) whitelistEl.value = settings.whitelist.join(', ');
 
         // Mode toggle
         const modeRadio = document.querySelector(`input[name="yd-pl-mode"][value="${settings.mode}"]`);
@@ -7996,19 +8029,13 @@
 
             <!-- Body -->
             <div class="yd-pl-body">
-                <!-- Фильтр по доменам с чипами -->
-                <div class="yd-pl-domain-section">
-                    <div id="yd-pl-chips" class="yd-pl-chips"></div>
-                    <div class="yd-pl-input-row">
-                        <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                            placeholder="Введите домен и Enter">
-                        <select id="yd-pl-position-select" class="yd-pl-position-select" title="Условие фильтрации">
-                            <option value="any" selected>Содержит</option>
-                            <option value="start">Начинается с</option>
-                            <option value="end">Оканчивается на</option>
-                        </select>
-                    </div>
+                <!-- Фильтр по доменам — единый контейнер -->
+                <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
+                    <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
+                    <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
+                        placeholder="Введите домен...">
                 </div>
+                <div class="yd-pl-hint">Префиксы: <code>*</code> содержит, <code>!</code> не содержит, <code>^</code> начало, <code>$</code> конец, <code>=</code> равно</div>
 
                 <!-- Расширенные фильтры -->
                 <div class="yd-pl-expand ${settings.filtersExpanded ? 'open' : ''}">
@@ -8055,14 +8082,6 @@
                                     <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                                 </div>
                             </div>
-                        </div>
-                        <div class="yd-pl-divider"></div>
-                        <div class="yd-pl-filter-row">
-                            <span class="yd-pl-filter-label">Белый список</span>
-                            <input type="text" id="yd-pl-whitelist" class="yd-pl-whitelist-input" 
-                                placeholder="yandex, google..." 
-                                value="${settings.whitelist.join(', ')}"
-                                title="Домены, которые никогда не выделяются">
                         </div>
                     </div>
                 </div>
@@ -8115,6 +8134,16 @@
         setTimeout(updatePreviewHighlight, 100);
     }
 
+    // Описания операторов
+    const OPERATORS = {
+        '*': { label: 'содержит', icon: '*', exclude: false },
+        '!': { label: 'не содержит', icon: '!', exclude: true },
+        '^': { label: 'начинается с', icon: '^', exclude: false },
+        '$': { label: 'заканчивается на', icon: '$', exclude: false },
+        '=': { label: 'равно', icon: '=', exclude: false },
+        '≠': { label: 'не равно', icon: '≠', exclude: true }
+    };
+
     // Рендер чипов доменов
     function renderChips() {
         const container = document.getElementById('yd-pl-chips');
@@ -8122,18 +8151,25 @@
         container.innerHTML = '';
 
         settings.filters.patterns.forEach((pattern, index) => {
+            const op = pattern.operator || '*';
+            const opInfo = OPERATORS[op] || OPERATORS['*'];
+            const isExclude = opInfo.exclude;
+
             const chip = document.createElement('div');
-            chip.className = 'yd-pl-chip';
+            chip.className = `yd-pl-chip ${isExclude ? 'yd-pl-chip-exclude' : ''}`;
             chip.dataset.index = index;
 
-            const posLabels = { start: '↑', end: '↓', any: '' };
-            const posLabel = posLabels[pattern.position] || '';
-
             chip.innerHTML = `
+                <span class="yd-pl-chip-op" title="${opInfo.label}">${opInfo.icon}</span>
                 <span class="yd-pl-chip-text">${pattern.value}</span>
-                ${posLabel ? `<span class="yd-pl-chip-pos">${posLabel}</span>` : ''}
                 <span class="yd-pl-chip-remove">×</span>
             `;
+
+            // Клик по оператору — dropdown для смены
+            chip.querySelector('.yd-pl-chip-op').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showOperatorDropdown(chip, index, e.target);
+            });
 
             // Удаление чипа
             chip.querySelector('.yd-pl-chip-remove').addEventListener('click', (e) => {
@@ -8144,13 +8180,13 @@
                 updatePreviewHighlight();
             });
 
-            // Редактирование чипа при клике
+            // Редактирование чипа при клике на текст
             chip.querySelector('.yd-pl-chip-text').addEventListener('click', () => {
                 const input = document.getElementById('yd-pl-domain-input');
-                const select = document.getElementById('yd-pl-position-select');
-                if (input && select) {
-                    input.value = pattern.value;
-                    select.value = pattern.position;
+                if (input) {
+                    // Добавляем оператор как префикс (кроме * который по умолчанию)
+                    const prefix = op !== '*' ? op : '';
+                    input.value = prefix + pattern.value;
                     input.focus();
                     // Удаляем редактируемый чип
                     settings.filters.patterns.splice(index, 1);
@@ -8161,6 +8197,57 @@
 
             container.appendChild(chip);
         });
+
+        // Автоскролл к input
+        const wrapper = document.getElementById('yd-pl-domain-wrapper');
+        if (wrapper) {
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+    }
+
+    // Dropdown для смены оператора
+    function showOperatorDropdown(chip, index, anchor) {
+        // Закрыть предыдущий dropdown
+        document.querySelectorAll('.yd-pl-op-dropdown').forEach(d => d.remove());
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'yd-pl-op-dropdown';
+
+        const currentOp = settings.filters.patterns[index]?.operator || '*';
+
+        Object.entries(OPERATORS).forEach(([op, info]) => {
+            const item = document.createElement('div');
+            item.className = `yd-pl-op-item ${op === currentOp ? 'active' : ''} ${info.exclude ? 'exclude' : ''}`;
+            item.innerHTML = `<span class="op-icon">${info.icon}</span><span class="op-label">${info.label}</span>`;
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settings.filters.patterns[index].operator = op;
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+                dropdown.remove();
+            });
+            dropdown.appendChild(item);
+        });
+
+        // Позиционирование
+        const rect = anchor.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.zIndex = '99999999';
+
+        document.body.appendChild(dropdown);
+
+        // Закрытие при клике вне
+        setTimeout(() => {
+            document.addEventListener('click', function closeDropdown(e) {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeDropdown);
+                }
+            });
+        }, 10);
     }
 
     function setupEventListeners(panel, pill) {
@@ -8176,19 +8263,43 @@
             panel.style.display = 'flex';
         });
 
+        // Парсинг ввода с префиксом оператора
+        function parseInput(raw) {
+            let operator = '*';
+            let value = raw.trim().toLowerCase();
+
+            // Проверяем префиксы
+            const prefixMatch = value.match(/^([*!^$=≠])/);
+            if (prefixMatch) {
+                operator = prefixMatch[1];
+                value = value.slice(1).trim();
+            }
+
+            return { operator, value };
+        }
+
         // Ввод домена с Enter для создания чипа
         const domainInput = document.getElementById('yd-pl-domain-input');
-        const positionSelect = document.getElementById('yd-pl-position-select');
+        const wrapper = document.getElementById('yd-pl-domain-wrapper');
 
         if (domainInput) {
+            // Фокус на wrapper при клике
+            if (wrapper) {
+                wrapper.addEventListener('click', () => domainInput.focus());
+            }
+
             domainInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    const value = domainInput.value.trim().toLowerCase();
-                    if (value) {
-                        settings.filters.patterns.push({
-                            value: value,
-                            position: positionSelect?.value || 'any'
+                    const rawValue = domainInput.value.trim();
+                    if (rawValue) {
+                        // Поддержка множественного ввода через запятую или перенос строки
+                        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+                        items.forEach(item => {
+                            const { operator, value } = parseInput(item);
+                            if (value) {
+                                settings.filters.patterns.push({ operator, value });
+                            }
                         });
                         saveSettings();
                         renderChips();
@@ -8196,6 +8307,27 @@
                         updatePreviewHighlight();
                     }
                 }
+            });
+
+            // Также обрабатываем paste для множественного ввода
+            domainInput.addEventListener('paste', (e) => {
+                setTimeout(() => {
+                    const rawValue = domainInput.value.trim();
+                    // Если вставлено с запятыми или переносами — сразу создаём чипы
+                    if (rawValue.includes(',') || rawValue.includes('\n')) {
+                        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+                        items.forEach(item => {
+                            const { operator, value } = parseInput(item);
+                            if (value) {
+                                settings.filters.patterns.push({ operator, value });
+                            }
+                        });
+                        saveSettings();
+                        renderChips();
+                        domainInput.value = '';
+                        updatePreviewHighlight();
+                    }
+                }, 0);
             });
         }
 
@@ -8213,7 +8345,7 @@
         // Main button
         document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
 
-        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров и whitelist
+        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров
         const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
         if (resetFiltersBtn) {
             resetFiltersBtn.addEventListener('click', (e) => {
@@ -8223,9 +8355,6 @@
                         const el = document.getElementById(id);
                         if (el) el.value = '';
                     });
-                const whitelist = document.getElementById('yd-pl-whitelist');
-                if (whitelist) whitelist.value = '';
-                settings.whitelist = [];
                 isSelectMode = true;
                 saveSettings();
                 updatePreviewHighlight();
@@ -8240,12 +8369,6 @@
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
         });
-
-        // Whitelist
-        const whitelistInput = document.getElementById('yd-pl-whitelist');
-        if (whitelistInput) {
-            whitelistInput.addEventListener('input', debounce(updatePreviewHighlight, 300));
-        }
 
         // Stats observer
         const tbody = document.querySelector('tbody');
@@ -8292,8 +8415,7 @@
         const hasFilters = (filters.clicksMin || filters.clicksMax) ||
             (filters.ctrMin || filters.ctrMax) ||
             (filters.cpcMin || filters.cpcMax) ||
-            (filters.spendMin || filters.spendMax) ||
-            (getWhitelistFromUI().length > 0);
+            (filters.spendMin || filters.spendMax);
 
         resetIcon.style.display = hasFilters ? 'flex' : 'none';
     }
@@ -8461,99 +8583,146 @@
             overflow-y: auto;
         }
 
-        /* Секция доменов */
-        .yd-pl-domain-section {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        /* Чипы */
-        .yd-pl-chips {
+        /* Domain Wrapper — единый контейнер */
+        .yd-pl-domain-wrapper {
             display: flex;
             flex-wrap: wrap;
+            align-items: flex-start;
             gap: 6px;
-            min-height: 0;
+            padding: 8px 10px;
+            background: var(--yd-bg);
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            cursor: text;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
+        .yd-pl-domain-wrapper:focus-within {
+            border-color: var(--yd-primary);
+            box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+        }
+        .yd-pl-domain-wrapper::-webkit-scrollbar { width: 4px; }
+        .yd-pl-domain-wrapper::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+        /* Chips container */
+        .yd-pl-chips-container { display: contents; }
+
+        /* Чипы */
         .yd-pl-chip {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background: #E3F2FD;
-            border: 1px solid #BBDEFB;
-            border-radius: 14px;
+            gap: 2px;
+            padding: 3px 6px;
+            background: #f0f2f5;
+            border-radius: 4px;
             font-size: 11px;
-            color: var(--yd-primary);
+            color: var(--yd-text);
             cursor: default;
             transition: all 0.15s;
-            animation: yd-pl-chip-in 0.2s ease;
-            max-width: 140px;
+            animation: yd-pl-chip-in 0.15s ease;
+            max-width: 150px;
         }
-        .yd-pl-chip:hover { background: #BBDEFB; }
+        .yd-pl-chip-exclude {
+            background: #fff1f0;
+            color: var(--yd-danger);
+        }
+        .yd-pl-chip-op {
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--yd-primary);
+            cursor: pointer;
+            border-radius: 3px;
+            transition: background 0.15s;
+        }
+        .yd-pl-chip-op:hover { background: rgba(0,0,0,0.08); }
+        .yd-pl-chip-exclude .yd-pl-chip-op { color: var(--yd-danger); }
         .yd-pl-chip-text {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             cursor: pointer;
+            max-width: 100px;
         }
         .yd-pl-chip-text:hover { text-decoration: underline; }
-        .yd-pl-chip-pos {
-            font-size: 8px;
-            color: var(--yd-text-muted);
-            flex-shrink: 0;
-        }
         .yd-pl-chip-remove {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 14px;
-            height: 14px;
-            background: rgba(0,0,0,0.1);
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             cursor: pointer;
             font-size: 10px;
-            color: var(--yd-text-secondary);
+            color: var(--yd-text-muted);
             transition: all 0.15s;
             flex-shrink: 0;
         }
         .yd-pl-chip-remove:hover { background: var(--yd-danger); color: #fff; }
-        @keyframes yd-pl-chip-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes yd-pl-chip-in { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-        /* Поле ввода с select */
-        .yd-pl-input-row {
-            display: flex;
-            gap: 6px;
-        }
+        /* Input внутри wrapper */
         .yd-pl-domain-input {
             flex: 1;
-            padding: 10px 12px;
-            border: 1px solid var(--yd-border);
-            border-radius: 8px;
-            font-size: 13px;
-            background: var(--yd-bg);
-            transition: all 0.2s;
-        }
-        .yd-pl-domain-input:focus {
+            min-width: 80px;
+            padding: 4px 2px;
+            border: none;
+            background: transparent;
+            font-size: 12px;
             outline: none;
-            border-color: var(--yd-primary);
-            box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
         }
         .yd-pl-domain-input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-domain-input:focus::placeholder { opacity: 0; }
-        
-        .yd-pl-position-select {
-            padding: 8px 6px;
-            border: 1px solid var(--yd-border);
-            border-radius: 6px;
-            font-size: 11px;
-            color: var(--yd-text-secondary);
-            background: var(--yd-bg);
-            cursor: pointer;
-            width: 110px;
-            flex-shrink: 0;
+
+        /* Hint под input */
+        .yd-pl-hint {
+            font-size: 10px;
+            color: var(--yd-text-muted);
+            padding: 4px 2px 0;
         }
-        .yd-pl-position-select:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-hint code {
+            font-family: 'SF Mono', Consolas, monospace;
+            background: rgba(0,0,0,0.05);
+            padding: 1px 3px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+
+        /* Operator Dropdown */
+        .yd-pl-op-dropdown {
+            background: #fff;
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 4px;
+            min-width: 140px;
+        }
+        .yd-pl-op-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--yd-text);
+            transition: background 0.1s;
+        }
+        .yd-pl-op-item:hover { background: var(--yd-bg-secondary); }
+        .yd-pl-op-item.active { background: #E3F2FD; }
+        .yd-pl-op-item.exclude { color: var(--yd-danger); }
+        .yd-pl-op-item .op-icon {
+            font-family: 'SF Mono', Consolas, monospace;
+            font-weight: 600;
+            width: 16px;
+            text-align: center;
+        }
+
 
         /* Расширяемая секция */
         .yd-pl-expand { margin-top: 4px; }
@@ -9246,6 +9415,7 @@
     init();
 
 })();
+
 
 
 
