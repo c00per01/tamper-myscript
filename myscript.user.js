@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.22
+// @version 1.193.23
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7826,14 +7826,16 @@
             btn.classList.remove('yd-pl-btn-deselect');
             btn.classList.add('yd-pl-btn-primary');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
-            text.textContent = count > 0 ? `Выделить ${count}` : 'Выделить';
+            text.textContent = count > 0 ? `Выделить (${count})` : 'Ничего не найдено';
+            btn.disabled = count === 0;
         } else {
             // Режим снятия — показываем сколько ВСЕГО выделено
             const checkedCount = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
             btn.classList.remove('yd-pl-btn-primary');
             btn.classList.add('yd-pl-btn-deselect');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
-            text.textContent = checkedCount > 0 ? `Снять ${checkedCount}` : 'Снять';
+            text.textContent = checkedCount > 0 ? `Снять (${checkedCount})` : 'Снять';
+            btn.disabled = false;
         }
     }
 
@@ -8018,7 +8020,21 @@
                     <span class="yd-pl-title">YD Helper</span>
                 </div>
                 <div class="yd-pl-header-right">
-                    <span id="yd-pl-stats" class="yd-pl-stats">0 из 0</span>
+                    <div class="yd-pl-help-icon" id="yd-pl-help-icon" title="Справка по префиксам">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <div class="yd-pl-help-tooltip">
+                            <div class="yd-pl-help-title">Префиксы фильтров</div>
+                            <div class="yd-pl-help-row"><code>*</code> содержит</div>
+                            <div class="yd-pl-help-row"><code>!</code> не содержит</div>
+                            <div class="yd-pl-help-row"><code>^</code> начинается с</div>
+                            <div class="yd-pl-help-row"><code>$</code> заканчивается на</div>
+                            <div class="yd-pl-help-row"><code>=</code> равно</div>
+                        </div>
+                    </div>
                     <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -8030,12 +8046,18 @@
             <!-- Body -->
             <div class="yd-pl-body">
                 <!-- Фильтр по доменам — единый контейнер -->
-                <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
-                    <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
-                    <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                        placeholder="Введите домен...">
+                <div class="yd-pl-domain-section">
+                    <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
+                        <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
+                        <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
+                            placeholder="Введите домен...">
+                        <button id="yd-pl-clear-chips" class="yd-pl-clear-chips" title="Очистить все" style="display: none;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <div class="yd-pl-hint">Префиксы: <code>*</code> содержит, <code>!</code> не содержит, <code>^</code> начало, <code>$</code> конец, <code>=</code> равно</div>
 
                 <!-- Расширенные фильтры -->
                 <div class="yd-pl-expand ${settings.filtersExpanded ? 'open' : ''}">
@@ -8053,34 +8075,41 @@
                         </button>
                     </div>
                     <div class="yd-pl-expand-content">
+                        <!-- Переключатель логики И/ИЛИ -->
+                        <div class="yd-pl-logic-toggle">
+                            <div class="yd-pl-segmented">
+                                <label class="yd-pl-segment ${settings.mode === 'and' ? 'active' : ''}">
+                                    <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                                    <span>И</span>
+                                </label>
+                                <label class="yd-pl-segment ${settings.mode === 'or' ? 'active' : ''}">
+                                    <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                                    <span>ИЛИ</span>
+                                </label>
+                            </div>
+                            <span class="yd-pl-logic-hint">${settings.mode === 'and' ? 'Все условия' : 'Любое условие'}</span>
+                        </div>
+                        
                         <div class="yd-pl-filters-grid">
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">Клики</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
-                                    <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
-                                </div>
+                                <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
+                                <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
                             </div>
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">CTR %</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
-                                    <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
-                                </div>
+                                <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
+                                <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
                             </div>
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">CPC ₽</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
-                                    <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
-                                </div>
+                                <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
+                                <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
                             </div>
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">Расход</span>
-                                <div class="yd-pl-range-inputs">
-                                    <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
-                                    <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
-                                </div>
+                                <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
+                                <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                             </div>
                         </div>
                     </div>
@@ -8095,7 +8124,7 @@
                             <polyline points="20 6 9 17 4 12"/>
                         </svg>
                     </span>
-                    <span id="yd-pl-apply-text">Выделить</span>
+                    <span id="yd-pl-apply-text">Выделить (0)</span>
                 </button>
             </div>
 
@@ -8160,7 +8189,7 @@
             chip.dataset.index = index;
 
             chip.innerHTML = `
-                <span class="yd-pl-chip-op" title="${opInfo.label}">${opInfo.icon}</span>
+                <span class="yd-pl-chip-op" title="${opInfo.label} — клик для смены">${opInfo.icon}</span>
                 <span class="yd-pl-chip-text">${pattern.value}</span>
                 <span class="yd-pl-chip-remove">×</span>
             `;
@@ -8202,6 +8231,12 @@
         const wrapper = document.getElementById('yd-pl-domain-wrapper');
         if (wrapper) {
             wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
+        // Показать/скрыть кнопку очистки
+        const clearBtn = document.getElementById('yd-pl-clear-chips');
+        if (clearBtn) {
+            clearBtn.style.display = settings.filters.patterns.length > 0 ? 'flex' : 'none';
         }
     }
 
@@ -8341,6 +8376,35 @@
                 saveSettings();
             });
         }
+
+        // Clear all chips button
+        const clearChipsBtn = document.getElementById('yd-pl-clear-chips');
+        if (clearChipsBtn) {
+            clearChipsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settings.filters.patterns = [];
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+            });
+        }
+
+        // Mode toggle (AND/OR)
+        document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                settings.mode = e.target.value;
+                saveSettings();
+                // Обновить UI
+                document.querySelectorAll('.yd-pl-segment').forEach(s => s.classList.remove('active'));
+                e.target.closest('.yd-pl-segment').classList.add('active');
+                // Обновить hint
+                const hint = document.querySelector('.yd-pl-logic-hint');
+                if (hint) {
+                    hint.textContent = settings.mode === 'and' ? 'Все условия' : 'Любое условие';
+                }
+                updatePreviewHighlight();
+            });
+        });
 
         // Main button
         document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
@@ -8563,8 +8627,68 @@
 
         .yd-pl-header-left { display: flex; align-items: center; gap: 8px; }
         .yd-pl-title { font-weight: 600; font-size: 14px; color: var(--yd-primary); }
-        .yd-pl-header-right { display: flex; align-items: center; gap: 10px; }
-        .yd-pl-stats { font-size: 12px; color: var(--yd-text-secondary); font-weight: 500; }
+        .yd-pl-header-right { display: flex; align-items: center; gap: 8px; }
+
+        /* Help Icon с Tooltip */
+        .yd-pl-help-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            cursor: help;
+            color: var(--yd-text-muted);
+            border-radius: 50%;
+            transition: all 0.15s;
+        }
+        .yd-pl-help-icon:hover { 
+            color: var(--yd-primary); 
+            background: var(--yd-bg-secondary);
+        }
+        .yd-pl-help-tooltip {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-4px);
+            transition: all 0.15s;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .yd-pl-help-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 10px;
+            border: 6px solid transparent;
+            border-bottom-color: #1a1a1a;
+            border-top: none;
+        }
+        .yd-pl-help-icon:hover .yd-pl-help-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        .yd-pl-help-title { font-weight: 600; margin-bottom: 6px; color: #ccc; }
+        .yd-pl-help-row { padding: 2px 0; display: flex; align-items: center; gap: 8px; }
+        .yd-pl-help-row code {
+            font-family: 'SF Mono', Consolas, monospace;
+            background: rgba(255,255,255,0.15);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            min-width: 18px;
+            text-align: center;
+        }
 
         .yd-pl-icon-btn {
             background: none; border: none; padding: 4px; cursor: pointer;
@@ -8583,13 +8707,17 @@
             overflow-y: auto;
         }
 
+        /* Domain Section */
+        .yd-pl-domain-section { position: relative; }
+
         /* Domain Wrapper — единый контейнер */
         .yd-pl-domain-wrapper {
+            position: relative;
             display: flex;
             flex-wrap: wrap;
             align-items: flex-start;
             gap: 6px;
-            padding: 8px 10px;
+            padding: 8px 32px 8px 10px;
             background: var(--yd-bg);
             border: 1px solid var(--yd-border);
             border-radius: 8px;
@@ -8605,6 +8733,29 @@
         .yd-pl-domain-wrapper::-webkit-scrollbar { width: 4px; }
         .yd-pl-domain-wrapper::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
 
+        /* Clear All Chips Button */
+        .yd-pl-clear-chips {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: none;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            transition: all 0.15s;
+        }
+        .yd-pl-clear-chips:hover { 
+            color: var(--yd-danger); 
+            background: rgba(239, 68, 68, 0.1);
+        }
+
         /* Chips container */
         .yd-pl-chips-container { display: contents; }
 
@@ -8612,8 +8763,8 @@
         .yd-pl-chip {
             display: inline-flex;
             align-items: center;
-            gap: 2px;
-            padding: 3px 6px;
+            gap: 0;
+            padding: 3px 6px 3px 0;
             background: #f0f2f5;
             border-radius: 4px;
             font-size: 11px;
@@ -8631,17 +8782,20 @@
             font-family: 'SF Mono', Consolas, monospace;
             font-size: 11px;
             font-weight: 600;
-            width: 14px;
-            height: 14px;
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--yd-primary);
             cursor: pointer;
             border-radius: 3px;
-            transition: background 0.15s;
+            transition: all 0.15s;
+            margin-right: 2px;
         }
-        .yd-pl-chip-op:hover { background: rgba(0,0,0,0.08); }
+        .yd-pl-chip-op:hover { 
+            background: rgba(32, 85, 152, 0.15); 
+        }
         .yd-pl-chip-exclude .yd-pl-chip-op { color: var(--yd-danger); }
         .yd-pl-chip-text {
             overflow: hidden;
@@ -8773,33 +8927,65 @@
             transition: max-height 0.25s ease, padding 0.25s ease;
         }
         .yd-pl-expand.open .yd-pl-expand-content { 
-            max-height: 400px; 
+            max-height: 500px; 
             padding: 12px;
         }
 
-        /* Фильтры */
-        .yd-pl-filters-grid { display: flex; flex-direction: column; gap: 10px; }
-        .yd-pl-filter-row {
+        /* Segmented Control (AND/OR Toggle) */
+        .yd-pl-logic-toggle {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--yd-border);
+        }
+        .yd-pl-segmented {
+            display: flex;
+            background: #e1e4e8;
+            border-radius: 6px;
+            padding: 2px;
+        }
+        .yd-pl-segment {
+            display: flex;
+            align-items: center;
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--yd-text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .yd-pl-segment input { display: none; }
+        .yd-pl-segment.active {
+            background: #fff;
+            color: var(--yd-primary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .yd-pl-segment:hover:not(.active) { color: var(--yd-text); }
+        .yd-pl-logic-hint {
+            font-size: 10px;
+            color: var(--yd-text-muted);
+        }
+
+        /* Фильтры — Grid Layout */
+        .yd-pl-filters-grid { 
+            display: grid;
+            grid-template-columns: 55px 1fr 1fr;
+            gap: 6px 4px;
+            align-items: center;
+        }
+        .yd-pl-filter-row {
+            display: contents;
         }
         .yd-pl-filter-label { 
-            width: 60px;
-            flex-shrink: 0;
             font-size: 11px; 
             color: var(--yd-text-secondary); 
         }
-        .yd-pl-range-inputs {
-            display: flex;
-            flex: 1;
-            gap: 4px;
-        }
-        .yd-pl-range-inputs input,
         .yd-pl-filter-row input[type="number"] {
-            flex: 1;
-            min-width: 0;
-            padding: 6px 4px;
+            width: 100%;
+            padding: 5px 4px;
             border: 1px solid var(--yd-border);
             border-radius: 5px;
             font-size: 11px;
@@ -8807,29 +8993,12 @@
             background: var(--yd-bg);
             color: var(--yd-text);
         }
-        .yd-pl-range-inputs input::placeholder,
         .yd-pl-filter-row input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-range-inputs input:focus::placeholder,
         .yd-pl-filter-row input:focus::placeholder { opacity: 0; }
-        .yd-pl-range-inputs input:focus,
         .yd-pl-filter-row input:focus { outline: none; border-color: var(--yd-primary); }
-        .yd-pl-range-inputs input::-webkit-inner-spin-button,
-        .yd-pl-range-inputs input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .yd-pl-range-inputs input[type="number"] { -moz-appearance: textfield; }
-
-        .yd-pl-divider { height: 1px; background: var(--yd-border); margin: 10px 0; }
-
-        .yd-pl-whitelist-input {
-            flex: 1;
-            padding: 8px 10px;
-            border: 1px solid var(--yd-border);
-            border-radius: 6px;
-            font-size: 12px;
-            background: var(--yd-bg);
-        }
-        .yd-pl-whitelist-input::placeholder { color: var(--yd-text-muted); }
-        .yd-pl-whitelist-input:focus::placeholder { opacity: 0; }
-        .yd-pl-whitelist-input:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-filter-row input::-webkit-inner-spin-button,
+        .yd-pl-filter-row input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .yd-pl-filter-row input[type="number"] { -moz-appearance: textfield; }
 
         /* Footer */
         .yd-pl-footer { 
@@ -8854,12 +9023,18 @@
             cursor: pointer; 
             transition: all 0.2s; 
         }
-        .yd-pl-btn-primary:hover { 
+        .yd-pl-btn-primary:hover:not(:disabled) { 
             background: var(--yd-primary-light); 
             transform: translateY(-1px); 
             box-shadow: 0 4px 12px rgba(32, 85, 152, 0.25); 
         }
-        .yd-pl-btn-primary:active { transform: translateY(0); }
+        .yd-pl-btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .yd-pl-btn-primary:disabled {
+            background: #ccc;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
 
         /* Кнопка снятия галочек */
         .yd-pl-btn-deselect { 
@@ -9415,6 +9590,7 @@
     init();
 
 })();
+
 
 
 
