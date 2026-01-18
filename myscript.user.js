@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.39
+// @version 1.193.41
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7775,6 +7775,37 @@
         return matching;
     }
 
+    // Синхронизация галочек с текущими фильтрами (для режима "Снять")
+    function syncCheckboxes() {
+        const matchingRows = new Set(getAllMatchingRows());
+        const allRows = document.querySelectorAll('tbody tr');
+
+        // Утилита для клика (дубликат, но нужен здесь)
+        function clickWithoutScroll(element) {
+            const scrollableParent = element.closest('div[style*="overflow"]') || document.scrollingElement;
+            const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
+            element.click();
+            if (scrollableParent) {
+                requestAnimationFrame(() => {
+                    scrollableParent.scrollTop = scrollTop;
+                });
+            }
+        }
+
+        allRows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (!checkbox || checkbox.disabled) return;
+
+            const shouldBeChecked = matchingRows.has(row);
+
+            if (shouldBeChecked && !checkbox.checked) {
+                clickWithoutScroll(checkbox);
+            } else if (!shouldBeChecked && checkbox.checked) {
+                clickWithoutScroll(checkbox);
+            }
+        });
+    }
+
     // ==================== UI: ПОДСВЕТКА PREVIEW ====================
     function updatePreviewHighlight() {
         // Снять старую подсветку
@@ -7785,6 +7816,11 @@
         // Подсветить ВСЕ строки соответствующие фильтрам (независимо от checked)
         const matching = getAllMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
+
+        // Если режим "Снять" (активны галочки), синхронизируем их с фильтрами
+        if (!isSelectMode) {
+            syncCheckboxes();
+        }
 
         // Обновить состояние кнопки и badge
         updateButtonState();
@@ -9482,8 +9518,8 @@
         /* Pill */
         .yd-pl-pill { 
             position: fixed; 
-            top: 80px; 
-            right: 20px; 
+            top: 15px; 
+            right: 15px; 
             z-index: 9999998; 
             background: #fff; 
             border: 1px solid var(--yd-border); 
@@ -9501,6 +9537,34 @@
         .yd-pl-pill:hover { 
             transform: translateY(-2px); 
             box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); 
+        }
+
+        /* Notifications */
+        .yd-pl-notification {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            background: #333;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10000000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: yd-pl-fade-in 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .yd-pl-notification-success { background: #10B981; }
+        .yd-pl-notification-info { background: #3B82F6; }
+        .yd-pl-notification-warn { background: #F59E0B; }
+        .yd-pl-notification-error { background: #EF4444; }
+        .yd-pl-notification-hide { opacity: 0; transition: opacity 0.3s; }
+        
+        @keyframes yd-pl-fade-in { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
         }
         .yd-pl-pill-badge { 
             background: var(--yd-primary); 
@@ -9952,6 +10016,7 @@
     init();
 
 })();
+
 
 
 
