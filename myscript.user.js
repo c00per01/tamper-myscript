@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.23
+// @version 1.193.24
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7715,7 +7715,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7731,8 +7731,8 @@
 
     // ==================== UI: ПОДСВЕТКА PREVIEW ====================
     function updatePreviewHighlight() {
-        // Снять старую подсветку
-        document.querySelectorAll('.yd-pl-row-preview').forEach(row => {
+        // Снять старую подсветку — ТОЛЬКО в таблице площадок
+        document.querySelectorAll('.b-stat-platform__table-wrap tbody tr.yd-pl-row-preview, .yd-pl-row-preview').forEach(row => {
             row.classList.remove('yd-pl-row-preview');
         });
 
@@ -7748,15 +7748,11 @@
     }
 
     function updateStats() {
-        const total = document.querySelectorAll('tbody tr input[type="checkbox"]').length;
-        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
-        const statsEl = document.getElementById('yd-pl-stats');
-        if (statsEl) statsEl.textContent = `${checked} из ${total}`;
+        // Статистика больше не отображается в UI
     }
 
     function saveCurrentFilters() {
         settings.filters = getFiltersFromUI();
-        settings.whitelist = getWhitelistFromUI();
         settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
         saveSettings();
     }
@@ -7798,7 +7794,7 @@
         } else {
             // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
-            document.querySelectorAll('tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
+            document.querySelectorAll('.b-stat-platform__table-wrap tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
                 clickWithoutScroll(checkbox);
                 count++;
             });
@@ -7830,7 +7826,7 @@
             btn.disabled = count === 0;
         } else {
             // Режим снятия — показываем сколько ВСЕГО выделено
-            const checkedCount = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+            const checkedCount = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr input[type="checkbox"]:checked').length;
             btn.classList.remove('yd-pl-btn-primary');
             btn.classList.add('yd-pl-btn-deselect');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
@@ -8051,12 +8047,13 @@
                         <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
                             placeholder="Введите домен...">
-                        <button id="yd-pl-clear-chips" class="yd-pl-clear-chips" title="Очистить все" style="display: none;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                            </svg>
-                        </button>
                     </div>
+                    <button id="yd-pl-clear-chips" class="yd-pl-clear-chips-external" title="Очистить все фильтры" style="display: none;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                        <span>Очистить</span>
+                    </button>
                 </div>
 
                 <!-- Расширенные фильтры -->
@@ -8075,21 +8072,6 @@
                         </button>
                     </div>
                     <div class="yd-pl-expand-content">
-                        <!-- Переключатель логики И/ИЛИ -->
-                        <div class="yd-pl-logic-toggle">
-                            <div class="yd-pl-segmented">
-                                <label class="yd-pl-segment ${settings.mode === 'and' ? 'active' : ''}">
-                                    <input type="radio" name="yd-pl-mode" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
-                                    <span>И</span>
-                                </label>
-                                <label class="yd-pl-segment ${settings.mode === 'or' ? 'active' : ''}">
-                                    <input type="radio" name="yd-pl-mode" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
-                                    <span>ИЛИ</span>
-                                </label>
-                            </div>
-                            <span class="yd-pl-logic-hint">${settings.mode === 'and' ? 'Все условия' : 'Любое условие'}</span>
-                        </div>
-                        
                         <div class="yd-pl-filters-grid">
                             <div class="yd-pl-filter-row">
                                 <span class="yd-pl-filter-label">Клики</span>
@@ -8112,6 +8094,18 @@
                                 <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Apple-style Segmented Control (И/ИЛИ) -->
+                <div class="yd-pl-logic-section">
+                    <span class="yd-pl-logic-label">Логика:</span>
+                    <div class="yd-pl-segmented-apple">
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-and">Все условия</label>
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-or">Любое</label>
+                        <div class="yd-pl-segmented-slider"></div>
                     </div>
                 </div>
             </div>
@@ -8394,14 +8388,6 @@
             radio.addEventListener('change', (e) => {
                 settings.mode = e.target.value;
                 saveSettings();
-                // Обновить UI
-                document.querySelectorAll('.yd-pl-segment').forEach(s => s.classList.remove('active'));
-                e.target.closest('.yd-pl-segment').classList.add('active');
-                // Обновить hint
-                const hint = document.querySelector('.yd-pl-logic-hint');
-                if (hint) {
-                    hint.textContent = settings.mode === 'and' ? 'Все условия' : 'Любое условие';
-                }
                 updatePreviewHighlight();
             });
         });
@@ -8703,21 +8689,20 @@
             padding: 14px; 
             display: flex; 
             flex-direction: column; 
-            gap: 12px;
+            gap: 8px;
             overflow-y: auto;
         }
 
         /* Domain Section */
-        .yd-pl-domain-section { position: relative; }
+        .yd-pl-domain-section { }
 
         /* Domain Wrapper — единый контейнер */
         .yd-pl-domain-wrapper {
-            position: relative;
             display: flex;
             flex-wrap: wrap;
             align-items: flex-start;
             gap: 6px;
-            padding: 8px 32px 8px 10px;
+            padding: 8px 10px;
             background: var(--yd-bg);
             border: 1px solid var(--yd-border);
             border-radius: 8px;
@@ -8732,29 +8717,6 @@
         }
         .yd-pl-domain-wrapper::-webkit-scrollbar { width: 4px; }
         .yd-pl-domain-wrapper::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
-
-        /* Clear All Chips Button */
-        .yd-pl-clear-chips {
-            position: absolute;
-            right: 6px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 22px;
-            height: 22px;
-            background: none;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            color: var(--yd-text-muted);
-            transition: all 0.15s;
-        }
-        .yd-pl-clear-chips:hover { 
-            color: var(--yd-danger); 
-            background: rgba(239, 68, 68, 0.1);
-        }
 
         /* Chips container */
         .yd-pl-chips-container { display: contents; }
@@ -8927,46 +8889,82 @@
             transition: max-height 0.25s ease, padding 0.25s ease;
         }
         .yd-pl-expand.open .yd-pl-expand-content { 
-            max-height: 500px; 
+            max-height: 300px; 
             padding: 12px;
         }
 
-        /* Segmented Control (AND/OR Toggle) */
-        .yd-pl-logic-toggle {
+        /* External Clear Chips Button */
+        .yd-pl-clear-chips-external {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            margin-top: 6px;
+            background: none;
+            border: 1px solid var(--yd-border);
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            font-size: 11px;
+            transition: all 0.15s;
+        }
+        .yd-pl-clear-chips-external:hover { 
+            color: var(--yd-danger); 
+            border-color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        /* Apple-style Segmented Control */
+        .yd-pl-logic-section {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--yd-border);
+            padding: 10px 0;
+            margin-top: 4px;
         }
-        .yd-pl-segmented {
-            display: flex;
-            background: #e1e4e8;
-            border-radius: 6px;
-            padding: 2px;
-        }
-        .yd-pl-segment {
-            display: flex;
-            align-items: center;
-            padding: 4px 12px;
+        .yd-pl-logic-label {
             font-size: 11px;
-            font-weight: 500;
             color: var(--yd-text-secondary);
-            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .yd-pl-segmented-apple {
+            position: relative;
+            display: flex;
+            background: #e5e5ea;
+            border-radius: 8px;
+            padding: 2px;
+            flex: 1;
+        }
+        .yd-pl-segmented-apple input { display: none; }
+        .yd-pl-segmented-apple label {
+            flex: 1;
+            text-align: center;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #666;
             cursor: pointer;
-            transition: all 0.15s;
+            z-index: 1;
+            position: relative;
+            transition: color 0.2s;
+            white-space: nowrap;
         }
-        .yd-pl-segment input { display: none; }
-        .yd-pl-segment.active {
-            background: #fff;
+        .yd-pl-segmented-apple input:checked + label {
             color: var(--yd-primary);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .yd-pl-segment:hover:not(.active) { color: var(--yd-text); }
-        .yd-pl-logic-hint {
-            font-size: 10px;
-            color: var(--yd-text-muted);
+        .yd-pl-segmented-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: calc(50% - 2px);
+            height: calc(100% - 4px);
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .yd-pl-segmented-apple input#yd-pl-mode-or:checked ~ .yd-pl-segmented-slider {
+            transform: translateX(100%);
         }
 
         /* Фильтры — Grid Layout */
@@ -9145,9 +9143,9 @@
         }
         .yd-pl-pill-filters { color: var(--yd-success); font-size: 11px; font-weight: 600; }
 
-        /* Preview подсветка */
-        tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
-        tbody tr.yd-pl-row-preview td { background: transparent !important; }
+        /* Preview подсветка — ТОЛЬКО для таблицы площадок */
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td { background: transparent !important; }
 
         /* Notifications */
         .yd-pl-notification { 
@@ -9500,69 +9498,64 @@
         const style = document.createElement('style');
         style.id = 'yd-cl-styles';
         style.textContent = `
-    /* Popover — рендерится в body */
-    .yd - cl - popover {
-    position: absolute;
-    z - index: 10000;
-    background: #fff;
-    border: 1px solid #e5e5e5;
-    border - radius: 8px;
-    box - shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    padding: 4px 0;
-    min - width: 180px;
-    opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-            .yd - cl - popover - visible {
-    opacity: 1;
-    transform: translateY(0);
-}
+            /* Popover — рендерится в body */
+            .yd-cl-popover {
+                position: absolute;
+                z-index: 10000;
+                background: #fff;
+                border: 1px solid #e5e5e5;
+                border-radius: 8px;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+                padding: 4px 0;
+                min-width: 180px;
+                opacity: 0;
+                transform: translateY(-4px);
+                transition: opacity 0.15s ease, transform 0.15s ease;
+            }
+            .yd-cl-popover-visible {
+                opacity: 1;
+                transform: translateY(0);
+            }
 
             /* Пункты popover */
-            .yd - cl - popover - item {
-    display: block;
-    padding: 10px 16px;
-    color: #000;
-    text - decoration: none;
-    font - size: 13px;
-    line - height: 18px;
-    white - space: nowrap;
-    transition: background - color 0.1s ease;
-}
+            .yd-cl-popover-item {
+                display: block;
+                padding: 10px 16px;
+                color: #000;
+                text-decoration: none;
+                font-size: 13px;
+                line-height: 18px;
+                white-space: nowrap;
+                transition: background-color 0.1s ease;
+            }
+            .yd-cl-popover-item:hover {
+                background-color: #f5f5f5;
+                text-decoration: none;
+            }
+            .yd-cl-popover-item:first-child {
+                border-radius: 6px 6px 0 0;
+            }
+            .yd-cl-popover-item:last-child {
+                border-radius: 0 0 6px 6px;
+            }
 
-            .yd - cl - popover - item:hover {
-    background - color: #f5f5f5;
-    text - decoration: none;
-}
+            /* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
+            [data-testid$="_name-with-links"] {
+                min-width: 280px !important;
+            }
 
-            .yd - cl - popover - item: first - child {
-    border - radius: 6px 6px 0 0;
-}
+            /* Заголовок столбца "Название" */
+            [data-testid="Grid.Header-name"],
+            [data-testid*="Header"][data-testid*="name"] {
+                min-width: 280px !important;
+            }
 
-            .yd - cl - popover - item: last - child {
-    border - radius: 0 0 6px 6px;
-}
-
-/* Расширение ВСЕХ ячеек столбца "Название" для консистентной ширины */
-/* Ячейки данных */
-[data - testid$="_name-with-links"] {
-    min - width: 280px!important;
-}
-
-/* Заголовок столбца "Название" */
-[data - testid="Grid.Header-name"],
-    [data - testid*="Header"][data - testid*= "name"] {
-    min - width: 280px!important;
-}
-
-/* Контейнер действий — nowrap для одной строки */
-[data - testid$="_name-with-links"].dc - Stack_type_horizontal {
-    flex - wrap: nowrap!important;
-    white - space: nowrap;
-}
-`;
+            /* Контейнер действий — nowrap для одной строки */
+            [data-testid$="_name-with-links"] .dc-Stack_type_horizontal {
+                flex-wrap: nowrap !important;
+                white-space: nowrap;
+            }
+        `;
 
 
         document.head.appendChild(style);
@@ -9590,6 +9583,7 @@
     init();
 
 })();
+
 
 
 
