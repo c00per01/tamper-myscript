@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.37
+// @version 1.193.39
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7727,7 +7727,46 @@
         rows.forEach(row => {
             if (checkRow(row, filters, mode)) {
                 const checkbox = row.querySelector('input[type="checkbox"]');
+                // Только НЕвыделенные строки для режима "Выделить"
                 if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                    matching.push(row);
+                }
+            }
+        });
+
+        return matching;
+    }
+
+    // Все строки соответствующие фильтрам (для preview)
+    function getAllMatchingRows() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
+        const rows = document.querySelectorAll('tbody tr');
+        const matching = [];
+
+        rows.forEach(row => {
+            if (checkRow(row, filters, mode)) {
+                matching.push(row);
+            }
+        });
+
+        return matching;
+    }
+
+    // Выделенные строки соответствующие фильтрам (для режима "Снять")
+    function getCheckedMatchingRows() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
+        const rows = document.querySelectorAll('tbody tr');
+        const matching = [];
+
+        rows.forEach(row => {
+            if (checkRow(row, filters, mode)) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                // Только ВЫДЕЛЕННЫЕ строки для режима "Снять"
+                if (checkbox && checkbox.checked && !checkbox.disabled) {
                     matching.push(row);
                 }
             }
@@ -7743,7 +7782,8 @@
             row.classList.remove('yd-pl-row-preview');
         });
 
-        const matching = getMatchingRows();
+        // Подсветить ВСЕ строки соответствующие фильтрам (независимо от checked)
+        const matching = getAllMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
         // Обновить состояние кнопки и badge
@@ -7799,20 +7839,26 @@
             showNotification(`Выделено: ${selected}`, 'success');
             isSelectMode = false;
         } else {
-            // Режим снятия — снимаем ВСЕ выделенные галочки
+            // Режим снятия — снимаем только строки соответствующие фильтрам
+            const checkedMatching = getCheckedMatchingRows();
+            if (checkedMatching.length === 0) {
+                showNotification('Нет выделенных площадок по фильтрам', 'info');
+                isSelectMode = true;
+                updateButtonState();
+                return;
+            }
             let count = 0;
-            document.querySelectorAll('tbody tr').forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]:checked');
-                const tds = row.querySelectorAll('td');
-                if (checkbox && !checkbox.disabled && tds.length >= 5) {
+            checkedMatching.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && checkbox.checked && !checkbox.disabled) {
                     clickWithoutScroll(checkbox);
                     count++;
                 }
             });
             if (count > 0) {
                 showNotification(`Снято: ${count}`, 'info');
-                isSelectMode = true;
             }
+            isSelectMode = true;
         }
 
         updateButtonState();
@@ -7836,21 +7882,15 @@
             text.textContent = count > 0 ? `Выделить (${count})` : 'Ничего не найдено';
             btn.disabled = count === 0;
         } else {
-            // Режим снятия — показываем сколько ВСЕГО выделено
-            let checkedCount = 0;
-            document.querySelectorAll('tbody tr').forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]:checked');
-                const tds = row.querySelectorAll('td');
-                if (checkbox && tds.length >= 5) {
-                    checkedCount++;
-                }
-            });
+            // Режим снятия — показываем сколько выделено ПО ФИЛЬТРАМ
+            const checkedMatching = getCheckedMatchingRows();
+            const checkedCount = checkedMatching.length;
 
             btn.classList.remove('yd-pl-btn-primary');
             btn.classList.add('yd-pl-btn-deselect');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
             text.textContent = checkedCount > 0 ? `Снять (${checkedCount})` : 'Снять';
-            btn.disabled = false;
+            btn.disabled = checkedCount === 0;
         }
     }
 
@@ -9912,6 +9952,7 @@
     init();
 
 })();
+
 
 
 
