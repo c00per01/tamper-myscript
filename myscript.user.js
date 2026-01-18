@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.28
+// @version 1.193.30
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -8113,10 +8113,12 @@
                     </div>
                 </div>
 
-                <!-- Apple-style Segmented Control (И/ИЛИ) -->
-                <div class="yd-pl-logic-section">
-                    <span class="yd-pl-logic-label">Логика:</span>
-                    <div class="yd-pl-segmented-apple">
+                <!-- Секция Условие -->
+                <div class="yd-pl-expand" style="border-top: 1px solid var(--yd-border); margin-top: 8px; padding-top: 8px; box-shadow: none; background: transparent;">
+                    <div class="yd-pl-expand-header" style="margin-bottom: 8px;">
+                        <span class="yd-pl-expand-btn" style="cursor: default;">Условие</span>
+                    </div>
+                    <div class="yd-pl-segmented-apple" style="width: 100%;">
                         <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
                         <label for="yd-pl-mode-and">Все условия</label>
                         <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
@@ -8334,19 +8336,14 @@
         settings.history.forEach(item => {
             const div = document.createElement('div');
             div.className = 'yd-pl-history-item';
-            div.innerHTML = `
-                <span>${item}</span>
-                <span class="yd-pl-history-remove" title="Удалить">×</span>
-            `;
+            div.innerHTML = `<span>${item}</span><span class="yd-pl-history-remove" title="Удалить">×</span>`;
+            div.style.cursor = 'pointer';
 
-            // Клик по тексту — выбрать
-            div.querySelector('span').addEventListener('click', (e) => {
+            // Клик по всей строке
+            div.addEventListener('click', (e) => {
+                if (e.target.classList.contains('yd-pl-history-remove')) return;
                 e.stopPropagation();
-                const input = document.getElementById('yd-pl-domain-input');
-                if (input) {
-                    input.value = item;
-                    input.focus();
-                }
+                processInput(item);
                 dropdown.classList.remove('visible');
             });
 
@@ -8361,13 +8358,62 @@
         });
     }
 
-    // Закрытие истории при клике вне
+    // Парсинг ввода (оператор + значение)
+    function parseInput(value) {
+        let operator = '*';
+        const prefixMatch = value.match(/^([*!^$=≠])/);
+        if (prefixMatch) {
+            operator = prefixMatch[1];
+            value = value.slice(1).trim();
+        }
+        return { operator, value };
+    }
+
+    // Обработка ввода (создание чипов)
+    function processInput(rawValue) {
+        if (!rawValue) return;
+        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+        let added = false;
+
+        items.forEach(item => {
+            const { operator, value } = parseInput(item);
+            if (value) {
+                settings.filters.patterns.push({ operator, value });
+                added = true;
+            }
+        });
+
+        if (added) {
+            addToHistory(rawValue);
+            saveSettings();
+            renderChips();
+            updatePreviewHighlight();
+            const input = document.getElementById('yd-pl-domain-input');
+            if (input) input.value = '';
+        }
+    }
+
+    // Закрытие истории и создание чипа при потере фокуса
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('yd-pl-history-dropdown');
         const input = document.getElementById('yd-pl-domain-input');
+
+        // Закрытие истории
         if (dropdown && dropdown.classList.contains('visible')) {
             if (!dropdown.contains(e.target) && e.target !== input) {
                 dropdown.classList.remove('visible');
+            }
+        }
+
+        // Создание чипа при клике вне (аналог blur)
+        if (input && input.value.trim() !== '') {
+            const isClickInsideInput = e.target === input;
+            const isClickInsideHistory = dropdown && dropdown.contains(e.target);
+            const isClickRemove = e.target.closest('.yd-pl-chip-remove') || e.target.closest('.yd-pl-history-remove');
+            const isClickClear = e.target.closest('#yd-pl-clear-chips');
+
+            if (!isClickInsideInput && !isClickInsideHistory && !isClickRemove && !isClickClear) {
+                processInput(input.value.trim());
             }
         }
     });
@@ -8386,19 +8432,7 @@
         });
 
         // Парсинг ввода с префиксом оператора
-        function parseInput(raw) {
-            let operator = '*';
-            let value = raw.trim().toLowerCase();
 
-            // Проверяем префиксы
-            const prefixMatch = value.match(/^([*!^$=≠])/);
-            if (prefixMatch) {
-                operator = prefixMatch[1];
-                value = value.slice(1).trim();
-            }
-
-            return { operator, value };
-        }
 
         // Ввод домена с Enter для создания чипа
         const domainInput = document.getElementById('yd-pl-domain-input');
@@ -8425,23 +8459,7 @@
             domainInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    const rawValue = domainInput.value.trim();
-                    if (rawValue) {
-                        addToHistory(rawValue); // Сохраняем в историю
-
-                        // Поддержка множественного ввода
-                        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
-                        items.forEach(item => {
-                            const { operator, value } = parseInput(item);
-                            if (value) {
-                                settings.filters.patterns.push({ operator, value });
-                            }
-                        });
-                        saveSettings();
-                        renderChips();
-                        domainInput.value = '';
-                        updatePreviewHighlight();
-                    }
+                    processInput(domainInput.value.trim());
                 }
             });
 
@@ -9722,6 +9740,7 @@
     init();
 
 })();
+
 
 
 
