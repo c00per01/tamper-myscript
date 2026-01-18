@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.33
+// @version 1.193.35
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -8023,6 +8023,16 @@
         const panel = document.createElement('div');
         panel.id = 'yd-pl-panel';
         panel.innerHTML = `
+            <!-- Resize Handles -->
+            <div class="yd-pl-resize-handle yd-pl-resize-n" data-resize="n"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-s" data-resize="s"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-e" data-resize="e"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-w" data-resize="w"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-ne" data-resize="ne"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-nw" data-resize="nw"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-sw" data-resize="sw"></div>
+
             <!-- Header -->
             <div class="yd-pl-header" id="yd-pl-panel-header">
                 <div class="yd-pl-header-left">
@@ -8200,7 +8210,7 @@
             chip.dataset.index = index;
 
             chip.innerHTML = `
-                <span class="yd-pl-chip-op" title="${opInfo.label} — клик для смены">${opInfo.icon}</span>
+                <span class="yd-pl-chip-op" title="${opInfo.icon} ${opInfo.label}">${opInfo.icon}</span>
                 <span class="yd-pl-chip-text">${pattern.value}</span>
                 <span class="yd-pl-chip-remove">×</span>
             `;
@@ -8377,8 +8387,14 @@
         items.forEach(item => {
             const { operator, value } = parseInput(item);
             if (value) {
-                settings.filters.patterns.push({ operator, value });
-                added = true;
+                // Проверка на дубликат
+                const isDuplicate = settings.filters.patterns.some(
+                    p => p.operator === operator && p.value.toLowerCase() === value.toLowerCase()
+                );
+                if (!isDuplicate) {
+                    settings.filters.patterns.push({ operator, value });
+                    added = true;
+                }
             }
         });
 
@@ -8646,36 +8662,80 @@
     }
 
     function makeResizable(panel) {
-        const handle = panel.querySelector('.yd-pl-resize-se');
-        if (!handle) {
-            console.warn('[YD-PL] Resize handle not found');
+        const handles = panel.querySelectorAll('.yd-pl-resize-handle');
+        if (handles.length === 0) {
+            console.warn('[YD-PL] Resize handles not found');
             return;
         }
-        let isResizing = false, startX, startY, startW, startH;
 
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            const rect = panel.getBoundingClientRect();
-            startW = rect.width;
-            startH = rect.height;
-            document.body.style.userSelect = 'none';
+        let isResizing = false;
+        let currentDir = '';
+        let startX, startY, startW, startH, startTop, startLeft;
+
+        handles.forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isResizing = true;
+                currentDir = handle.dataset.resize;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = panel.getBoundingClientRect();
+                startW = rect.width;
+                startH = rect.height;
+                startTop = rect.top;
+                startLeft = rect.left;
+                document.body.style.userSelect = 'none';
+            });
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
-            panel.style.width = Math.max(300, startW + e.clientX - startX) + 'px';
-            panel.style.height = Math.max(350, startH + e.clientY - startY) + 'px';
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const minW = 320;
+            const minH = 350;
+
+            // Обработка по направлениям
+            if (currentDir.includes('e')) {
+                panel.style.width = Math.max(minW, startW + dx) + 'px';
+            }
+            if (currentDir.includes('w')) {
+                const newW = Math.max(minW, startW - dx);
+                if (newW > minW || dx < 0) {
+                    panel.style.width = newW + 'px';
+                    panel.style.left = (startLeft + dx) + 'px';
+                    panel.style.right = 'auto';
+                }
+            }
+            if (currentDir.includes('s')) {
+                panel.style.height = Math.max(minH, startH + dy) + 'px';
+            }
+            if (currentDir.includes('n')) {
+                const newH = Math.max(minH, startH - dy);
+                if (newH > minH || dy < 0) {
+                    panel.style.height = newH + 'px';
+                    panel.style.top = (startTop + dy) + 'px';
+                }
+            }
         });
 
         document.addEventListener('mouseup', () => {
             if (isResizing) {
-                settings.panelSize = { width: parseInt(panel.style.width), height: parseInt(panel.style.height) };
+                settings.panelSize = {
+                    width: parseInt(panel.style.width),
+                    height: parseInt(panel.style.height)
+                };
+                settings.panelPosition = {
+                    top: panel.style.top,
+                    left: panel.style.left,
+                    right: panel.style.right
+                };
                 saveSettings();
             }
             isResizing = false;
+            currentDir = '';
             document.body.style.userSelect = '';
         });
     }
@@ -8704,15 +8764,12 @@
 
         #yd-pl-panel {
             position: fixed;
-            top: 80px;
-            right: 20px;
+            top: 15px;
+            right: 15px;
             z-index: 9999999;
             width: 340px;
-            min-width: 340px;
-            min-height: 480px; /* Чтобы все элементы влезали без скролла */
-            /* Allow resize */
-            resize: both;
-            overflow: hidden;
+            min-width: 320px;
+            min-height: 420px;
             background: var(--yd-bg);
             border-radius: 12px;
             box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
@@ -8722,7 +8779,25 @@
             display: flex;
             flex-direction: column;
             max-height: 90vh;
+            overflow: hidden;
         }
+
+        /* Resize Handles — все стороны и углы */
+        .yd-pl-resize-handle {
+            position: absolute;
+            background: transparent;
+            z-index: 10;
+            transition: background 0.15s;
+        }
+        .yd-pl-resize-handle:hover { background: rgba(32, 85, 152, 0.15); }
+        .yd-pl-resize-n { top: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+        .yd-pl-resize-s { bottom: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+        .yd-pl-resize-e { top: 12px; bottom: 12px; right: -3px; width: 6px; cursor: ew-resize; }
+        .yd-pl-resize-w { top: 12px; bottom: 12px; left: -3px; width: 6px; cursor: ew-resize; }
+        .yd-pl-resize-ne { top: -3px; right: -3px; width: 12px; height: 12px; cursor: nesw-resize; border-radius: 0 12px 0 0; }
+        .yd-pl-resize-nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nwse-resize; border-radius: 12px 0 0 0; }
+        .yd-pl-resize-se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: nwse-resize; border-radius: 0 0 12px 0; }
+        .yd-pl-resize-sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: nesw-resize; border-radius: 0 0 0 12px; }
 
         /* History Dropdown */
         .yd-pl-history-dropdown {
@@ -8941,45 +9016,60 @@
         /* Chips container */
         .yd-pl-chips-container { display: contents; }
 
-        /* Чипы */
+        /* Чипы — Apple-style */
         .yd-pl-chip {
             display: inline-flex;
             align-items: center;
             gap: 0;
-            padding: 3px 6px 3px 0;
+            padding: 0;
             background: #f0f2f5;
-            border-radius: 4px;
-            font-size: 11px;
+            border-radius: 6px;
+            font-size: 12px;
             color: var(--yd-text);
             cursor: default;
             transition: all 0.15s;
             animation: yd-pl-chip-in 0.15s ease;
-            max-width: 150px;
+            max-width: 180px;
+            overflow: hidden;
+        }
+        .yd-pl-chip:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .yd-pl-chip-exclude {
             background: #fff1f0;
             color: var(--yd-danger);
         }
+        /* Оператор — кликабельный блок слева */
         .yd-pl-chip-op {
             font-family: 'SF Mono', Consolas, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            width: 20px;
-            height: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            min-width: 26px;
+            height: 100%;
+            padding: 6px 8px;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: rgba(32, 85, 152, 0.1);
             color: var(--yd-primary);
             cursor: pointer;
-            border-radius: 3px;
             transition: all 0.15s;
-            margin-right: 2px;
+            border-right: 1px solid rgba(32, 85, 152, 0.15);
         }
         .yd-pl-chip-op:hover { 
-            background: rgba(32, 85, 152, 0.15); 
+            background: rgba(32, 85, 152, 0.2);
         }
-        .yd-pl-chip-exclude .yd-pl-chip-op { color: var(--yd-danger); }
+        .yd-pl-chip-exclude .yd-pl-chip-op { 
+            color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.1);
+            border-right-color: rgba(239, 68, 68, 0.15);
+        }
+        .yd-pl-chip-exclude .yd-pl-chip-op:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        /* Текст */
         .yd-pl-chip-text {
+            padding: 6px 8px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -8987,20 +9077,26 @@
             max-width: 100px;
         }
         .yd-pl-chip-text:hover { text-decoration: underline; }
+        /* Крестик удаления — увеличенный */
         .yd-pl-chip-remove {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
+            width: 24px;
+            height: 100%;
+            padding: 0 6px;
             cursor: pointer;
-            font-size: 10px;
+            font-size: 14px;
+            font-weight: 500;
             color: var(--yd-text-muted);
             transition: all 0.15s;
             flex-shrink: 0;
+            border-left: 1px solid rgba(0,0,0,0.05);
         }
-        .yd-pl-chip-remove:hover { background: var(--yd-danger); color: #fff; }
+        .yd-pl-chip-remove:hover { 
+            background: var(--yd-danger); 
+            color: #fff;
+        }
         @keyframes yd-pl-chip-in { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
         /* Input внутри wrapper */
@@ -9049,8 +9145,16 @@
             color: var(--yd-text);
             transition: background 0.1s;
         }
-        .yd-pl-op-item:hover { background: var(--yd-bg-secondary); }
-        .yd-pl-op-item.active { background: #E3F2FD; }
+        .yd-pl-op-item:hover { 
+            background: rgba(32, 85, 152, 0.1);
+        }
+        .yd-pl-op-item.active { 
+            background: rgba(32, 85, 152, 0.15);
+            font-weight: 600;
+        }
+        .yd-pl-op-item.exclude:hover { 
+            background: rgba(239, 68, 68, 0.1);
+        }
         .yd-pl-op-item.exclude { color: var(--yd-danger); }
         .yd-pl-op-item .op-icon {
             font-family: 'SF Mono', Consolas, monospace;
@@ -9796,6 +9900,7 @@
     init();
 
 })();
+
 
 
 
