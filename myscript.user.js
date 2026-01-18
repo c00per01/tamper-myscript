@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.26
+// @version 1.193.28
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7664,15 +7664,13 @@
         return op === '!' || op === '≠';
     }
 
-    function isPlatformRow(row) {
-        return !!row.querySelector('[data-testid$="_name-with-links"]');
-    }
-
     function checkRow(row, filters, mode) {
-        if (!isPlatformRow(row)) return false;
+        // Проверяем валидность строки: чекбокс и данные
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        if (!checkbox) return false;
 
         const tds = row.querySelectorAll('td');
-        if (tds.length < 6) return false;
+        if (tds.length < 5) return false;
 
         const domainCell = tds[0];
         const domainEl = domainCell.querySelector('a') || domainCell;
@@ -7804,12 +7802,11 @@
             // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
             document.querySelectorAll('tbody tr').forEach(row => {
-                if (isPlatformRow(row)) {
-                    const checkbox = row.querySelector('input[type="checkbox"]:checked');
-                    if (checkbox && !checkbox.disabled) {
-                        clickWithoutScroll(checkbox);
-                        count++;
-                    }
+                const checkbox = row.querySelector('input[type="checkbox"]:checked');
+                const tds = row.querySelectorAll('td');
+                if (checkbox && !checkbox.disabled && tds.length >= 5) {
+                    clickWithoutScroll(checkbox);
+                    count++;
                 }
             });
             if (count > 0) {
@@ -7842,7 +7839,9 @@
             // Режим снятия — показываем сколько ВСЕГО выделено
             let checkedCount = 0;
             document.querySelectorAll('tbody tr').forEach(row => {
-                if (isPlatformRow(row) && row.querySelector('input[type="checkbox"]:checked')) {
+                const checkbox = row.querySelector('input[type="checkbox"]:checked');
+                const tds = row.querySelectorAll('td');
+                if (checkbox && tds.length >= 5) {
                     checkedCount++;
                 }
             });
@@ -8691,8 +8690,9 @@
             top: 80px;
             right: 20px;
             z-index: 9999999;
-            width: 300px;
-            min-width: 280px;
+            width: 340px;
+            min-width: 340px;
+            min-height: 480px; /* Чтобы все элементы влезали без скролла */
             /* Allow resize */
             resize: both;
             overflow: hidden;
@@ -9722,6 +9722,7 @@
     init();
 
 })();
+
 
 
 
