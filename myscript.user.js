@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.32
+// @version 1.193.33
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7670,19 +7670,18 @@
         if (!checkbox) return false;
 
         const tds = row.querySelectorAll('td');
-        if (tds.length < 7) return false; // Нужно минимум 7 ячеек: checkbox, domain, показы, клики, CTR, расход, CPC
+        if (tds.length < 6) return false;
 
-        // tds[0] = checkbox, tds[1] = домен, tds[2] = показы, tds[3] = клики, tds[4] = CTR, tds[5] = расход, tds[6] = CPC
-        const domainCell = tds[1];
+        const domainCell = tds[0];
         const domainEl = domainCell.querySelector('a') || domainCell;
         if (isGreyElement(domainEl)) return false;
 
         const domain = domainEl.textContent.trim().toLowerCase();
 
-        const clicks = parseNumber(tds[3]?.textContent);
-        const ctr = parseNumber(tds[4]?.textContent);
-        const spend = parseNumber(tds[5]?.textContent);
-        const cpc = parseNumber(tds[6]?.textContent);
+        const clicks = parseNumber(tds[2].textContent);
+        const ctr = parseNumber(tds[3].textContent);
+        const spend = parseNumber(tds[4].textContent);
+        const cpc = parseNumber(tds[5].textContent);
 
         const conditions = [];
 
@@ -7805,7 +7804,7 @@
             document.querySelectorAll('tbody tr').forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]:checked');
                 const tds = row.querySelectorAll('td');
-                if (checkbox && !checkbox.disabled && tds.length >= 7) {
+                if (checkbox && !checkbox.disabled && tds.length >= 5) {
                     clickWithoutScroll(checkbox);
                     count++;
                 }
@@ -7842,7 +7841,7 @@
             document.querySelectorAll('tbody tr').forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]:checked');
                 const tds = row.querySelectorAll('td');
-                if (checkbox && tds.length >= 7) {
+                if (checkbox && tds.length >= 5) {
                     checkedCount++;
                 }
             });
@@ -8066,17 +8065,19 @@
                     <div class="yd-pl-section-header">
                         <span class="yd-pl-section-title">По доменам</span>
                         <button id="yd-pl-clear-chips" class="yd-pl-section-action" title="Очистить" style="display: none;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                             </svg>
                         </button>
                     </div>
-                    <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
-                        <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
-                        <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
-                            placeholder="Введите домен...">
+                    <div class="yd-pl-domain-section" style="position: relative;">
+                        <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
+                            <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
+                            <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
+                                placeholder="Введите домен...">
+                        </div>
+                        <div id="yd-pl-history-dropdown" class="yd-pl-history-dropdown"></div>
                     </div>
-                    <div id="yd-pl-history-dropdown" class="yd-pl-history-dropdown"></div>
                 </div>
 
                 <!-- Секция: По показателям -->
@@ -8084,7 +8085,7 @@
                     <div class="yd-pl-section-header">
                         <span class="yd-pl-section-title">По показателям</span>
                         <button id="yd-pl-reset-filters" class="yd-pl-section-action" style="display: none;" title="Сбросить">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                             </svg>
                         </button>
@@ -8112,26 +8113,30 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Footer: Условие + Кнопка -->
-            <div class="yd-pl-footer">
-                <div class="yd-pl-footer-row">
-                    <div class="yd-pl-mode-toggle">
+                <!-- Условие: И / Или (компактный переключатель) -->
+                <div class="yd-pl-condition-row">
+                    <span class="yd-pl-condition-label">Условие:</span>
+                    <div class="yd-pl-segmented-apple yd-pl-segmented-compact">
                         <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
                         <label for="yd-pl-mode-and">И</label>
                         <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
                         <label for="yd-pl-mode-or">Или</label>
+                        <div class="yd-pl-segmented-slider"></div>
                     </div>
-                    <button id="yd-pl-apply" class="yd-pl-btn-primary">
-                        <span id="yd-pl-apply-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                        </span>
-                        <span id="yd-pl-apply-text">Выделить (0)</span>
-                    </button>
                 </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="yd-pl-footer">
+                <button id="yd-pl-apply" class="yd-pl-btn-primary">
+                    <span id="yd-pl-apply-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </span>
+                    <span id="yd-pl-apply-text">Выделить (0)</span>
+                </button>
             </div>
 
             <!-- Resize handle -->
@@ -8719,82 +8724,6 @@
             max-height: 90vh;
         }
 
-        /* Секции */
-        .yd-pl-section {
-            padding: 12px;
-            border-bottom: 1px solid var(--yd-border);
-            position: relative;
-        }
-        .yd-pl-section:last-child { border-bottom: none; }
-        
-        .yd-pl-section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .yd-pl-section-title {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--yd-text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .yd-pl-section-action {
-            background: none;
-            border: none;
-            padding: 4px;
-            cursor: pointer;
-            color: var(--yd-text-muted);
-            border-radius: 4px;
-            transition: all 0.15s;
-        }
-        .yd-pl-section-action:hover {
-            color: var(--yd-danger);
-            background: rgba(239, 68, 68, 0.1);
-        }
-
-        /* Footer */
-        .yd-pl-footer {
-            padding: 12px;
-            border-top: 1px solid var(--yd-border);
-            background: var(--yd-bg-secondary);
-        }
-        .yd-pl-footer-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* Mode Toggle (И / Или) */
-        .yd-pl-mode-toggle {
-            display: flex;
-            background: var(--yd-border);
-            border-radius: 6px;
-            padding: 2px;
-        }
-        .yd-pl-mode-toggle input { display: none; }
-        .yd-pl-mode-toggle label {
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--yd-text-secondary);
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.15s;
-        }
-        .yd-pl-mode-toggle input:checked + label {
-            background: #fff;
-            color: var(--yd-text);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        }
-
-        /* Body */
-        .yd-pl-body {
-            flex: 1;
-            overflow-y: auto;
-        }
-
         /* History Dropdown */
         .yd-pl-history-dropdown {
             position: absolute;
@@ -8920,11 +8849,68 @@
         /* Body */
         .yd-pl-body { 
             flex: 1; 
-            padding: 14px; 
+            padding: 12px; 
             display: flex; 
             flex-direction: column; 
-            gap: 8px;
+            gap: 12px;
             overflow-y: auto;
+        }
+
+        /* Section — единый блок с заголовком */
+        .yd-pl-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .yd-pl-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2px;
+        }
+        .yd-pl-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--yd-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .yd-pl-section-action {
+            background: none;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            border-radius: 4px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+        }
+        .yd-pl-section-action:hover {
+            color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Condition Row — И/Или переключатель */
+        .yd-pl-condition-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0 4px 0;
+            border-top: 1px solid var(--yd-border);
+        }
+        .yd-pl-condition-label {
+            font-size: 12px;
+            color: var(--yd-text-secondary);
+            white-space: nowrap;
+        }
+        .yd-pl-segmented-compact {
+            flex: 1;
+            max-width: 120px;
+        }
+        .yd-pl-segmented-compact label {
+            padding: 5px 16px !important;
+            font-size: 12px !important;
         }
 
         /* Domain Section */
