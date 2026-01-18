@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.24
+// @version 1.193.26
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7553,6 +7553,8 @@
                 cpcMin: '', cpcMax: '',
                 spendMin: '', spendMax: ''
             },
+            history: [], // История ввода доменов
+
             templates: [
                 {
                     name: 'Мобильные приложения',
@@ -7662,7 +7664,13 @@
         return op === '!' || op === '≠';
     }
 
+    function isPlatformRow(row) {
+        return !!row.querySelector('[data-testid$="_name-with-links"]');
+    }
+
     function checkRow(row, filters, mode) {
+        if (!isPlatformRow(row)) return false;
+
         const tds = row.querySelectorAll('td');
         if (tds.length < 6) return false;
 
@@ -7715,14 +7723,15 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        const rows = document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            if (!checkbox || checkbox.disabled) return;
-            if (checkRow(row, filters, mode) && !checkbox.checked) {
-                matching.push(row);
+            if (checkRow(row, filters, mode)) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                    matching.push(row);
+                }
             }
         });
 
@@ -7731,8 +7740,8 @@
 
     // ==================== UI: ПОДСВЕТКА PREVIEW ====================
     function updatePreviewHighlight() {
-        // Снять старую подсветку — ТОЛЬКО в таблице площадок
-        document.querySelectorAll('.b-stat-platform__table-wrap tbody tr.yd-pl-row-preview, .yd-pl-row-preview').forEach(row => {
+        // Снять старую подсветку
+        document.querySelectorAll('tr.yd-pl-row-preview').forEach(row => {
             row.classList.remove('yd-pl-row-preview');
         });
 
@@ -7765,7 +7774,7 @@
 
         // Утилита для клика без скролла
         function clickWithoutScroll(element) {
-            const scrollableParent = element.closest('.b-stat-platform__table-wrap') || document.scrollingElement;
+            const scrollableParent = element.closest('div[style*="overflow"]') || document.scrollingElement;
             const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
             element.click();
             if (scrollableParent) {
@@ -7784,7 +7793,7 @@
             let selected = 0;
             matching.forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && !checkbox.checked) {
+                if (checkbox && !checkbox.checked && !checkbox.disabled) {
                     clickWithoutScroll(checkbox);
                     selected++;
                 }
@@ -7794,14 +7803,19 @@
         } else {
             // Режим снятия — снимаем ВСЕ выделенные галочки
             let count = 0;
-            document.querySelectorAll('.b-stat-platform__table-wrap tbody tr input[type="checkbox"]:checked').forEach(checkbox => {
-                clickWithoutScroll(checkbox);
-                count++;
+            document.querySelectorAll('tbody tr').forEach(row => {
+                if (isPlatformRow(row)) {
+                    const checkbox = row.querySelector('input[type="checkbox"]:checked');
+                    if (checkbox && !checkbox.disabled) {
+                        clickWithoutScroll(checkbox);
+                        count++;
+                    }
+                }
             });
             if (count > 0) {
                 showNotification(`Снято: ${count}`, 'info');
+                isSelectMode = true;
             }
-            isSelectMode = true;
         }
 
         updateButtonState();
@@ -7826,7 +7840,13 @@
             btn.disabled = count === 0;
         } else {
             // Режим снятия — показываем сколько ВСЕГО выделено
-            const checkedCount = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr input[type="checkbox"]:checked').length;
+            let checkedCount = 0;
+            document.querySelectorAll('tbody tr').forEach(row => {
+                if (isPlatformRow(row) && row.querySelector('input[type="checkbox"]:checked')) {
+                    checkedCount++;
+                }
+            });
+
             btn.classList.remove('yd-pl-btn-primary');
             btn.classList.add('yd-pl-btn-deselect');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
@@ -8042,12 +8062,14 @@
             <!-- Body -->
             <div class="yd-pl-body">
                 <!-- Фильтр по доменам — единый контейнер -->
-                <div class="yd-pl-domain-section">
+                <div class="yd-pl-domain-section" style="position: relative;">
                     <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
                         <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
                         <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
                             placeholder="Введите домен...">
                     </div>
+                    <div id="yd-pl-history-dropdown" class="yd-pl-history-dropdown"></div>
+
                     <button id="yd-pl-clear-chips" class="yd-pl-clear-chips-external" title="Очистить все фильтры" style="display: none;">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -8057,14 +8079,9 @@
                 </div>
 
                 <!-- Расширенные фильтры -->
-                <div class="yd-pl-expand ${settings.filtersExpanded ? 'open' : ''}">
+                <div class="yd-pl-expand">
                     <div class="yd-pl-expand-header">
-                        <button id="yd-pl-expand-toggle" class="yd-pl-expand-btn">
-                            <svg class="yd-pl-expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            <span>Доп. фильтры</span>
-                        </button>
+                        <span class="yd-pl-expand-btn">Доп. фильтры</span>
                         <button id="yd-pl-reset-filters" class="yd-pl-reset-icon" style="display: none;" title="Сбросить фильтры">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -8279,6 +8296,83 @@
         }, 10);
     }
 
+    // ==================== ИСТОРИЯ ВВОДА ====================
+    function addToHistory(value) {
+        if (!value || value.trim() === '') return;
+        const normalized = value.trim();
+
+        // Удалить если уже есть
+        if (!settings.history) settings.history = [];
+        const index = settings.history.findIndex(item => item === normalized);
+        if (index !== -1) settings.history.splice(index, 1);
+
+        settings.history.unshift(normalized);
+        if (settings.history.length > 10) settings.history.pop();
+        saveSettings();
+    }
+
+    function removeFromHistory(value) {
+        if (!settings.history) return;
+        settings.history = settings.history.filter(i => i !== value);
+        saveSettings();
+        renderHistory();
+        if (settings.history.length === 0) {
+            const dropdown = document.getElementById('yd-pl-history-dropdown');
+            if (dropdown) dropdown.classList.remove('visible');
+        }
+    }
+
+    function renderHistory() {
+        const dropdown = document.getElementById('yd-pl-history-dropdown');
+        if (!dropdown) return;
+
+        if (!settings.history || settings.history.length === 0) {
+            dropdown.innerHTML = '<div class="yd-pl-history-item" style="cursor:default;color:var(--yd-text-muted);justify-content:center;">История пуста</div>';
+            return;
+        }
+
+        dropdown.innerHTML = '';
+        settings.history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'yd-pl-history-item';
+            div.innerHTML = `
+                <span>${item}</span>
+                <span class="yd-pl-history-remove" title="Удалить">×</span>
+            `;
+
+            // Клик по тексту — выбрать
+            div.querySelector('span').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const input = document.getElementById('yd-pl-domain-input');
+                if (input) {
+                    input.value = item;
+                    input.focus();
+                }
+                dropdown.classList.remove('visible');
+            });
+
+            // Клик по крестику — удалить
+            div.querySelector('.yd-pl-history-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                removeFromHistory(item);
+            });
+
+            dropdown.appendChild(div);
+        });
+    }
+
+    // Закрытие истории при клике вне
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('yd-pl-history-dropdown');
+        const input = document.getElementById('yd-pl-domain-input');
+        if (dropdown && dropdown.classList.contains('visible')) {
+            if (!dropdown.contains(e.target) && e.target !== input) {
+                dropdown.classList.remove('visible');
+            }
+        }
+    });
+
     function setupEventListeners(panel, pill) {
         // Toggle panel
         document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
@@ -8317,12 +8411,26 @@
                 wrapper.addEventListener('click', () => domainInput.focus());
             }
 
+            // Показ истории при клике/фокусе
+            const showHistory = () => {
+                renderHistory();
+                const dropdown = document.getElementById('yd-pl-history-dropdown');
+                if (dropdown) dropdown.classList.add('visible');
+            };
+            domainInput.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showHistory();
+            });
+            domainInput.addEventListener('focus', showHistory);
+
             domainInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const rawValue = domainInput.value.trim();
                     if (rawValue) {
-                        // Поддержка множественного ввода через запятую или перенос строки
+                        addToHistory(rawValue); // Сохраняем в историю
+
+                        // Поддержка множественного ввода
                         const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
                         items.forEach(item => {
                             const { operator, value } = parseInput(item);
@@ -8585,7 +8693,9 @@
             z-index: 9999999;
             width: 300px;
             min-width: 280px;
-            max-width: 450px;
+            /* Allow resize */
+            resize: both;
+            overflow: hidden;
             background: var(--yd-bg);
             border-radius: 12px;
             box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
@@ -8594,8 +8704,44 @@
             color: var(--yd-text);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            max-height: 90vh;
         }
+
+        /* History Dropdown */
+        .yd-pl-history-dropdown {
+            position: absolute;
+            top: 100%; /* Relative to input wrapper if needed */
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            margin-top: 4px;
+        }
+        .yd-pl-history-dropdown.visible { display: block; }
+        .yd-pl-history-item {
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--yd-text);
+            cursor: pointer;
+            border-bottom: 1px solid var(--yd-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .yd-pl-history-item:last-child { border-bottom: none; }
+        .yd-pl-history-item:hover { background: var(--yd-bg-secondary); }
+        .yd-pl-history-remove {
+            color: var(--yd-text-muted);
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .yd-pl-history-remove:hover { color: var(--yd-danger); background: rgba(255,0,0,0.05); }
 
         #yd-pl-panel * { box-sizing: border-box; }
 
@@ -8840,12 +8986,13 @@
         }
 
 
-        /* Расширяемая секция */
-        .yd-pl-expand { margin-top: 4px; }
+        /* Расширяемая секция (Всегда открыта) */
+        .yd-pl-expand { margin-top: 8px; }
         .yd-pl-expand-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-bottom: 8px;
         }
         .yd-pl-expand-btn {
             display: flex;
@@ -8853,15 +9000,14 @@
             gap: 6px;
             background: none;
             border: none;
-            padding: 6px 0;
+            padding: 0;
             font-size: 12px;
-            color: var(--yd-text-secondary);
-            cursor: pointer;
-            transition: color 0.15s;
+            font-weight: 600;
+            color: var(--yd-text);
+            cursor: default; /* Не кликабельно */
         }
-        .yd-pl-expand-btn:hover { color: var(--yd-primary); }
-        .yd-pl-expand-arrow { transition: transform 0.2s; }
-        .yd-pl-expand.open .yd-pl-expand-arrow { transform: rotate(180deg); }
+        .yd-pl-expand-arrow { display: none; } /* Скрыть стрелку */
+        
         .yd-pl-reset-icon {
             display: none;
             align-items: center;
@@ -8880,17 +9026,10 @@
             background: rgba(239, 68, 68, 0.1);
         }
         .yd-pl-expand-content { 
-            max-height: 0;
-            overflow: hidden;
-            padding: 0 12px;
+            display: block; /* Всегда видно */
+            padding: 12px;
             background: var(--yd-bg-secondary);
             border-radius: 10px;
-            margin-top: 8px;
-            transition: max-height 0.25s ease, padding 0.25s ease;
-        }
-        .yd-pl-expand.open .yd-pl-expand-content { 
-            max-height: 300px; 
-            padding: 12px;
         }
 
         /* External Clear Chips Button */
@@ -9583,6 +9722,7 @@
     init();
 
 })();
+
 
 
 
