@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.42
+// @version 1.193.44
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7733,7 +7733,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7754,7 +7754,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7771,7 +7771,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7802,7 +7802,7 @@
         if (!isSelectMode) {
             const filters = getFiltersFromUI();
             const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
-            const rows = document.querySelectorAll('tbody tr');
+            const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
 
             rows.forEach(row => {
                 const checkbox = row.querySelector('input[type="checkbox"]');
@@ -9975,6 +9975,7 @@
     init();
 
 })();
+
 
 
 
