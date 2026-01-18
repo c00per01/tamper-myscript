@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.35
+// @version 1.193.37
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -8225,6 +8225,7 @@
             chip.querySelector('.yd-pl-chip-remove').addEventListener('click', (e) => {
                 e.stopPropagation();
                 settings.filters.patterns.splice(index, 1);
+                isSelectMode = true; // Сброс в режим выделения
                 saveSettings();
                 renderChips();
                 updatePreviewHighlight();
@@ -8517,9 +8518,11 @@
             clearChipsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 settings.filters.patterns = [];
+                isSelectMode = true; // Сброс в режим выделения
                 saveSettings();
                 renderChips();
                 updatePreviewHighlight();
+                showNotification('Фильтры очищены', 'info');
             });
         }
 
@@ -9359,7 +9362,7 @@
             justify-content: center; 
             gap: 6px; 
             padding: 10px 12px; 
-            background: var(--yd-accent); 
+            background: #6B7280; 
             color: #fff; 
             border: none; 
             border-radius: 8px; 
@@ -9369,9 +9372,9 @@
             transition: all 0.2s; 
         }
         .yd-pl-btn-deselect:hover { 
-            background: #D45A17; 
+            background: #4B5563; 
             transform: translateY(-1px); 
-            box-shadow: 0 4px 12px rgba(228, 105, 36, 0.25); 
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.25); 
         }
         .yd-pl-btn-deselect:active { transform: translateY(0); }
 
@@ -9414,6 +9417,15 @@
             background: var(--yd-bg); 
             border-color: var(--yd-danger); 
             color: var(--yd-danger); 
+        }
+
+        /* Preview Highlight — подсветка найденных строк */
+        tr.yd-pl-row-preview {
+            background: rgba(255, 235, 59, 0.15) !important;
+            box-shadow: inset 3px 0 0 #FFEB3B;
+        }
+        tr.yd-pl-row-preview:hover {
+            background: rgba(255, 235, 59, 0.25) !important;
         }
 
         .yd-pl-resize-se { 
@@ -9900,6 +9912,7 @@
     init();
 
 })();
+
 
 
 
