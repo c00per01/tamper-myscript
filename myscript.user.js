@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.195.1
+// @version 1.196.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7804,11 +7804,9 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        // ТОЛЬКО таблица площадок
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
-        if (!tableWrap) return [];
-
-        const rows = tableWrap.querySelectorAll('tbody tr');
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7829,11 +7827,9 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        // ТОЛЬКО таблица площадок
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
-        if (!tableWrap) return [];
-
-        const rows = tableWrap.querySelectorAll('tbody tr');
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7850,11 +7846,9 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        // ТОЛЬКО таблица площадок
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
-        if (!tableWrap) return [];
-
-        const rows = tableWrap.querySelectorAll('tbody tr');
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7872,13 +7866,12 @@
 
     // ==================== UI: ПОДСВЕТКА PREVIEW ====================
     function updatePreviewHighlight() {
-        // Снять старую подсветку ТОЛЬКО в таблице площадок
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
-        if (tableWrap) {
-            tableWrap.querySelectorAll('tbody tr.yd-pl-row-preview').forEach(row => {
-                row.classList.remove('yd-pl-row-preview');
-            });
-        }
+        // Снять старую подсветку
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rowsToClean = tableWrap ? tableWrap.querySelectorAll('tbody tr.yd-pl-row-preview') : document.querySelectorAll('tbody tr.yd-pl-row-preview');
+        rowsToClean.forEach(row => {
+            row.classList.remove('yd-pl-row-preview');
+        });
 
         // Подсветить ВСЕ строки соответствующие фильтрам (независимо от checked)
         const matching = getAllMatchingRows();
@@ -7927,11 +7920,11 @@
 
         let deselectedCount = 0;
 
-        // Ищем ТОЛЬКО в таблице площадок
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
-        if (!tableWrap) return;
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
 
-        tableWrap.querySelectorAll('tbody tr').forEach(row => {
+        rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (checkbox && checkbox.checked && !checkbox.disabled) {
                 // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
@@ -8328,11 +8321,10 @@
                     </span>
                     <span id="yd-pl-apply-text">Выделить (0)</span>
                 </button>
-                <!-- Блок информации о дате последней отправки — ПОД кнопкой -->
+                <!-- Компактная строка даты последней отправки -->
                 <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
                     <span class="yd-pl-last-send-label">Последняя отправка:</span>
                     <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
-                    <span id="yd-pl-period-hint" style="font-size: 10px; color: #888;"></span>
                 </div>
             </div>
 
@@ -8378,7 +8370,6 @@
     function updateLastSendInfo() {
         const container = document.getElementById('yd-pl-last-send-info');
         const dateEl = document.getElementById('yd-pl-last-send-date');
-        const hintEl = document.getElementById('yd-pl-period-hint');
 
         if (!container || !dateEl) return;
 
@@ -8387,15 +8378,6 @@
         if (period && period.lastChange) {
             container.style.display = 'flex';
             dateEl.textContent = formatDateRu(period.lastChange);
-
-            if (period.start && period.end) {
-                hintEl.textContent = `Период: ${formatDateRu(period.start)} — ${formatDateRu(period.end)}`;
-            } else if (period.message) {
-                hintEl.textContent = period.message;
-                hintEl.style.color = '#e46924';
-            } else {
-                hintEl.textContent = '';
-            }
         } else {
             container.style.display = 'none';
         }
@@ -9044,15 +9026,15 @@
             }
         }
 
-        /* Дата последней отправки */
+        /* Дата последней отправки — компактная одна строка */
         .yd-pl-last-send-info {
             display: flex;
-            flex-direction: column;
-            gap: 2px;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
             font-size: 11px;
             color: #666;
-            padding: 8px 10px;
-            margin-top: 8px;
+            padding: 6px 10px;
             background: linear-gradient(135deg, #f8fff8, #f0f8f0);
             border-radius: 6px;
             border-left: 3px solid #28a745;
@@ -9703,15 +9685,21 @@
             color: var(--yd-danger); 
         }
 
-        /* Preview Highlight — подсветка ТОЛЬКО строк в таблице площадок (не шапка, не другие части) */
-        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview {
+        /* Preview Highlight — подсветка строк в таблице площадок */
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview,
+        .b-stat-table tbody tr.yd-pl-row-preview,
+        tbody tr.yd-pl-row-preview {
             background: rgba(255, 235, 59, 0.15) !important;
             box-shadow: inset 3px 0 0 #FFEB3B;
         }
-        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview:hover {
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview:hover,
+        .b-stat-table tbody tr.yd-pl-row-preview:hover,
+        tbody tr.yd-pl-row-preview:hover {
             background: rgba(255, 235, 59, 0.25) !important;
         }
-        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td {
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td,
+        .b-stat-table tbody tr.yd-pl-row-preview td,
+        tbody tr.yd-pl-row-preview td {
             background: transparent !important;
         }
 
@@ -10211,6 +10199,7 @@
     init();
 
 })();
+
 
 
 
