@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.194.4
+// @version 1.195.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7690,6 +7690,19 @@
         return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
     }
 
+    // Клик по элементу БЕЗ скролла страницы
+    function clickWithoutScroll(element) {
+        // Сохраняем текущую позицию скролла
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+
+        // Выполняем клик
+        element.click();
+
+        // Немедленно восстанавливаем позицию скролла
+        window.scrollTo(scrollX, scrollY);
+    }
+
     // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
     function getFiltersFromUI() {
         // Patterns берём напрямую из settings (чипы)
@@ -7791,7 +7804,11 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        // ТОЛЬКО таблица площадок
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
+        if (!tableWrap) return [];
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7812,14 +7829,14 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        // Use specific selector + filter for checkbox
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        // ТОЛЬКО таблица площадок
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
+        if (!tableWrap) return [];
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
-            // Ensure row has checkbox (filters out headers)
-            if (!row.querySelector('input[type="checkbox"]')) return;
-
             if (checkRow(row, filters, mode)) {
                 matching.push(row);
             }
@@ -7833,7 +7850,11 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        // ТОЛЬКО таблица площадок
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
+        if (!tableWrap) return [];
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7851,19 +7872,24 @@
 
     // ==================== UI: ПОДСВЕТКА PREVIEW ====================
     function updatePreviewHighlight() {
-        // Снять старую подсветку
-        document.querySelectorAll('tr.yd-pl-row-preview').forEach(row => {
-            row.classList.remove('yd-pl-row-preview');
-        });
+        // Снять старую подсветку ТОЛЬКО в таблице площадок
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
+        if (tableWrap) {
+            tableWrap.querySelectorAll('tbody tr.yd-pl-row-preview').forEach(row => {
+                row.classList.remove('yd-pl-row-preview');
+            });
+        }
 
         // Подсветить ВСЕ строки соответствующие фильтрам (независимо от checked)
         const matching = getAllMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // АВТОРЕЖИМ: если мы в режиме "Снять" — автоматически снимать галочки 
-        // со строк, которые больше не соответствуют фильтрам
+        // LIVE-РЕЖИМ: если мы в режиме "Снять" — автоматически:
+        // 1) Снимаем галочки со строк, которые НЕ соответствуют фильтрам
+        // 2) Ставим галочки на строки, которые соответствуют фильтрам
         if (!isSelectMode) {
             autoDeselectNonMatching();
+            autoSelectMatching(); // Live-выделение галочками
         }
 
         // Обновить состояние кнопки и badge
@@ -7874,6 +7900,25 @@
         saveCurrentFilters();
     }
 
+    // Live-выделение галочками всех подходящих строк (режим "Снять")
+    function autoSelectMatching() {
+        const matching = getAllMatchingRows();
+        let selectedCount = 0;
+
+        matching.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                // Клик БЕЗ скролла
+                clickWithoutScroll(checkbox);
+                selectedCount++;
+            }
+        });
+
+        if (selectedCount > 0) {
+            showNotification(`Авто-выделено: ${selectedCount}`, 'success');
+        }
+    }
+
     // Автоматическое снятие галочек со строк, которые НЕ соответствуют текущим фильтрам
     function autoDeselectNonMatching() {
         const filters = getFiltersFromUI();
@@ -7882,7 +7927,11 @@
 
         let deselectedCount = 0;
 
-        document.querySelectorAll('.b-stat-platform__table-wrap tbody tr').forEach(row => {
+        // Ищем ТОЛЬКО в таблице площадок
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap');
+        if (!tableWrap) return;
+
+        tableWrap.querySelectorAll('tbody tr').forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (checkbox && checkbox.checked && !checkbox.disabled) {
                 // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
@@ -7910,37 +7959,6 @@
 
     // ==================== ДЕЙСТВИЯ ====================
     let isSelectMode = true; // true = выделить, false = снять
-
-    // Утилита для клика по чекбоксу БЕЗ скролла страницы
-    function clickWithoutScroll(element) {
-        // Сохраняем позицию скролла всех родителей
-        const scrollPositions = [];
-        let parent = element.parentElement;
-        while (parent) {
-            if (parent.scrollTop !== undefined) {
-                scrollPositions.push({ el: parent, top: parent.scrollTop, left: parent.scrollLeft });
-            }
-            parent = parent.parentElement;
-        }
-        // Также сохраняем скролл документа
-        const docScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
-        const docScrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft;
-
-        // Клик
-        element.click();
-
-        // Восстанавливаем позиции
-        requestAnimationFrame(() => {
-            scrollPositions.forEach(pos => {
-                pos.el.scrollTop = pos.top;
-                pos.el.scrollLeft = pos.left;
-            });
-            document.documentElement.scrollTop = docScrollTop;
-            document.body.scrollTop = docScrollTop;
-            document.documentElement.scrollLeft = docScrollLeft;
-            document.body.scrollLeft = docScrollLeft;
-        });
-    }
 
     function togglePlacements() {
         const matching = getMatchingRows();
@@ -8311,7 +8329,7 @@
                     <span id="yd-pl-apply-text">Выделить (0)</span>
                 </button>
                 <!-- Блок информации о дате последней отправки — ПОД кнопкой -->
-                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none; margin-top: 8px;">
+                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
                     <span class="yd-pl-last-send-label">Последняя отправка:</span>
                     <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
                     <span id="yd-pl-period-hint" style="font-size: 10px; color: #888;"></span>
@@ -8324,12 +8342,11 @@
 
         document.body.appendChild(panel);
 
-        // Позиция и размер — ВСЕГДА справа
+        // Позиция и размер
         panel.style.width = settings.panelSize.width + 'px';
         panel.style.height = settings.panelSize.height + 'px';
-        panel.style.top = settings.panelPosition.top || '15px';
-        panel.style.right = settings.panelPosition.right || '15px';
-        panel.style.left = 'auto'; // Убираем left, чтобы всегда было справа
+        panel.style.top = settings.panelPosition.top;
+        panel.style.right = settings.panelPosition.right;
 
         // Pill
         const pill = document.createElement('div');
@@ -8852,7 +8869,7 @@
     }
 
     function makeDraggable(element, handle) {
-        let isDragging = false, startX, startY, startRight, startTop;
+        let isDragging = false, startX, startY, startLeft, startTop;
 
         handle.addEventListener('mousedown', (e) => {
             if (e.target.closest('button, input, select')) return;
@@ -8860,24 +8877,21 @@
             startX = e.clientX;
             startY = e.clientY;
             const rect = element.getBoundingClientRect();
-            startRight = window.innerWidth - rect.right;
+            startLeft = rect.left;
             startTop = rect.top;
             document.body.style.userSelect = 'none';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            // Вычисляем новую позицию справа
-            const newRight = startRight - (e.clientX - startX);
-            const newTop = startTop + e.clientY - startY;
-            element.style.right = newRight + 'px';
-            element.style.top = newTop + 'px';
-            element.style.left = 'auto'; // Всегда справа
+            element.style.left = (startLeft + e.clientX - startX) + 'px';
+            element.style.top = (startTop + e.clientY - startY) + 'px';
+            element.style.right = 'auto';
         });
 
         document.addEventListener('mouseup', () => {
             if (isDragging) {
-                settings.panelPosition = { top: element.style.top, right: element.style.right };
+                settings.panelPosition = { top: element.style.top, right: 'auto', left: element.style.left };
                 saveSettings();
             }
             isDragging = false;
@@ -9587,10 +9601,11 @@
         .yd-pl-filter-row input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .yd-pl-filter-row input[type="number"] { -moz-appearance: textfield; }
 
-        /* Footer */
+        /* Footer — вертикальный layout */
         .yd-pl-footer { 
             display: flex; 
-            gap: 6px; 
+            flex-direction: column;
+            gap: 8px; 
             padding: 10px 12px; 
             border-top: 1px solid var(--yd-border); 
         }
@@ -9688,13 +9703,16 @@
             color: var(--yd-danger); 
         }
 
-        /* Preview Highlight — подсветка найденных строк */
-        tr.yd-pl-row-preview {
+        /* Preview Highlight — подсветка ТОЛЬКО строк в таблице площадок (не шапка, не другие части) */
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview {
             background: rgba(255, 235, 59, 0.15) !important;
             box-shadow: inset 3px 0 0 #FFEB3B;
         }
-        tr.yd-pl-row-preview:hover {
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview:hover {
             background: rgba(255, 235, 59, 0.25) !important;
+        }
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td {
+            background: transparent !important;
         }
 
         .yd-pl-resize-se { 
@@ -9750,9 +9768,6 @@
         }
         .yd-pl-pill-filters { color: var(--yd-success); font-size: 11px; font-weight: 600; }
 
-        /* Preview подсветка — ТОЛЬКО для таблицы площадок */
-        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview { background: rgba(16, 185, 129, 0.08) !important; }
-        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td { background: transparent !important; }
 
         /* Notifications */
         .yd-pl-notification { 
