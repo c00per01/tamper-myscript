@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.194.1
+// @version 1.194.4
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7791,7 +7791,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7812,10 +7812,14 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        // Use specific selector + filter for checkbox
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
+            // Ensure row has checkbox (filters out headers)
+            if (!row.querySelector('input[type="checkbox"]')) return;
+
             if (checkRow(row, filters, mode)) {
                 matching.push(row);
             }
@@ -7829,7 +7833,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('tbody tr');
+        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7878,12 +7882,12 @@
 
         let deselectedCount = 0;
 
-        document.querySelectorAll('tbody tr').forEach(row => {
+        document.querySelectorAll('.b-stat-platform__table-wrap tbody tr').forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
             if (checkbox && checkbox.checked && !checkbox.disabled) {
                 // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
                 if (!matchingSet.has(row)) {
-                    checkbox.click();
+                    clickWithoutScroll(checkbox);
                     deselectedCount++;
                 }
             }
@@ -7907,20 +7911,39 @@
     // ==================== ДЕЙСТВИЯ ====================
     let isSelectMode = true; // true = выделить, false = снять
 
+    // Утилита для клика по чекбоксу БЕЗ скролла страницы
+    function clickWithoutScroll(element) {
+        // Сохраняем позицию скролла всех родителей
+        const scrollPositions = [];
+        let parent = element.parentElement;
+        while (parent) {
+            if (parent.scrollTop !== undefined) {
+                scrollPositions.push({ el: parent, top: parent.scrollTop, left: parent.scrollLeft });
+            }
+            parent = parent.parentElement;
+        }
+        // Также сохраняем скролл документа
+        const docScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        const docScrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft;
+
+        // Клик
+        element.click();
+
+        // Восстанавливаем позиции
+        requestAnimationFrame(() => {
+            scrollPositions.forEach(pos => {
+                pos.el.scrollTop = pos.top;
+                pos.el.scrollLeft = pos.left;
+            });
+            document.documentElement.scrollTop = docScrollTop;
+            document.body.scrollTop = docScrollTop;
+            document.documentElement.scrollLeft = docScrollLeft;
+            document.body.scrollLeft = docScrollLeft;
+        });
+    }
+
     function togglePlacements() {
         const matching = getMatchingRows();
-
-        // Утилита для клика без скролла
-        function clickWithoutScroll(element) {
-            const scrollableParent = element.closest('div[style*="overflow"]') || document.scrollingElement;
-            const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
-            element.click();
-            if (scrollableParent) {
-                requestAnimationFrame(() => {
-                    scrollableParent.scrollTop = scrollTop;
-                });
-            }
-        }
 
         if (isSelectMode) {
             // Режим выделения
@@ -8279,12 +8302,6 @@
 
             <!-- Footer -->
             <div class="yd-pl-footer">
-                <!-- Блок информации о дате последней отправки -->
-                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
-                    <span class="yd-pl-last-send-label">Последняя отправка:</span>
-                    <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
-                    <span id="yd-pl-period-hint" style="font-size: 10px; color: #888;"></span>
-                </div>
                 <button id="yd-pl-apply" class="yd-pl-btn-primary">
                     <span id="yd-pl-apply-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -8293,6 +8310,12 @@
                     </span>
                     <span id="yd-pl-apply-text">Выделить (0)</span>
                 </button>
+                <!-- Блок информации о дате последней отправки — ПОД кнопкой -->
+                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none; margin-top: 8px;">
+                    <span class="yd-pl-last-send-label">Последняя отправка:</span>
+                    <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
+                    <span id="yd-pl-period-hint" style="font-size: 10px; color: #888;"></span>
+                </div>
             </div>
 
             <!-- Resize handle -->
@@ -8301,11 +8324,12 @@
 
         document.body.appendChild(panel);
 
-        // Позиция и размер
+        // Позиция и размер — ВСЕГДА справа
         panel.style.width = settings.panelSize.width + 'px';
         panel.style.height = settings.panelSize.height + 'px';
-        panel.style.top = settings.panelPosition.top;
-        panel.style.right = settings.panelPosition.right;
+        panel.style.top = settings.panelPosition.top || '15px';
+        panel.style.right = settings.panelPosition.right || '15px';
+        panel.style.left = 'auto'; // Убираем left, чтобы всегда было справа
 
         // Pill
         const pill = document.createElement('div');
@@ -8828,7 +8852,7 @@
     }
 
     function makeDraggable(element, handle) {
-        let isDragging = false, startX, startY, startLeft, startTop;
+        let isDragging = false, startX, startY, startRight, startTop;
 
         handle.addEventListener('mousedown', (e) => {
             if (e.target.closest('button, input, select')) return;
@@ -8836,21 +8860,24 @@
             startX = e.clientX;
             startY = e.clientY;
             const rect = element.getBoundingClientRect();
-            startLeft = rect.left;
+            startRight = window.innerWidth - rect.right;
             startTop = rect.top;
             document.body.style.userSelect = 'none';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            element.style.left = (startLeft + e.clientX - startX) + 'px';
-            element.style.top = (startTop + e.clientY - startY) + 'px';
-            element.style.right = 'auto';
+            // Вычисляем новую позицию справа
+            const newRight = startRight - (e.clientX - startX);
+            const newTop = startTop + e.clientY - startY;
+            element.style.right = newRight + 'px';
+            element.style.top = newTop + 'px';
+            element.style.left = 'auto'; // Всегда справа
         });
 
         document.addEventListener('mouseup', () => {
             if (isDragging) {
-                settings.panelPosition = { top: element.style.top, right: 'auto', left: element.style.left };
+                settings.panelPosition = { top: element.style.top, right: element.style.right };
                 saveSettings();
             }
             isDragging = false;
@@ -10169,6 +10196,7 @@
     init();
 
 })();
+
 
 
 
