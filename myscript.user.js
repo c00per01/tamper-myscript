@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.44
+// @version 1.193.45
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7509,7 +7509,7 @@
     console.log("[YD-PL] 🚀 Модуль площадок v3.0");
 
     // ==================== КОНСТАНТЫ ====================
-    const STORAGE_KEY = 'yd-pl-settings-v4';
+    const STORAGE_KEY = 'yd-pl-settings-v3';
 
     // ==================== СОСТОЯНИЕ ====================
     let settings = loadSettings();
@@ -7620,18 +7620,6 @@
         return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
     }
 
-    function clickWithoutScroll(element) {
-        if (!element) return;
-        const scrollableParent = element.closest('div[style*="overflow"]') || document.scrollingElement;
-        const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
-        element.click();
-        if (scrollableParent) {
-            requestAnimationFrame(() => {
-                scrollableParent.scrollTop = scrollTop;
-            });
-        }
-    }
-
     // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
     function getFiltersFromUI() {
         // Patterns берём напрямую из settings (чипы)
@@ -7733,7 +7721,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        const rows = document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7754,7 +7742,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        const rows = document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7771,7 +7759,7 @@
         const filters = getFiltersFromUI();
         const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
 
-        const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
+        const rows = document.querySelectorAll('tbody tr');
         const matching = [];
 
         rows.forEach(row => {
@@ -7798,25 +7786,10 @@
         const matching = getAllMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // АВТО-РЕЖИМ (если режим "Снять"): Синхронизация галочек с фильтрами
+        // АВТОРЕЖИМ: если мы в режиме "Снять" — автоматически снимать галочки 
+        // со строк, которые больше не соответствуют фильтрам
         if (!isSelectMode) {
-            const filters = getFiltersFromUI();
-            const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
-            const rows = document.querySelectorAll('.b-stat-platform__table-wrap tbody tr');
-
-            rows.forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]');
-                if (!checkbox || checkbox.disabled) return;
-
-                const matches = checkRow(row, filters, mode);
-                const isChecked = checkbox.checked;
-
-                if (matches && !isChecked) {
-                    clickWithoutScroll(checkbox);
-                } else if (!matches && isChecked) {
-                    clickWithoutScroll(checkbox);
-                }
-            });
+            autoDeselectNonMatching();
         }
 
         // Обновить состояние кнопки и badge
@@ -7825,6 +7798,30 @@
 
         updateStats();
         saveCurrentFilters();
+    }
+
+    // Автоматическое снятие галочек со строк, которые НЕ соответствуют текущим фильтрам
+    function autoDeselectNonMatching() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        const matchingSet = new Set(getAllMatchingRows());
+
+        let deselectedCount = 0;
+
+        document.querySelectorAll('tbody tr').forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
+                if (!matchingSet.has(row)) {
+                    checkbox.click();
+                    deselectedCount++;
+                }
+            }
+        });
+
+        if (deselectedCount > 0) {
+            showNotification(`Авто-снято: ${deselectedCount}`, 'info');
+        }
     }
 
     function updateStats() {
@@ -7843,7 +7840,17 @@
     function togglePlacements() {
         const matching = getMatchingRows();
 
-
+        // Утилита для клика без скролла
+        function clickWithoutScroll(element) {
+            const scrollableParent = element.closest('div[style*="overflow"]') || document.scrollingElement;
+            const scrollTop = scrollableParent ? scrollableParent.scrollTop : 0;
+            element.click();
+            if (scrollableParent) {
+                requestAnimationFrame(() => {
+                    scrollableParent.scrollTop = scrollTop;
+                });
+            }
+        }
 
         if (isSelectMode) {
             // Режим выделения
@@ -9505,8 +9512,8 @@
         /* Pill */
         .yd-pl-pill { 
             position: fixed; 
-            top: 15px; 
-            right: 15px; 
+            top: 80px; 
+            right: 20px; 
             z-index: 9999998; 
             background: #fff; 
             border: 1px solid var(--yd-border); 
@@ -9542,20 +9549,26 @@
         /* Notifications */
         .yd-pl-notification { 
             position: fixed; 
-            top: 20px; 
+            top: 80px; 
             right: 20px; 
-            z-index: 2147483647; 
-            padding: 10px 16px; 
-            border-radius: 8px; 
-            font-size: 12px; 
+            z-index: 999999999; 
+            padding: 12px 20px; 
+            border-radius: 10px; 
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            font-size: 13px; 
             font-weight: 500; 
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); 
             animation: yd-pl-notify-in 0.3s ease; 
+            pointer-events: auto;
         }
-        .yd-pl-notification-success { background: var(--yd-success); color: #fff; }
-        .yd-pl-notification-error { background: var(--yd-danger); color: #fff; }
-        .yd-pl-notification-info { background: var(--yd-primary); color: #fff; }
+        .yd-pl-notification-success { background: #10B981; color: #fff; }
+        .yd-pl-notification-error { background: #EF4444; color: #fff; }
+        .yd-pl-notification-info { background: #205598; color: #fff; }
+        .yd-pl-notification-hide { 
+            animation: yd-pl-notify-out 0.3s ease forwards; 
+        }
         @keyframes yd-pl-notify-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes yd-pl-notify-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 
         /* Scrollbar */
         .yd-pl-body::-webkit-scrollbar { width: 5px; }
@@ -9975,7 +9988,6 @@
     init();
 
 })();
-
 
 
 
