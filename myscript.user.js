@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.193.45
+// @version 1.194.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7600,6 +7600,76 @@
         }
     }
 
+    // ==================== СИНХРОНИЗАЦИЯ ДАТЫ ПОСЛЕДНЕГО ИЗМЕНЕНИЯ ====================
+
+    // Получаем дату последнего изменения кампании из data-bem на странице
+    function getLastChangeDate() {
+        try {
+            // Ищем элемент с данными кампании
+            const statEl = document.querySelector('.p-campaign-stat[data-bem]');
+            if (!statEl) {
+                console.log('[YD-PL] Не найден элемент .p-campaign-stat');
+                return null;
+            }
+
+            const bemData = JSON.parse(statEl.getAttribute('data-bem'));
+            const campaign = bemData?.['p-campaign-stat']?.campaign;
+
+            // Дата последнего изменения кампании (LastChange включает изменения DontShow)
+            if (campaign?.LastChange) {
+                // Формат: "2026-01-13 07:50:14"
+                const dateStr = campaign.LastChange;
+                const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (dateMatch) {
+                    const [, year, month, day] = dateMatch;
+                    return new Date(Number(year), Number(month) - 1, Number(day));
+                }
+            }
+
+            return null;
+        } catch (e) {
+            console.error('[YD-PL] Ошибка получения даты:', e);
+            return null;
+        }
+    }
+
+    // Расчёт рекомендуемого периода для фильтрации
+    // Логика: следующий день после даты последней отправки и минус 1 день от сегодня
+    function calculateRecommendedPeriod() {
+        const lastChange = getLastChangeDate();
+        if (!lastChange) return null;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Начало: следующий день после последнего изменения
+        const startDate = new Date(lastChange);
+        startDate.setDate(startDate.getDate() + 1);
+
+        // Конец: вчера (сегодня минус 1 день)
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() - 1);
+
+        // Если начало позже конца — нет данных для выбора
+        if (startDate > endDate) {
+            return { start: null, end: null, message: 'Нет новых данных для выбора' };
+        }
+
+        return {
+            start: startDate,
+            end: endDate,
+            lastChange: lastChange
+        };
+    }
+
+    // Форматирование даты в русском формате
+    function formatDateRu(date) {
+        if (!date) return '—';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
+    }
     // ==================== УТИЛИТЫ ====================
     function parseNumber(text) {
         if (!text) return NaN;
@@ -8209,6 +8279,12 @@
 
             <!-- Footer -->
             <div class="yd-pl-footer">
+                <!-- Блок информации о дате последней отправки -->
+                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
+                    <span class="yd-pl-last-send-label">Последняя отправка:</span>
+                    <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
+                    <span id="yd-pl-period-hint" style="font-size: 10px; color: #888;"></span>
+                </div>
                 <button id="yd-pl-apply" class="yd-pl-btn-primary">
                     <span id="yd-pl-apply-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -8252,6 +8328,36 @@
         makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
         makeResizable(panel);
         setTimeout(updatePreviewHighlight, 100);
+
+        // Инициализация блока даты последней отправки
+        updateLastSendInfo();
+    }
+
+    // Обновление блока информации о дате последней отправки
+    function updateLastSendInfo() {
+        const container = document.getElementById('yd-pl-last-send-info');
+        const dateEl = document.getElementById('yd-pl-last-send-date');
+        const hintEl = document.getElementById('yd-pl-period-hint');
+
+        if (!container || !dateEl) return;
+
+        const period = calculateRecommendedPeriod();
+
+        if (period && period.lastChange) {
+            container.style.display = 'flex';
+            dateEl.textContent = formatDateRu(period.lastChange);
+
+            if (period.start && period.end) {
+                hintEl.textContent = `Период: ${formatDateRu(period.start)} — ${formatDateRu(period.end)}`;
+            } else if (period.message) {
+                hintEl.textContent = period.message;
+                hintEl.style.color = '#e46924';
+            } else {
+                hintEl.textContent = '';
+            }
+        } else {
+            container.style.display = 'none';
+        }
     }
 
     // Описания операторов
@@ -8505,16 +8611,27 @@
     });
 
     function setupEventListeners(panel, pill) {
-        // Toggle panel
+        // Toggle panel with animation — свернуть в правый нижний угол
         document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
-            panel.style.display = 'none';
-            pill.style.display = 'flex';
-            updatePill();
+            // Анимация сворачивания панели
+            panel.classList.add('yd-pl-panel-minimizing');
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.classList.remove('yd-pl-panel-minimizing');
+                // Показать pill с анимацией
+                pill.style.display = 'flex';
+                pill.classList.add('yd-pl-pill-appear');
+                setTimeout(() => pill.classList.remove('yd-pl-pill-appear'), 300);
+                updatePill();
+            }, 400);
         });
 
         pill.addEventListener('click', () => {
             pill.style.display = 'none';
+            // Показать панель с анимацией
             panel.style.display = 'flex';
+            panel.classList.add('yd-pl-panel-appearing');
+            setTimeout(() => panel.classList.remove('yd-pl-panel-appearing'), 400);
         });
 
         // Парсинг ввода с префиксом оператора
@@ -8657,9 +8774,16 @@
         document.addEventListener('keydown', (e) => {
             // Escape — свернуть панель
             if (e.key === 'Escape' && panel.style.display !== 'none') {
-                panel.style.display = 'none';
-                pill.style.display = 'flex';
-                updatePill();
+                // Анимация сворачивания панели
+                panel.classList.add('yd-pl-panel-minimizing');
+                setTimeout(() => {
+                    panel.style.display = 'none';
+                    panel.classList.remove('yd-pl-panel-minimizing');
+                    pill.style.display = 'flex';
+                    pill.classList.add('yd-pl-pill-appear');
+                    setTimeout(() => pill.classList.remove('yd-pl-pill-appear'), 300);
+                    updatePill();
+                }, 400);
             }
             // Ctrl+Enter — toggle выделения
             if (e.key === 'Enter' && e.ctrlKey) {
@@ -8853,6 +8977,54 @@
             flex-direction: column;
             max-height: 90vh;
             overflow: hidden;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+
+        /* Анимация сворачивания в правый нижний угол */
+        #yd-pl-panel.yd-pl-panel-minimizing {
+            transform: scale(0.3) translate(50%, 100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Анимация появления */
+        #yd-pl-panel.yd-pl-panel-appearing {
+            animation: yd-pl-panel-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes yd-pl-panel-appear {
+            from {
+                transform: scale(0.3) translate(50%, 100%);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
+        }
+
+        /* Дата последней отправки */
+        .yd-pl-last-send-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 11px;
+            color: #666;
+            padding: 8px 10px;
+            margin-top: 8px;
+            background: linear-gradient(135deg, #f8fff8, #f0f8f0);
+            border-radius: 6px;
+            border-left: 3px solid #28a745;
+        }
+
+        .yd-pl-last-send-label {
+            color: #555;
+        }
+
+        .yd-pl-last-send-date {
+            font-weight: 600;
+            color: #28a745;
+            font-size: 12px;
         }
 
         /* Resize Handles — все стороны и углы */
@@ -9509,28 +9681,37 @@
         }
         #yd-pl-panel:hover .yd-pl-resize-se { opacity: 0.3; }
 
-        /* Pill */
+        /* Pill — правый нижний угол как модуль запросов */
         .yd-pl-pill { 
             position: fixed; 
-            top: 80px; 
+            bottom: 20px; 
             right: 20px; 
             z-index: 9999998; 
             background: #fff; 
             border: 1px solid var(--yd-border); 
-            border-radius: 20px; 
-            padding: 8px 14px; 
+            border-radius: 25px; 
+            padding: 12px 16px; 
             display: flex; 
             align-items: center; 
             gap: 8px; 
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); 
             cursor: pointer; 
-            font-size: 12px; 
+            font-size: 13px; 
+            font-weight: 600;
             color: var(--yd-primary); 
-            transition: all 0.2s; 
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+            user-select: none;
         }
         .yd-pl-pill:hover { 
             transform: translateY(-2px); 
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); 
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25); 
+        }
+        .yd-pl-pill.yd-pl-pill-appear {
+            animation: yd-pl-pill-appear 0.3s ease;
+        }
+        @keyframes yd-pl-pill-appear {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
         }
         .yd-pl-pill-badge { 
             background: var(--yd-primary); 
@@ -9988,6 +10169,7 @@
     init();
 
 })();
+
 
 
 
