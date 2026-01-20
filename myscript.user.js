@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.197.2
+// @version 1.198.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7670,6 +7670,79 @@
         const year = date.getFullYear();
         return `${day}.${month}.${year}`;
     }
+
+    // Автоматическая установка периода на странице
+    // Изменяет URL если текущий период не совпадает с рекомендуемым
+    function applyRecommendedPeriod() {
+        const period = calculateRecommendedPeriod();
+        if (!period || !period.start || !period.end) {
+            console.log('[YD-PL] Период не может быть рассчитан или нет новых данных');
+            return;
+        }
+
+        // Получаем текущие параметры URL
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // Текущие значения периода из URL
+        const currentY1 = urlParams.get('y1');
+        const currentM1 = urlParams.get('m1');
+        const currentD1 = urlParams.get('d1');
+        const currentY2 = urlParams.get('y2');
+        const currentM2 = urlParams.get('m2');
+        const currentD2 = urlParams.get('d2');
+
+        // Рекомендуемые значения
+        const startY = String(period.start.getFullYear()).slice(-2);
+        const startM = String(period.start.getMonth() + 1).padStart(2, '0');
+        const startD = String(period.start.getDate()).padStart(2, '0');
+        const endY = String(period.end.getFullYear()).slice(-2);
+        const endM = String(period.end.getMonth() + 1).padStart(2, '0');
+        const endD = String(period.end.getDate()).padStart(2, '0');
+
+        // Проверяем, совпадает ли текущий период с рекомендуемым
+        const isCorrectPeriod =
+            currentY1 === startY &&
+            currentM1 === startM &&
+            currentD1 === startD &&
+            currentY2 === endY &&
+            currentM2 === endM &&
+            currentD2 === endD;
+
+        if (isCorrectPeriod) {
+            console.log(`[YD-PL] ✅ Период уже установлен правильно: ${formatDateRu(period.start)} — ${formatDateRu(period.end)}`);
+            return;
+        }
+
+        // Проверяем, был ли период уже применён в этой сессии (чтобы не зациклиться)
+        const sessionKey = `yd-pl-period-applied-${urlParams.get('cid') || 'default'}`;
+        if (sessionStorage.getItem(sessionKey)) {
+            console.log('[YD-PL] Период уже был применён в этой сессии, пропускаем');
+            return;
+        }
+
+        // Устанавливаем флаг что период был применён
+        sessionStorage.setItem(sessionKey, 'true');
+
+        // Обновляем параметры URL
+        urlParams.set('y1', startY);
+        urlParams.set('m1', startM);
+        urlParams.set('d1', startD);
+        urlParams.set('y2', endY);
+        urlParams.set('m2', endM);
+        urlParams.set('d2', endD);
+
+        // Переходим на новый URL
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        console.log(`[YD-PL] 📅 Применяем период: ${formatDateRu(period.start)} — ${formatDateRu(period.end)}`);
+        console.log(`[YD-PL] 🔗 Переход на: ${newUrl}`);
+
+        showNotification(`Период: ${formatDateRu(period.start)} — ${formatDateRu(period.end)}`, 'info');
+
+        // Редирект с небольшой задержкой для отображения уведомления
+        setTimeout(() => {
+            window.location.href = newUrl;
+        }, 500);
+    }
     // ==================== УТИЛИТЫ ====================
     function parseNumber(text) {
         if (!text) return NaN;
@@ -8364,6 +8437,10 @@
 
         // Инициализация блока даты последней отправки
         updateLastSendInfo();
+
+        // Автоматическое применение периода на основе даты последнего изменения
+        // Задержка нужна чтобы дать странице полностью загрузиться
+        setTimeout(applyRecommendedPeriod, 1000);
     }
 
     // Обновление блока информации о дате последней отправки
@@ -10203,6 +10280,7 @@
     init();
 
 })();
+
 
 
 
