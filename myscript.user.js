@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 1.196.1
+// @version 1.197.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -9855,9 +9855,13 @@
         const baseUrl = 'https://direct.yandex.ru/registered/main.pl';
 
         if (statType === 'pages') {
-            return `${baseUrl}?cmd = showCampStat & stat_type=pages & group=none & with_nds=0 & cid=${cid}& ulogin=${ulogin}& y1=${dates.y1}& m1=${dates.m1}& d1=${dates.d1}& y2=${dates.y2}& m2=${dates.m2}& d2=${dates.d2}& isStat=1`;
+            // Ссылка на статистику по площадкам
+            return `${baseUrl}?cmd=showCampStat&stat_type=pages&group=&with_nds=0&cid=${cid}&ulogin=${ulogin}&y1=${String(dates.y1).slice(-2)}&m1=${String(dates.m1).padStart(2, '0')}&d1=${String(dates.d1).padStart(2, '0')}&y2=${String(dates.y2).slice(-2)}&m2=${String(dates.m2).padStart(2, '0')}&d2=${String(dates.d2).padStart(2, '0')}&isStat=1`;
         } else {
-            return `${baseUrl}?cmd = showStat & stat_type=search_queries & cid=${cid}& ulogin=${ulogin}& date_from=${dates.y1} -${String(dates.m1).padStart(2, '0')} -${String(dates.d1).padStart(2, '0')}& date_to=${dates.y2} -${String(dates.m2).padStart(2, '0')} -${String(dates.d2).padStart(2, '0')}& group_by=day & goal_id=0 & attribution=LAC & page_size=100`;
+            // Ссылка на статистику по поисковым запросам
+            const dateFrom = `${dates.y1}-${String(dates.m1).padStart(2, '0')}-${String(dates.d1).padStart(2, '0')}`;
+            const dateTo = `${dates.y2}-${String(dates.m2).padStart(2, '0')}-${String(dates.d2).padStart(2, '0')}`;
+            return `${baseUrl}?show_stat=1&cmd=showStat&stat_periods=&ulogin=${ulogin}&stat_type=search_queries&cid=${cid}&single_camp=1&group_by_date=none&page_size=100&date_from=${dateFrom}&date_to=${dateTo}&attribution_model=automatic&with_nds=0&columns=shows%2Cclicks%2Cctr%2Csum%2Cav_sum%2Caconv%2Cagoalcost%2Cagoalnum&group_by=search_query%2Cadgroup%2Ccontextcond_orig%2Cmatch_type%2Cmatched_phrase%2Ctargeting_category`;
         }
     }
 
@@ -10199,6 +10203,7 @@
     init();
 
 })();
+
 
 
 
