@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 2.0.5
+// @version 2.0.6
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7499,56 +7499,96 @@
     }
 
 })();
-// ==================== РњРћР”РЈР›Р¬: РџР›РћР©РђР”РљР v4.0 (РџР°РЅРµР»СЊ-РўСЂР°РЅСЃС„РѕСЂРјРµСЂ) ====================
-// Р¤РёР»СЊС‚СЂ + Р’Р°Р№С‚Р»РёСЃС‚, Live-СЂРµР¶РёРј, Smart State РґР»СЏ РіР°Р»РѕС‡РµРє
+// ==================== МОДУЛЬ: ПЛОЩАДКИ (stat_type=pages) ====================
+// Полностью переработанный модуль в стиле Apple
 (function () {
     'use strict';
 
     if (!location.href.toLowerCase().includes("stat_type=pages")) return;
 
-    console.log("[YD-PL] рџљЂ РњРѕРґСѓР»СЊ РїР»РѕС‰Р°РґРѕРє v4.0 (Transformer)");
+    console.log("[YD-PL] 🚀 Модуль площадок v3.0");
 
-    // ==================== РљРћРќРЎРўРђРќРўР« ====================
-    const STORAGE_KEY = 'yd-pl-settings-v4';
-    const DEBOUNCE_DELAY = 300;
+    // ==================== КОНСТАНТЫ ====================
+    const STORAGE_KEY = 'yd-pl-settings-v3';
 
-    // РћРїРµСЂР°С‚РѕСЂС‹ С„РёР»СЊС‚СЂР°С†РёРё
-    const OPERATORS = {
-        '*': { label: 'РЎРѕРґРµСЂР¶РёС‚', icon: 'в€—', default: true },
-        '^': { label: 'РќР°С‡РёРЅР°РµС‚СЃСЏ СЃ', icon: 'вЊѓ' },
-        '$': { label: 'Р—Р°РєР°РЅС‡РёРІР°РµС‚СЃСЏ РЅР°', icon: 'вЊ„' },
-        '=': { label: 'Р Р°РІРЅРѕ', icon: '=' },
-        '!': { label: 'РќРµ СЃРѕРґРµСЂР¶РёС‚', icon: 'в‰ ', exclude: true }
-    };
-
-    // ==================== РЎРћРЎРўРћРЇРќРР• ====================
+    // ==================== СОСТОЯНИЕ ====================
     let settings = loadSettings();
-    let currentMode = 'filter'; // 'filter' | 'whitelist'
-    let currentOperator = '*';
-    let isHintVisible = false;
 
-    // Smart State: tracking РёСЃС‚РѕС‡РЅРёРєР° РіР°Р»РѕС‡РµРє
-    // key = domain, value = { source: 'auto'|'manual_included'|'manual_excluded' }
-    let checkboxState = new Map();
-
-    // ==================== РќРђРЎРўР РћР™РљР ====================
     function loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Миграция: position → operator
+                if (parsed.filters?.patterns) {
+                    parsed.filters.patterns = parsed.filters.patterns.map(p => {
+                        if (p.position && !p.operator) {
+                            const opMap = { start: '^', end: '$', any: '*' };
+                            return { operator: opMap[p.position] || '*', value: p.value };
+                        }
+                        return p;
+                    });
+                }
+                return parsed;
+            }
         } catch (e) {
-            console.error('[YD-PL] РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё:', e);
+            console.error('[YD-PL] Ошибка загрузки:', e);
         }
         return getDefaultSettings();
     }
 
     function getDefaultSettings() {
         return {
-            panelPosition: { top: '80px', right: '15px' },
-            panelSize: { width: 380, height: 500 },
-            filterChips: [], // [{operator, value}]
-            whitelistDomains: [], // [domain, domain, ...]
-            lastSyncDate: null
+            panelPosition: { top: '15px', right: '15px' },
+            panelSize: { width: 360, height: 480 },
+            templatesCollapsed: true,
+            filters: {
+                patterns: [
+                    { operator: '^', value: 'com.' },
+                    { operator: '*', value: 'dsp' },
+                    { operator: '*', value: 'game' }
+                ],
+                clicksMin: '', clicksMax: '',
+                ctrMin: '', ctrMax: '',
+                cpcMin: '', cpcMax: '',
+                spendMin: '', spendMax: ''
+            },
+            history: [], // История ввода доменов
+
+            templates: [
+                {
+                    name: 'Мобильные приложения',
+                    filters: {
+                        patterns: [
+                            { operator: '^', value: 'com.' },
+                            { operator: '*', value: 'android' },
+                            { operator: '*', value: 'ios' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    mode: 'or'
+                },
+                {
+                    name: 'Игры и казино',
+                    filters: {
+                        patterns: [
+                            { operator: '*', value: 'game' },
+                            { operator: '*', value: 'puzzle' },
+                            { operator: '*', value: 'casino' }
+                        ],
+                        clicksMin: '', clicksMax: '',
+                        ctrMin: '', ctrMax: '',
+                        cpcMin: '', cpcMax: '',
+                        spendMin: '', spendMax: ''
+                    },
+                    mode: 'or'
+                }
+            ],
+            currentTemplate: null,
+            mode: 'or'
         };
     }
 
@@ -7556,1188 +7596,2209 @@
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
-            console.error('[YD-PL] РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ:', e);
+            console.error('[YD-PL] Ошибка сохранения:', e);
         }
     }
 
-    // ==================== РЈРўРР›РРўР« ====================
-    function debounce(fn, delay) {
-        let timer;
-        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
-    }
+    // ==================== СИНХРОНИЗАЦИЯ ДАТЫ ПОСЛЕДНЕГО ИЗМЕНЕНИЯ ====================
 
-    function parseNumber(text) {
-        if (!text) return NaN;
-        return parseFloat(text.replace(/\u00A0/g, '').replace(/\s+/g, '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
-    }
-
-    function getDomainFromRow(row) {
-        const cell = row.querySelector('td:first-child a, td:first-child');
-        return cell?.textContent?.trim()?.toLowerCase() || '';
-    }
-
-    function showNotification(message, type = 'info') {
-        const existing = document.getElementById('yd-pl-notify');
-        if (existing) existing.remove();
-
-        const colors = {
-            success: { bg: '#d4edda', border: '#28a745', text: '#155724' },
-            error: { bg: '#f8d7da', border: '#dc3545', text: '#721c24' },
-            info: { bg: '#e7f3ff', border: '#205598', text: '#0c5460' },
-            warning: { bg: '#fff3cd', border: '#ffc107', text: '#856404' }
-        };
-        const c = colors[type] || colors.info;
-
-        const el = document.createElement('div');
-        el.id = 'yd-pl-notify';
-        el.style.cssText = `
-            position: fixed; top: 20px; right: 20px; z-index: 100001;
-            background: ${c.bg}; border: 1px solid ${c.border}; color: ${c.text};
-            padding: 12px 20px; border-radius: 10px; font-size: 14px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            animation: yd-pl-notify-in 0.3s ease;
-        `;
-        el.textContent = message;
-        document.body.appendChild(el);
-
-        setTimeout(() => {
-            el.style.animation = 'yd-pl-notify-out 0.3s ease';
-            setTimeout(() => el.remove(), 300);
-        }, 3000);
-    }
-
-    // ==================== РЎРРќРҐР РћРќРР—РђР¦РРЇ Р”РђРўР« ====================
+    // Получаем дату последнего изменения кампании из data-bem на странице
     function getLastChangeDate() {
         try {
+            // Ищем элемент с данными кампании
             const statEl = document.querySelector('.p-campaign-stat[data-bem]');
-            if (!statEl) return null;
+            if (!statEl) {
+                console.log('[YD-PL] Не найден элемент .p-campaign-stat');
+                return null;
+            }
 
             const bemData = JSON.parse(statEl.getAttribute('data-bem'));
             const campaign = bemData?.['p-campaign-stat']?.campaign;
 
+            // Дата последнего изменения кампании (LastChange включает изменения DontShow)
             if (campaign?.LastChange) {
-                const dateMatch = campaign.LastChange.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                // Формат: "2026-01-13 07:50:14"
+                const dateStr = campaign.LastChange;
+                const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
                 if (dateMatch) {
                     const [, year, month, day] = dateMatch;
                     return new Date(Number(year), Number(month) - 1, Number(day));
                 }
             }
+
             return null;
         } catch (e) {
-            console.error('[YD-PL] РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РґР°С‚С‹:', e);
+            console.error('[YD-PL] Ошибка получения даты:', e);
             return null;
         }
     }
 
-    function formatDateRu(date) {
-        if (!date) return 'вЂ”';
-        const d = String(date.getDate()).padStart(2, '0');
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const y = date.getFullYear();
-        return `${d}.${m}.${y}`;
-    }
-
-    function applyRecommendedPeriod() {
+    // Расчёт рекомендуемого периода для фильтрации
+    // Логика: следующий день после даты последней отправки и минус 1 день от сегодня
+    function calculateRecommendedPeriod() {
         const lastChange = getLastChangeDate();
-
-        if (!lastChange) {
-            showNotification('рџ“… РР·РјРµРЅРµРЅРёР№ РЅРµ РѕР±РЅР°СЂСѓР¶РµРЅРѕ', 'info');
-            updateDateInfo(null);
-            return;
-        }
+        if (!lastChange) return null;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // Начало: следующий день после последнего изменения
         const startDate = new Date(lastChange);
         startDate.setDate(startDate.getDate() + 1);
 
+        // Конец: вчера (сегодня минус 1 день)
         const endDate = new Date(today);
         endDate.setDate(endDate.getDate() - 1);
 
+        // Если начало позже конца — нет данных для выбора
         if (startDate > endDate) {
-            showNotification('рџ“… РќРµС‚ РЅРѕРІС‹С… РґР°РЅРЅС‹С… РґР»СЏ Р°РЅР°Р»РёР·Р°', 'info');
-            updateDateInfo(lastChange, true);
-            return;
+            return { start: null, end: null, message: 'Нет новых данных для выбора' };
         }
 
-        // РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСѓС‰РёР№ URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const startY = String(startDate.getFullYear()).slice(-2);
-        const startM = String(startDate.getMonth() + 1).padStart(2, '0');
-        const startD = String(startDate.getDate()).padStart(2, '0');
-        const endY = String(endDate.getFullYear()).slice(-2);
-        const endM = String(endDate.getMonth() + 1).padStart(2, '0');
-        const endD = String(endDate.getDate()).padStart(2, '0');
+        return {
+            start: startDate,
+            end: endDate,
+            lastChange: lastChange
+        };
+    }
 
-        const isCorrect = urlParams.get('y1') === startY &&
-            urlParams.get('m1') === startM &&
-            urlParams.get('d1') === startD;
+    // Форматирование даты в русском формате
+    function formatDateRu(date) {
+        if (!date) return '—';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
+    }
+    // ==================== УТИЛИТЫ ====================
+    function parseNumber(text) {
+        if (!text) return NaN;
+        return parseFloat(text.replace(/\u00A0/g, '').replace(/\s+/g, '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
+    }
 
-        if (isCorrect) {
-            showNotification(`вњ… РџРµСЂРёРѕРґ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅ`, 'success');
-            updateDateInfo(lastChange);
-            highlightPeriodSelector();
-            return;
+    function isGreyElement(el) {
+        if (!el || !window.getComputedStyle) return false;
+        const color = window.getComputedStyle(el).color;
+        const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (!m) return false;
+        const [r, g, b] = m.slice(1).map(Number);
+        return Math.abs(r - g) <= 10 && Math.abs(g - b) <= 10 && (r + g + b) / 3 > 80;
+    }
+
+    function debounce(fn, delay) {
+        let timer;
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+    }
+
+    // Клик по элементу БЕЗ скролла страницы
+    function clickWithoutScroll(element) {
+        // Сохраняем текущую позицию скролла
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+
+        // Выполняем клик
+        element.click();
+
+        // Немедленно восстанавливаем позицию скролла
+        window.scrollTo(scrollX, scrollY);
+    }
+
+    // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
+    function getFiltersFromUI() {
+        // Patterns берём напрямую из settings (чипы)
+        return {
+            patterns: settings.filters.patterns || [],
+            clicksMin: document.getElementById('yd-pl-clicks-min')?.value || '',
+            clicksMax: document.getElementById('yd-pl-clicks-max')?.value || '',
+            ctrMin: document.getElementById('yd-pl-ctr-min')?.value || '',
+            ctrMax: document.getElementById('yd-pl-ctr-max')?.value || '',
+            cpcMin: document.getElementById('yd-pl-cpc-min')?.value || '',
+            cpcMax: document.getElementById('yd-pl-cpc-max')?.value || '',
+            spendMin: document.getElementById('yd-pl-spend-min')?.value || '',
+            spendMax: document.getElementById('yd-pl-spend-max')?.value || ''
+        };
+    }
+
+    // Операторы фильтрации:
+    // * = содержит (include)
+    // ! = не содержит (exclude)
+    // ^ = начинается с (include)
+    // $ = заканчивается на (include)
+    // = = равно (include)
+    // ≠ = не равно (exclude)
+    function matchesPattern(domain, pattern) {
+        const val = pattern.value.toLowerCase();
+        const dom = domain.toLowerCase();
+        const op = pattern.operator || '*';
+
+        switch (op) {
+            case '*': return dom.includes(val);           // содержит
+            case '!': return !dom.includes(val);          // НЕ содержит
+            case '^': return dom.startsWith(val);         // начинается
+            case '$': return dom.endsWith(val);           // заканчивается
+            case '=': return dom === val;                 // равно
+            case '≠': return dom !== val;                 // НЕ равно
+            default: return dom.includes(val);
+        }
+    }
+
+    // Проверка: оператор исключающий?
+    function isExcludeOperator(op) {
+        return op === '!' || op === '≠';
+    }
+
+    function checkRow(row, filters, mode) {
+        // Проверяем валидность строки: чекбокс и данные
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        if (!checkbox) return false;
+
+        const tds = row.querySelectorAll('td');
+        if (tds.length < 6) return false;
+
+        const domainCell = tds[0];
+        const domainEl = domainCell.querySelector('a') || domainCell;
+        if (isGreyElement(domainEl)) return false;
+
+        const domain = domainEl.textContent.trim().toLowerCase();
+
+        const clicks = parseNumber(tds[2].textContent);
+        const ctr = parseNumber(tds[3].textContent);
+        const spend = parseNumber(tds[4].textContent);
+        const cpc = parseNumber(tds[5].textContent);
+
+        const conditions = [];
+
+        // Паттерны доменов — разделяем на include и exclude
+        if (filters.patterns.length > 0) {
+            const includePatterns = filters.patterns.filter(p => !isExcludeOperator(p.operator));
+            const excludePatterns = filters.patterns.filter(p => isExcludeOperator(p.operator));
+
+            // Include: хотя бы один должен совпасть (OR)
+            if (includePatterns.length > 0) {
+                const hasIncludeMatch = includePatterns.some(p => matchesPattern(domain, p));
+                conditions.push(hasIncludeMatch);
+            }
+
+            // Exclude: ВСЕ должны пройти (AND) — если хоть один exclude не прошёл, строка не выбирается
+            if (excludePatterns.length > 0) {
+                const allExcludesPass = excludePatterns.every(p => matchesPattern(domain, p));
+                if (!allExcludesPass) return false; // Сразу отбрасываем
+            }
         }
 
-        // РџСЂРёРјРµРЅСЏРµРј РїРµСЂРёРѕРґ
-        const sessionKey = `yd-pl-sync-${urlParams.get('cid') || 'default'}`;
-        if (sessionStorage.getItem(sessionKey)) {
-            updateDateInfo(lastChange);
-            return;
+        // Числовые фильтры (диапазоны)
+        if (filters.clicksMin) conditions.push(clicks >= Number(filters.clicksMin));
+        if (filters.clicksMax) conditions.push(clicks <= Number(filters.clicksMax));
+        if (filters.ctrMin) conditions.push(ctr >= Number(filters.ctrMin));
+        if (filters.ctrMax) conditions.push(ctr <= Number(filters.ctrMax));
+        if (filters.cpcMin) conditions.push(cpc >= Number(filters.cpcMin));
+        if (filters.cpcMax) conditions.push(cpc <= Number(filters.cpcMax));
+        if (filters.spendMin) conditions.push(spend >= Number(filters.spendMin));
+        if (filters.spendMax) conditions.push(spend <= Number(filters.spendMax));
+
+        if (conditions.length === 0) return false;
+        return mode === 'and' ? conditions.every(Boolean) : conditions.some(Boolean);
+    }
+
+    function getMatchingRows() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+        const matching = [];
+
+        rows.forEach(row => {
+            if (checkRow(row, filters, mode)) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                // Только НЕвыделенные строки для режима "Выделить"
+                if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                    matching.push(row);
+                }
+            }
+        });
+
+        return matching;
+    }
+
+    // Все строки соответствующие фильтрам (для preview)
+    function getAllMatchingRows() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+        const matching = [];
+
+        rows.forEach(row => {
+            if (checkRow(row, filters, mode)) {
+                matching.push(row);
+            }
+        });
+
+        return matching;
+    }
+
+    // Выделенные строки соответствующие фильтрам (для режима "Снять")
+    function getCheckedMatchingRows() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+        const matching = [];
+
+        rows.forEach(row => {
+            if (checkRow(row, filters, mode)) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                // Только ВЫДЕЛЕННЫЕ строки для режима "Снять"
+                if (checkbox && checkbox.checked && !checkbox.disabled) {
+                    matching.push(row);
+                }
+            }
+        });
+
+        return matching;
+    }
+
+    // ==================== UI: ПОДСВЕТКА PREVIEW ====================
+    function updatePreviewHighlight() {
+        // Снять старую подсветку
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rowsToClean = tableWrap ? tableWrap.querySelectorAll('tbody tr.yd-pl-row-preview') : document.querySelectorAll('tbody tr.yd-pl-row-preview');
+        rowsToClean.forEach(row => {
+            row.classList.remove('yd-pl-row-preview');
+        });
+
+        // Подсветить ВСЕ строки соответствующие фильтрам (независимо от checked)
+        const matching = getAllMatchingRows();
+        matching.forEach(row => row.classList.add('yd-pl-row-preview'));
+
+        // LIVE-РЕЖИМ: если мы в режиме "Снять" — автоматически:
+        // 1) Снимаем галочки со строк, которые НЕ соответствуют фильтрам
+        // 2) Ставим галочки на строки, которые соответствуют фильтрам
+        if (!isSelectMode) {
+            autoDeselectNonMatching();
+            autoSelectMatching(); // Live-выделение галочками
         }
-        sessionStorage.setItem(sessionKey, 'true');
 
-        showNotification(`рџ“… РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ: ${formatDateRu(startDate)} вЂ” ${formatDateRu(endDate)}`, 'info');
+        // Обновить состояние кнопки и badge
+        updateButtonState();
+        updateExpandBadge();
 
-        urlParams.set('y1', startY);
-        urlParams.set('m1', startM);
-        urlParams.set('d1', startD);
-        urlParams.set('y2', endY);
-        urlParams.set('m2', endM);
-        urlParams.set('d2', endD);
+        updateStats();
+        saveCurrentFilters();
+    }
+
+    // Live-выделение галочками всех подходящих строк (режим "Снять")
+    function autoSelectMatching() {
+        const matching = getAllMatchingRows();
+        let selectedCount = 0;
+
+        matching.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                // Клик БЕЗ скролла
+                clickWithoutScroll(checkbox);
+                selectedCount++;
+            }
+        });
+
+        if (selectedCount > 0) {
+            showNotification(`Авто-выделено: ${selectedCount}`, 'success');
+        }
+    }
+
+    // Автоматическое снятие галочек со строк, которые НЕ соответствуют текущим фильтрам
+    function autoDeselectNonMatching() {
+        const filters = getFiltersFromUI();
+        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        const matchingSet = new Set(getAllMatchingRows());
+
+        let deselectedCount = 0;
+
+        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
+                if (!matchingSet.has(row)) {
+                    clickWithoutScroll(checkbox);
+                    deselectedCount++;
+                }
+            }
+        });
+
+        if (deselectedCount > 0) {
+            showNotification(`Авто-снято: ${deselectedCount}`, 'info');
+        }
+    }
+
+    function updateStats() {
+        // Статистика больше не отображается в UI
+    }
+
+    function saveCurrentFilters() {
+        settings.filters = getFiltersFromUI();
+        settings.mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+        saveSettings();
+    }
+
+    // ==================== ДЕЙСТВИЯ ====================
+    let isSelectMode = true; // true = выделить, false = снять
+
+    function togglePlacements() {
+        const matching = getMatchingRows();
+
+        if (isSelectMode) {
+            // Режим выделения
+            if (matching.length === 0) {
+                showNotification('Нет площадок для выделения', 'info');
+                return;
+            }
+            let selected = 0;
+            matching.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                    clickWithoutScroll(checkbox);
+                    selected++;
+                }
+            });
+            showNotification(`Выделено: ${selected}`, 'success');
+            isSelectMode = false;
+        } else {
+            // Режим снятия — снимаем только строки соответствующие фильтрам
+            const checkedMatching = getCheckedMatchingRows();
+            if (checkedMatching.length === 0) {
+                showNotification('Нет выделенных площадок по фильтрам', 'info');
+                isSelectMode = true;
+                updateButtonState();
+                return;
+            }
+            let count = 0;
+            checkedMatching.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && checkbox.checked && !checkbox.disabled) {
+                    clickWithoutScroll(checkbox);
+                    count++;
+                }
+            });
+            if (count > 0) {
+                showNotification(`Снято: ${count}`, 'info');
+            }
+            isSelectMode = true;
+        }
+
+        updateButtonState();
+        updatePreviewHighlight();
+    }
+
+    function updateButtonState() {
+        const btn = document.getElementById('yd-pl-apply');
+        const icon = document.getElementById('yd-pl-apply-icon');
+        const text = document.getElementById('yd-pl-apply-text');
+
+        if (!btn || !icon || !text) return;
+
+        if (isSelectMode) {
+            // Режим выделения — показываем сколько будет выделено
+            const matching = getMatchingRows();
+            const count = matching.length;
+            btn.classList.remove('yd-pl-btn-deselect');
+            btn.classList.add('yd-pl-btn-primary');
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+            text.textContent = count > 0 ? `Выделить (${count})` : 'Ничего не найдено';
+            btn.disabled = count === 0;
+        } else {
+            // Режим снятия — показываем сколько выделено ПО ФИЛЬТРАМ
+            const checkedMatching = getCheckedMatchingRows();
+            const checkedCount = checkedMatching.length;
+
+            btn.classList.remove('yd-pl-btn-primary');
+            btn.classList.add('yd-pl-btn-deselect');
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
+            text.textContent = checkedCount > 0 ? `Снять (${checkedCount})` : 'Снять';
+            btn.disabled = checkedCount === 0;
+        }
+    }
+
+    // Для совместимости
+    function selectPlacements() { togglePlacements(); }
+    function clearAllSelections() {
+        isSelectMode = false;
+        togglePlacements();
+    }
+
+    function showNotification(message, type = 'info') {
+        const existing = document.getElementById('yd-pl-notification');
+        if (existing) existing.remove();
+
+        const notification = document.createElement('div');
+        notification.id = 'yd-pl-notification';
+        notification.className = `yd-pl-notification yd-pl-notification-${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
 
         setTimeout(() => {
-            window.location.href = `${window.location.pathname}?${urlParams.toString()}`;
-        }, 800);
+            notification.classList.add('yd-pl-notification-hide');
+            setTimeout(() => notification.remove(), 300);
+        }, 2000);
     }
 
-    function updateDateInfo(lastChange, noData = false) {
-        const el = document.getElementById('yd-pl-date-info');
-        if (!el) return;
+    // ==================== UI: ПАТТЕРНЫ ====================
+    function createPatternItem(pattern = { value: '', position: 'any' }) {
+        const div = document.createElement('div');
+        div.className = 'yd-pl-pattern-item';
+        div.innerHTML = `
+            <input type="text" class="yd-pl-pattern-input" value="${pattern.value}" placeholder="домен...">
+            <div class="yd-pl-pos-group">
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'start' ? 'active' : ''}" data-pos="start" title="Строго в начале">^</button>
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'any' ? 'active' : ''}" data-pos="any" title="В любом месте">*</button>
+                <button type="button" class="yd-pl-pos-btn ${pattern.position === 'end' ? 'active' : ''}" data-pos="end" title="Строго в конце">$</button>
+            </div>
+            <button type="button" class="yd-pl-pattern-remove" title="Удалить">×</button>
+        `;
 
-        if (noData || !lastChange) {
-            el.innerHTML = '<span style="color:#888">РР·РјРµРЅРµРЅРёР№ РЅРµ Р·Р°С„РёРєСЃРёСЂРѕРІР°РЅРѕ</span>';
-        } else {
-            el.innerHTML = `<span>РџРѕСЃР»РµРґРЅРµРµ РёР·РјРµРЅРµРЅРёРµ: <strong>${formatDateRu(lastChange)}</strong></span>`;
-        }
-        el.style.display = 'flex';
-
-        // Highlight animation
-        el.classList.add('yd-pl-highlight');
-        setTimeout(() => el.classList.remove('yd-pl-highlight'), 2000);
-    }
-
-    function highlightPeriodSelector() {
-        const periodEl = document.querySelector('.b-stat-filter__period, .b-stat-period');
-        if (periodEl) {
-            periodEl.style.transition = 'box-shadow 0.3s, background 0.3s';
-            periodEl.style.boxShadow = '0 0 0 3px rgba(32, 85, 152, 0.3)';
-            periodEl.style.background = 'rgba(32, 85, 152, 0.05)';
-            periodEl.style.borderRadius = '8px';
-
-            setTimeout(() => {
-                periodEl.style.boxShadow = '';
-                periodEl.style.background = '';
-            }, 3000);
-        }
-    }
-
-    // ==================== MATCHING LOGIC ====================
-    function matchesDomain(domain, operator, pattern) {
-        const d = domain.toLowerCase();
-        const p = pattern.toLowerCase();
-
-        switch (operator) {
-            case '*': return d.includes(p);
-            case '^': return d.startsWith(p);
-            case '$': return d.endsWith(p);
-            case '=': return d === p;
-            case '!': return !d.includes(p);
-            default: return d.includes(p);
-        }
-    }
-
-    function shouldHighlightRow(domain) {
-        if (!domain) return false;
-        const chips = settings.filterChips || [];
-        if (chips.length === 0) return false;
-
-        // РҐРѕС‚СЏ Р±С‹ РѕРґРёРЅ С„РёР»СЊС‚СЂ РґРѕР»Р¶РµРЅ СЃРѕРІРїР°СЃС‚СЊ
-        return chips.some(chip => matchesDomain(domain, chip.operator, chip.value));
-    }
-
-    function isWhitelisted(domain) {
-        return (settings.whitelistDomains || []).some(wd =>
-            domain.toLowerCase().includes(wd.toLowerCase())
-        );
-    }
-
-    // ==================== TABLE OPERATIONS ====================
-    function getTableRows() {
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') ||
-            document.querySelector('.b-stat-table');
-        return tableWrap ?
-            Array.from(tableWrap.querySelectorAll('tbody tr')) :
-            Array.from(document.querySelectorAll('tbody tr'));
-    }
-
-    function processRows() {
-        const rows = getTableRows();
-        let autoCount = 0;
-        let manualCount = 0;
-
-        rows.forEach(row => {
-            const domain = getDomainFromRow(row);
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            if (!checkbox || checkbox.disabled) return;
-
-            const isProtected = isWhitelisted(domain);
-            const shouldMatch = shouldHighlightRow(domain);
-            const state = checkboxState.get(domain);
-
-            // Whitelist protection
-            row.classList.toggle('yd-pl-row-protected', isProtected);
-
-            // Update shield icon
-            updateShieldIcon(row, isProtected);
-
-            // Skip manual exclusions
-            if (state?.source === 'manual_excluded') {
-                row.classList.add('yd-pl-row-manual-excluded');
-                return;
-            }
-
-            // Skip manual inclusions (they stay checked)
-            if (state?.source === 'manual_included') {
-                if (checkbox.checked) manualCount++;
-                row.classList.add('yd-pl-row-manual');
-                return;
-            }
-
-            // Skip protected rows from filter
-            if (isProtected) return;
-
-            // Auto-check based on filter
-            if (shouldMatch && !checkbox.checked) {
-                checkbox.click();
-                checkboxState.set(domain, { source: 'auto' });
-                autoCount++;
-                row.classList.add('yd-pl-row-auto');
-            } else if (!shouldMatch && checkbox.checked && state?.source === 'auto') {
-                checkbox.click();
-                checkboxState.delete(domain);
-                row.classList.remove('yd-pl-row-auto');
-            } else if (shouldMatch && checkbox.checked) {
-                if (!state) checkboxState.set(domain, { source: 'auto' });
-                autoCount++;
-            }
-
-            // Visual highlight
-            row.classList.toggle('yd-pl-row-preview', shouldMatch && !isProtected);
+        // События
+        div.querySelector('input').addEventListener('input', debounce(updatePreviewHighlight, 300));
+        div.querySelectorAll('.yd-pl-pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                div.querySelectorAll('.yd-pl-pos-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                updatePreviewHighlight();
+            });
+        });
+        div.querySelector('.yd-pl-pattern-remove').addEventListener('click', () => {
+            div.remove();
+            updatePreviewHighlight();
         });
 
-        updateButtonState(autoCount, manualCount);
+        return div;
     }
 
-    const processRowsDebounced = debounce(processRows, DEBOUNCE_DELAY);
-
-    function updateShieldIcon(row, isProtected) {
-        let shield = row.querySelector('.yd-pl-shield');
-        if (!shield) {
-            const firstCell = row.querySelector('td:first-child');
-            if (!firstCell) return;
-
-            shield = document.createElement('span');
-            shield.className = 'yd-pl-shield';
-            shield.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>`;
-            shield.title = 'Р”РѕР±Р°РІРёС‚СЊ РІ Р’Р°Р№С‚Р»РёСЃС‚';
-            firstCell.style.position = 'relative';
-            firstCell.appendChild(shield);
-
-            shield.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const domain = getDomainFromRow(row);
-                toggleWhitelist(domain, row);
-            });
-        }
-
-        shield.classList.toggle('yd-pl-shield-active', isProtected);
-    }
-
-    function toggleWhitelist(domain, row) {
-        const idx = settings.whitelistDomains.indexOf(domain);
-        if (idx >= 0) {
-            settings.whitelistDomains.splice(idx, 1);
-            showNotification(`вќЊ РЈРґР°Р»РµРЅРѕ РёР· Р’Р°Р№С‚Р»РёСЃС‚Р°: ${domain}`, 'info');
-        } else {
-            settings.whitelistDomains.push(domain);
-            showNotification(`вњ… Р”РѕР±Р°РІР»РµРЅРѕ РІ Р’Р°Р№С‚Р»РёСЃС‚: ${domain}`, 'success');
-        }
-        saveSettings();
-        processRows();
-        updateWhitelistCount();
-        if (currentMode === 'whitelist') renderChips();
-    }
-
-    function updateButtonState(autoCount, manualCount) {
-        const btn = document.getElementById('yd-pl-action-btn');
-        const total = autoCount + manualCount;
-
-        if (!btn) return;
-
-        if (total === 0) {
-            btn.textContent = 'Р’С‹Р±РµСЂРёС‚Рµ РїР»РѕС‰Р°РґРєРё';
-            btn.disabled = true;
-            btn.className = 'yd-pl-btn-primary yd-pl-btn-disabled';
-        } else {
-            btn.textContent = `Р—Р°Р±Р»РѕРєРёСЂРѕРІР°С‚СЊ (${total})`;
-            btn.disabled = false;
-            btn.className = 'yd-pl-btn-primary yd-pl-btn-danger';
-            btn.title = `${autoCount} РїРѕ С„РёР»СЊС‚СЂСѓ, ${manualCount} РІСЂСѓС‡РЅСѓСЋ`;
-        }
-    }
-
-    // ==================== CHECKBOX TRACKING ====================
-    function setupCheckboxTracking() {
-        document.addEventListener('change', (e) => {
-            if (!e.target.matches('tbody input[type="checkbox"]')) return;
-
-            const row = e.target.closest('tr');
-            if (!row) return;
-
-            const domain = getDomainFromRow(row);
-            const state = checkboxState.get(domain);
-
-            if (e.target.checked) {
-                // User manually checked
-                if (!state || state.source !== 'auto') {
-                    checkboxState.set(domain, { source: 'manual_included' });
-                    row.classList.add('yd-pl-row-manual');
-                    row.classList.remove('yd-pl-row-manual-excluded');
-                }
-            } else {
-                // User manually unchecked
-                if (state?.source === 'auto') {
-                    checkboxState.set(domain, { source: 'manual_excluded' });
-                    row.classList.add('yd-pl-row-manual-excluded');
-                    row.classList.remove('yd-pl-row-auto');
-                } else {
-                    checkboxState.delete(domain);
-                    row.classList.remove('yd-pl-row-manual');
-                }
-            }
-
-            updateButtonFromCheckboxes();
-        }, true);
-    }
-
-    function updateButtonFromCheckboxes() {
-        const rows = getTableRows();
-        let auto = 0, manual = 0;
-
-        rows.forEach(row => {
-            const cb = row.querySelector('input[type="checkbox"]');
-            if (!cb?.checked) return;
-
-            const domain = getDomainFromRow(row);
-            const state = checkboxState.get(domain);
-            if (state?.source === 'manual_included') manual++;
-            else auto++;
-        });
-
-        updateButtonState(auto, manual);
-    }
-
-    // ==================== CHIPS ====================
-    function addChip(value, operator = '*') {
-        if (!value.trim()) return;
-
-        const targetList = currentMode === 'filter' ? settings.filterChips :
-            settings.whitelistDomains.map(d => ({ operator: '*', value: d }));
-
-        if (currentMode === 'filter') {
-            settings.filterChips.push({ operator, value: value.trim() });
-        } else {
-            if (!settings.whitelistDomains.includes(value.trim())) {
-                settings.whitelistDomains.push(value.trim());
-            }
-        }
-
-        saveSettings();
-        renderChips();
-        updateWhitelistCount();
-        processRowsDebounced();
-    }
-
-    function removeChip(index) {
-        if (currentMode === 'filter') {
-            settings.filterChips.splice(index, 1);
-        } else {
-            settings.whitelistDomains.splice(index, 1);
-        }
-        saveSettings();
-        renderChips();
-        updateWhitelistCount();
-        processRowsDebounced();
-    }
-
-    function clearAllChips() {
-        if (currentMode === 'filter') {
-            settings.filterChips = [];
-            // Clear auto checkboxes
-            checkboxState.forEach((state, domain) => {
-                if (state.source === 'auto') checkboxState.delete(domain);
-            });
-        } else {
-            settings.whitelistDomains = [];
-        }
-        saveSettings();
-        renderChips();
-        updateWhitelistCount();
-        processRowsDebounced();
-    }
-
-    function updateWhitelistCount() {
-        const badge = document.getElementById('yd-pl-whitelist-count');
-        if (badge) {
-            const count = settings.whitelistDomains.length;
-            badge.textContent = count || '';
-            badge.style.display = count > 0 ? 'inline-flex' : 'none';
-        }
-    }
-
-    function renderChips() {
-        const container = document.getElementById('yd-pl-chips');
+    function renderPatterns() {
+        const container = document.getElementById('yd-pl-patterns-list');
         if (!container) return;
-
         container.innerHTML = '';
-        const chips = currentMode === 'filter' ? settings.filterChips :
-            settings.whitelistDomains.map(d => ({ operator: 'вњ“', value: d }));
+        settings.filters.patterns.forEach(p => container.appendChild(createPatternItem(p)));
+        if (settings.filters.patterns.length === 0) {
+            container.appendChild(createPatternItem());
+        }
+    }
 
-        chips.forEach((chip, idx) => {
-            const el = document.createElement('div');
-            el.className = `yd-pl-chip ${currentMode === 'whitelist' ? 'yd-pl-chip-green' : ''}`;
-            el.innerHTML = `
-                <span class="yd-pl-chip-op" title="РР·РјРµРЅРёС‚СЊ СѓСЃР»РѕРІРёРµ">${chip.operator}</span>
-                <span class="yd-pl-chip-text">${chip.value}</span>
-                <span class="yd-pl-chip-x">Г—</span>
+    // Применить числовые фильтры из settings в UI
+    function applyFiltersToUI() {
+        const f = settings.filters;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+
+        setVal('yd-pl-clicks-min', f.clicksMin);
+        setVal('yd-pl-clicks-max', f.clicksMax);
+        setVal('yd-pl-ctr-min', f.ctrMin);
+        setVal('yd-pl-ctr-max', f.ctrMax);
+        setVal('yd-pl-cpc-min', f.cpcMin);
+        setVal('yd-pl-cpc-max', f.cpcMax);
+        setVal('yd-pl-spend-min', f.spendMin);
+        setVal('yd-pl-spend-max', f.spendMax);
+
+        // Mode toggle
+        const modeRadio = document.querySelector(`input[name="yd-pl-mode"][value="${settings.mode}"]`);
+        if (modeRadio) {
+            modeRadio.checked = true;
+            document.querySelectorAll('.yd-pl-toggle').forEach(t => t.classList.remove('active'));
+            modeRadio.closest('.yd-pl-toggle')?.classList.add('active');
+        }
+    }
+
+    // ==================== UI: ШАБЛОНЫ ====================
+    function renderTemplates() {
+        const container = document.getElementById('yd-pl-templates-list');
+        if (!container) return;
+        container.innerHTML = '';
+
+        settings.templates.forEach((tpl, idx) => {
+            const div = document.createElement('div');
+            div.className = 'yd-pl-template-item';
+            div.innerHTML = `
+                <span class="yd-pl-template-name">${tpl.name}</span>
+                <div class="yd-pl-template-actions">
+                    <button class="yd-pl-tpl-apply" title="Применить все настройки">✓</button>
+                    <button class="yd-pl-tpl-copy" title="Копировать">⧉</button>
+                    <button class="yd-pl-tpl-delete" title="Удалить">×</button>
+                </div>
             `;
 
-            // Edit chip
-            el.querySelector('.yd-pl-chip-text').addEventListener('click', () => {
-                const input = document.getElementById('yd-pl-input');
-                if (input) {
-                    input.value = chip.value;
-                    if (currentMode === 'filter') currentOperator = chip.operator;
-                    updateOperatorIcon();
+            // Применить шаблон — загружает ВСЕ настройки
+            div.querySelector('.yd-pl-tpl-apply').addEventListener('click', () => {
+                // Применяем все настройки из шаблона
+                if (tpl.filters) {
+                    settings.filters = JSON.parse(JSON.stringify(tpl.filters));
+                } else if (tpl.patterns) {
+                    // Обратная совместимость со старыми шаблонами
+                    settings.filters.patterns = [...tpl.patterns];
                 }
-                removeChip(idx);
+                if (tpl.whitelist) settings.whitelist = [...tpl.whitelist];
+                if (tpl.mode) settings.mode = tpl.mode;
+
+                // Обновить UI
+                renderPatterns();
+                applyFiltersToUI();
+                updatePreviewHighlight();
+                showNotification(`Шаблон "${tpl.name}" применён`, 'success');
             });
 
-            // Remove chip
-            el.querySelector('.yd-pl-chip-x').addEventListener('click', (e) => {
-                e.stopPropagation();
-                removeChip(idx);
-            });
-
-            // Change operator (filter mode only)
-            if (currentMode === 'filter') {
-                el.querySelector('.yd-pl-chip-op').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    showOperatorPopover(e.target, idx);
+            div.querySelector('.yd-pl-tpl-copy').addEventListener('click', () => {
+                const newName = prompt('Имя нового шаблона:', tpl.name + ' (копия)');
+                if (!newName) return;
+                // Копируем все настройки
+                settings.templates.push({
+                    name: newName,
+                    filters: tpl.filters ? JSON.parse(JSON.stringify(tpl.filters)) : { patterns: [...(tpl.patterns || [])] },
+                    whitelist: tpl.whitelist ? [...tpl.whitelist] : [],
+                    mode: tpl.mode || 'or'
                 });
-            }
-
-            container.appendChild(el);
-        });
-
-        // Show/hide clear button
-        const clearBtn = document.getElementById('yd-pl-clear-btn');
-        if (clearBtn) {
-            clearBtn.style.display = chips.length > 0 ? 'flex' : 'none';
-        }
-    }
-
-    function showOperatorPopover(target, chipIdx) {
-        closePopover();
-
-        const popover = document.createElement('div');
-        popover.className = 'yd-pl-popover';
-        popover.id = 'yd-pl-op-popover';
-
-        Object.entries(OPERATORS).forEach(([op, data]) => {
-            const item = document.createElement('div');
-            item.className = 'yd-pl-popover-item';
-            item.innerHTML = `<span>${data.icon}</span> ${data.label}`;
-            item.addEventListener('click', () => {
-                settings.filterChips[chipIdx].operator = op;
                 saveSettings();
-                renderChips();
-                processRowsDebounced();
-                closePopover();
+                renderTemplates();
+                showNotification(`Шаблон скопирован`, 'success');
             });
-            popover.appendChild(item);
+
+            div.querySelector('.yd-pl-tpl-delete').addEventListener('click', () => {
+                if (!confirm(`Удалить шаблон "${tpl.name}"?`)) return;
+                settings.templates.splice(idx, 1);
+                saveSettings();
+                renderTemplates();
+                showNotification(`Шаблон удалён`, 'info');
+            });
+
+            // Редактирование имени по двойному клику
+            div.querySelector('.yd-pl-template-name').addEventListener('dblclick', () => {
+                const newName = prompt('Новое имя шаблона:', tpl.name);
+                if (newName) {
+                    tpl.name = newName;
+                    saveSettings();
+                    renderTemplates();
+                }
+            });
+
+            container.appendChild(div);
         });
-
-        const rect = target.getBoundingClientRect();
-        popover.style.cssText = `
-            position: fixed;
-            top: ${rect.bottom + 5}px;
-            left: ${rect.left}px;
-            z-index: 100002;
-        `;
-        document.body.appendChild(popover);
     }
 
-    function closePopover() {
-        document.querySelectorAll('.yd-pl-popover').forEach(p => p.remove());
-    }
-
-    function updateOperatorIcon() {
-        const icon = document.getElementById('yd-pl-op-icon');
-        if (icon) {
-            icon.textContent = OPERATORS[currentOperator]?.icon || '*';
-        }
-    }
-
-    // ==================== UI CREATION ====================
+    // ==================== СОЗДАНИЕ ПАНЕЛИ ====================
     function createPanel() {
         if (document.getElementById('yd-pl-panel')) return;
-
         injectStyles();
 
         const panel = document.createElement('div');
         panel.id = 'yd-pl-panel';
         panel.innerHTML = `
-            <div class="yd-pl-header" id="yd-pl-header">
-                <span class="yd-pl-title">Р¤РёР»СЊС‚СЂ РїР»РѕС‰Р°РґРѕРє</span>
-                <button class="yd-pl-minimize" id="yd-pl-minimize">в€’</button>
-            </div>
+            <!-- Resize Handles -->
+            <div class="yd-pl-resize-handle yd-pl-resize-n" data-resize="n"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-s" data-resize="s"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-e" data-resize="e"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-w" data-resize="w"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-ne" data-resize="ne"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-nw" data-resize="nw"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
+            <div class="yd-pl-resize-handle yd-pl-resize-sw" data-resize="sw"></div>
 
-            <div class="yd-pl-body">
-                <!-- Mode Switcher -->
-                <div class="yd-pl-mode-switcher">
-                    <button class="yd-pl-mode-btn yd-pl-mode-active" data-mode="filter">Р¤РёР»СЊС‚СЂ</button>
-                    <button class="yd-pl-mode-btn" data-mode="whitelist">
-                        Р’Р°Р№С‚Р»РёСЃС‚
-                        <span id="yd-pl-whitelist-count" class="yd-pl-badge"></span>
+            <!-- Header -->
+            <div class="yd-pl-header" id="yd-pl-panel-header">
+                <div class="yd-pl-header-left">
+                    <svg class="yd-pl-logo" width="20" height="20" viewBox="0 0 100 100">
+                        <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
+                        <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+                        <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
+                        <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
+                    </svg>
+                    <span class="yd-pl-title">YD Helper</span>
+                </div>
+                <div class="yd-pl-header-right">
+                    <div class="yd-pl-help-icon" id="yd-pl-help-icon" title="Справка по префиксам">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <div class="yd-pl-help-tooltip">
+                            <div class="yd-pl-help-title">Префиксы фильтров</div>
+                            <div class="yd-pl-help-row"><code>*</code> содержит</div>
+                            <div class="yd-pl-help-row"><code>!</code> не содержит</div>
+                            <div class="yd-pl-help-row"><code>^</code> начинается с</div>
+                            <div class="yd-pl-help-row"><code>$</code> заканчивается на</div>
+                            <div class="yd-pl-help-row"><code>=</code> равно</div>
+                        </div>
+                    </div>
+                    <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
                     </button>
                 </div>
+            </div>
 
-                <!-- Smart Input -->
-                <div class="yd-pl-input-wrap" id="yd-pl-input-wrap">
-                    <div class="yd-pl-chips-container" id="yd-pl-chips"></div>
-                    <div class="yd-pl-input-row">
-                        <span class="yd-pl-op-icon" id="yd-pl-op-icon" title="Р’С‹Р±СЂР°С‚СЊ СѓСЃР»РѕРІРёРµ">в€—</span>
-                        <input type="text" id="yd-pl-input" placeholder="Р’РІРµРґРёС‚Рµ РґРѕРјРµРЅ...">
-                        <button class="yd-pl-clear-btn" id="yd-pl-clear-btn" title="РћС‡РёСЃС‚РёС‚СЊ РІСЃС‘">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            <!-- Body -->
+            <div class="yd-pl-body">
+                <!-- Секция: По доменам -->
+                <div class="yd-pl-section">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-title">По доменам</span>
+                        <button id="yd-pl-clear-chips" class="yd-pl-section-action" title="Очистить" style="display: none;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                             </svg>
                         </button>
                     </div>
-                </div>
-
-                <!-- Hint Popover -->
-                <div class="yd-pl-hint" id="yd-pl-hint" style="display:none">
-                    <div class="yd-pl-hint-title">РЈСЃР»РѕРІРёРµ РїРѕРёСЃРєР°:</div>
-                    ${Object.entries(OPERATORS).map(([op, d]) => `
-                        <div class="yd-pl-hint-item ${d.default ? 'active' : ''}" data-op="${op}">
-                            <span class="yd-pl-hint-icon">${d.icon}</span>
-                            <span>${d.label}</span>
+                    <div class="yd-pl-domain-section" style="position: relative;">
+                        <div class="yd-pl-domain-wrapper" id="yd-pl-domain-wrapper">
+                            <div id="yd-pl-chips" class="yd-pl-chips-container"></div>
+                            <input type="text" id="yd-pl-domain-input" class="yd-pl-domain-input" 
+                                placeholder="Введите домен...">
                         </div>
-                    `).join('')}
+                        <div id="yd-pl-history-dropdown" class="yd-pl-history-dropdown"></div>
+                    </div>
                 </div>
 
-                <!-- Date Info -->
-                <div class="yd-pl-date-info" id="yd-pl-date-info">
-                    <span style="color:#888">Р—Р°РіСЂСѓР·РєР°...</span>
+                <!-- Секция: По показателям -->
+                <div class="yd-pl-section">
+                    <div class="yd-pl-section-header">
+                        <span class="yd-pl-section-title">По показателям</span>
+                        <button id="yd-pl-reset-filters" class="yd-pl-section-action" style="display: none;" title="Сбросить">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="yd-pl-filters-grid">
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Клики</span>
+                            <input type="number" id="yd-pl-clicks-min" min="0" step="1" placeholder="от" value="${settings.filters.clicksMin}">
+                            <input type="number" id="yd-pl-clicks-max" min="0" step="1" placeholder="до" value="${settings.filters.clicksMax}">
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CTR %</span>
+                            <input type="number" id="yd-pl-ctr-min" min="0" step="0.1" placeholder="от" value="${settings.filters.ctrMin}">
+                            <input type="number" id="yd-pl-ctr-max" min="0" step="0.1" placeholder="до" value="${settings.filters.ctrMax}">
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">CPC ₽</span>
+                            <input type="number" id="yd-pl-cpc-min" min="0" step="1" placeholder="от" value="${settings.filters.cpcMin}">
+                            <input type="number" id="yd-pl-cpc-max" min="0" step="1" placeholder="до" value="${settings.filters.cpcMax}">
+                        </div>
+                        <div class="yd-pl-filter-row">
+                            <span class="yd-pl-filter-label">Расход</span>
+                            <input type="number" id="yd-pl-spend-min" min="0" step="1" placeholder="от" value="${settings.filters.spendMin}">
+                            <input type="number" id="yd-pl-spend-max" min="0" step="1" placeholder="до" value="${settings.filters.spendMax}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Условие: И / Или (компактный переключатель) -->
+                <div class="yd-pl-condition-row">
+                    <span class="yd-pl-condition-label">Условие:</span>
+                    <div class="yd-pl-segmented-apple yd-pl-segmented-compact">
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-and" value="and" ${settings.mode === 'and' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-and">И</label>
+                        <input type="radio" name="yd-pl-mode" id="yd-pl-mode-or" value="or" ${settings.mode === 'or' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-or">Или</label>
+                        <div class="yd-pl-segmented-slider"></div>
+                    </div>
                 </div>
             </div>
 
+            <!-- Footer -->
             <div class="yd-pl-footer">
-                <button class="yd-pl-btn-primary yd-pl-btn-disabled" id="yd-pl-action-btn" disabled>
-                    Р’С‹Р±РµСЂРёС‚Рµ РїР»РѕС‰Р°РґРєРё
+                <button id="yd-pl-apply" class="yd-pl-btn-primary">
+                    <span id="yd-pl-apply-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </span>
+                    <span id="yd-pl-apply-text">Выделить (0)</span>
                 </button>
+                <!-- Компактная строка даты последней отправки -->
+                <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
+                    <span class="yd-pl-last-send-label">Последняя отправка:</span>
+                    <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
+                </div>
             </div>
 
-            <div class="yd-pl-resize" id="yd-pl-resize"></div>
+            <!-- Resize handle -->
+            <div class="yd-pl-resize-handle yd-pl-resize-se" data-resize="se"></div>
         `;
 
         document.body.appendChild(panel);
 
-        // Position
-        panel.style.top = settings.panelPosition.top;
-        panel.style.right = settings.panelPosition.right;
+        // Позиция и размер
         panel.style.width = settings.panelSize.width + 'px';
         panel.style.height = settings.panelSize.height + 'px';
+        panel.style.top = settings.panelPosition.top;
+        panel.style.right = settings.panelPosition.right;
 
-        setupEventListeners();
+        // Pill
+        const pill = document.createElement('div');
+        pill.id = 'yd-pl-pill';
+        pill.className = 'yd-pl-pill';
+        pill.style.display = 'none';
+        pill.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 100 100">
+                <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
+                <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+            </svg>
+            <span id="yd-pl-pill-count" class="yd-pl-pill-badge">0</span>
+            <span id="yd-pl-pill-filters" class="yd-pl-pill-filters"></span>
+        `;
+        document.body.appendChild(pill);
+
+        // Инициализация
         renderChips();
-        updateWhitelistCount();
-        setupCheckboxTracking();
-        injectShieldsToTable();
+        setupEventListeners(panel, pill);
+        makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
+        makeResizable(panel);
+        setTimeout(updatePreviewHighlight, 100);
 
-        // Sync date
-        setTimeout(applyRecommendedPeriod, 1000);
-        setTimeout(processRows, 1500);
+        // Инициализация блока даты последней отправки
+        updateLastSendInfo();
     }
 
-    function setupEventListeners() {
-        const input = document.getElementById('yd-pl-input');
-        const hint = document.getElementById('yd-pl-hint');
-        const opIcon = document.getElementById('yd-pl-op-icon');
-        const clearBtn = document.getElementById('yd-pl-clear-btn');
-        const minimizeBtn = document.getElementById('yd-pl-minimize');
-        const actionBtn = document.getElementById('yd-pl-action-btn');
+    // Обновление блока информации о дате последней отправки
+    function updateLastSendInfo() {
+        const container = document.getElementById('yd-pl-last-send-info');
+        const dateEl = document.getElementById('yd-pl-last-send-date');
 
-        // Input events
-        input.addEventListener('focus', () => {
-            if (input.value === '' && currentMode === 'filter') {
-                hint.style.display = 'block';
-                isHintVisible = true;
-            }
-        });
+        if (!container || !dateEl) return;
 
-        input.addEventListener('input', () => {
-            if (input.value !== '' && isHintVisible) {
-                hint.style.display = 'none';
-                isHintVisible = false;
-            }
-        });
+        const period = calculateRecommendedPeriod();
 
-        input.addEventListener('blur', () => {
-            setTimeout(() => {
-                hint.style.display = 'none';
-                isHintVisible = false;
-            }, 200);
-        });
-
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && input.value.trim()) {
-                addChip(input.value, currentOperator);
-                input.value = '';
-                currentOperator = '*';
-                updateOperatorIcon();
-            }
-        });
-
-        // Hint items
-        hint.querySelectorAll('.yd-pl-hint-item').forEach(item => {
-            item.addEventListener('click', () => {
-                currentOperator = item.dataset.op;
-                updateOperatorIcon();
-                hint.querySelectorAll('.yd-pl-hint-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                hint.style.display = 'none';
-                input.focus();
-            });
-        });
-
-        // Operator icon
-        opIcon.addEventListener('click', () => {
-            hint.style.display = hint.style.display === 'none' ? 'block' : 'none';
-        });
-
-        // Clear button
-        clearBtn.addEventListener('click', clearAllChips);
-
-        // Mode switcher
-        document.querySelectorAll('.yd-pl-mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentMode = btn.dataset.mode;
-                document.querySelectorAll('.yd-pl-mode-btn').forEach(b => b.classList.remove('yd-pl-mode-active'));
-                btn.classList.add('yd-pl-mode-active');
-
-                const wrap = document.getElementById('yd-pl-input-wrap');
-                wrap.classList.toggle('yd-pl-whitelist-mode', currentMode === 'whitelist');
-
-                input.placeholder = currentMode === 'filter' ? 'Р’РІРµРґРёС‚Рµ РґРѕРјРµРЅ...' : 'Р”РѕР±Р°РІРёС‚СЊ РІ РёСЃРєР»СЋС‡РµРЅРёСЏ...';
-                opIcon.style.display = currentMode === 'filter' ? 'flex' : 'none';
-
-                renderChips();
-            });
-        });
-
-        // Minimize
-        minimizeBtn.addEventListener('click', () => {
-            const panel = document.getElementById('yd-pl-panel');
-            panel.classList.toggle('yd-pl-minimized');
-        });
-
-        // Action button
-        actionBtn.addEventListener('click', executeBlock);
-
-        // Drag
-        makeDraggable();
-
-        // Close popover on click outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.yd-pl-popover') && !e.target.closest('.yd-pl-chip-op')) {
-                closePopover();
-            }
-        });
-    }
-
-    function executeBlock() {
-        const masterBtn = document.querySelector('.b-group-action__button, [class*="group-action"] button');
-        if (masterBtn) {
-            masterBtn.click();
-            setTimeout(() => {
-                const blockOption = document.querySelector('[class*="menu"] [class*="item"]:contains("Р—Р°РїСЂРµС‚РёС‚СЊ")');
-                if (blockOption) blockOption.click();
-            }, 300);
+        if (period && period.lastChange) {
+            container.style.display = 'flex';
+            dateEl.textContent = formatDateRu(period.lastChange);
         } else {
-            showNotification('вљ пёЏ Р’С‹Р±РµСЂРёС‚Рµ РїР»РѕС‰Р°РґРєРё РІ С‚Р°Р±Р»РёС†Рµ', 'warning');
+            container.style.display = 'none';
         }
     }
 
-    function makeDraggable() {
-        const panel = document.getElementById('yd-pl-panel');
-        const header = document.getElementById('yd-pl-header');
-        let isDragging = false, startX, startY, startTop, startRight;
+    // Описания операторов
+    const OPERATORS = {
+        '*': { label: 'содержит', icon: '*', exclude: false },
+        '!': { label: 'не содержит', icon: '!', exclude: true },
+        '^': { label: 'начинается с', icon: '^', exclude: false },
+        '$': { label: 'заканчивается на', icon: '$', exclude: false },
+        '=': { label: 'равно', icon: '=', exclude: false },
+        '≠': { label: 'не равно', icon: '≠', exclude: true }
+    };
 
-        header.addEventListener('mousedown', (e) => {
-            if (e.target.closest('button')) return;
+    // Рендер чипов доменов
+    function renderChips() {
+        const container = document.getElementById('yd-pl-chips');
+        if (!container) return;
+        container.innerHTML = '';
+
+        settings.filters.patterns.forEach((pattern, index) => {
+            const op = pattern.operator || '*';
+            const opInfo = OPERATORS[op] || OPERATORS['*'];
+            const isExclude = opInfo.exclude;
+
+            const chip = document.createElement('div');
+            chip.className = `yd-pl-chip ${isExclude ? 'yd-pl-chip-exclude' : ''}`;
+            chip.dataset.index = index;
+
+            chip.innerHTML = `
+                <span class="yd-pl-chip-op" title="${opInfo.icon} ${opInfo.label}">${opInfo.icon}</span>
+                <span class="yd-pl-chip-text">${pattern.value}</span>
+                <span class="yd-pl-chip-remove">×</span>
+            `;
+
+            // Клик по оператору — dropdown для смены
+            chip.querySelector('.yd-pl-chip-op').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showOperatorDropdown(chip, index, e.target);
+            });
+
+            // Удаление чипа
+            chip.querySelector('.yd-pl-chip-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                settings.filters.patterns.splice(index, 1);
+                isSelectMode = true; // Сброс в режим выделения
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+            });
+
+            // Редактирование чипа при клике на текст
+            chip.querySelector('.yd-pl-chip-text').addEventListener('click', () => {
+                const input = document.getElementById('yd-pl-domain-input');
+                if (input) {
+                    // Добавляем оператор как префикс (кроме * который по умолчанию)
+                    const prefix = op !== '*' ? op : '';
+                    input.value = prefix + pattern.value;
+                    input.focus();
+                    // Удаляем редактируемый чип
+                    settings.filters.patterns.splice(index, 1);
+                    saveSettings();
+                    renderChips();
+                }
+            });
+
+            container.appendChild(chip);
+        });
+
+        // Автоскролл к input
+        const wrapper = document.getElementById('yd-pl-domain-wrapper');
+        if (wrapper) {
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
+        // Показать/скрыть кнопку очистки
+        const clearBtn = document.getElementById('yd-pl-clear-chips');
+        if (clearBtn) {
+            clearBtn.style.display = settings.filters.patterns.length > 0 ? 'flex' : 'none';
+        }
+    }
+
+    // Dropdown для смены оператора
+    function showOperatorDropdown(chip, index, anchor) {
+        // Закрыть предыдущий dropdown
+        document.querySelectorAll('.yd-pl-op-dropdown').forEach(d => d.remove());
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'yd-pl-op-dropdown';
+
+        const currentOp = settings.filters.patterns[index]?.operator || '*';
+
+        Object.entries(OPERATORS).forEach(([op, info]) => {
+            const item = document.createElement('div');
+            item.className = `yd-pl-op-item ${op === currentOp ? 'active' : ''} ${info.exclude ? 'exclude' : ''}`;
+            item.innerHTML = `<span class="op-icon">${info.icon}</span><span class="op-label">${info.label}</span>`;
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settings.filters.patterns[index].operator = op;
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+                dropdown.remove();
+            });
+            dropdown.appendChild(item);
+        });
+
+        // Позиционирование
+        const rect = anchor.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.zIndex = '99999999';
+
+        document.body.appendChild(dropdown);
+
+        // Закрытие при клике вне
+        setTimeout(() => {
+            document.addEventListener('click', function closeDropdown(e) {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeDropdown);
+                }
+            });
+        }, 10);
+    }
+
+    // ==================== ИСТОРИЯ ВВОДА ====================
+    function addToHistory(value) {
+        if (!value || value.trim() === '') return;
+        const normalized = value.trim();
+
+        // Удалить если уже есть
+        if (!settings.history) settings.history = [];
+        const index = settings.history.findIndex(item => item === normalized);
+        if (index !== -1) settings.history.splice(index, 1);
+
+        settings.history.unshift(normalized);
+        if (settings.history.length > 10) settings.history.pop();
+        saveSettings();
+    }
+
+    function removeFromHistory(value) {
+        if (!settings.history) return;
+        settings.history = settings.history.filter(i => i !== value);
+        saveSettings();
+        renderHistory();
+        if (settings.history.length === 0) {
+            const dropdown = document.getElementById('yd-pl-history-dropdown');
+            if (dropdown) dropdown.classList.remove('visible');
+        }
+    }
+
+    function renderHistory() {
+        const dropdown = document.getElementById('yd-pl-history-dropdown');
+        if (!dropdown) return;
+
+        if (!settings.history || settings.history.length === 0) {
+            dropdown.innerHTML = '<div class="yd-pl-history-item" style="cursor:default;color:var(--yd-text-muted);justify-content:center;">История пуста</div>';
+            return;
+        }
+
+        dropdown.innerHTML = '';
+        settings.history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'yd-pl-history-item';
+            div.innerHTML = `<span>${item}</span><span class="yd-pl-history-remove" title="Удалить">×</span>`;
+            div.style.cursor = 'pointer';
+
+            // Клик по всей строке
+            div.addEventListener('click', (e) => {
+                if (e.target.classList.contains('yd-pl-history-remove')) return;
+                e.stopPropagation();
+                processInput(item);
+                dropdown.classList.remove('visible');
+            });
+
+            // Клик по крестику — удалить
+            div.querySelector('.yd-pl-history-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                removeFromHistory(item);
+            });
+
+            dropdown.appendChild(div);
+        });
+    }
+
+    // Парсинг ввода (оператор + значение)
+    function parseInput(value) {
+        let operator = '*';
+        const prefixMatch = value.match(/^([*!^$=≠])/);
+        if (prefixMatch) {
+            operator = prefixMatch[1];
+            value = value.slice(1).trim();
+        }
+        return { operator, value };
+    }
+
+    // Обработка ввода (создание чипов)
+    function processInput(rawValue) {
+        if (!rawValue) return;
+        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+        let added = false;
+
+        items.forEach(item => {
+            const { operator, value } = parseInput(item);
+            if (value) {
+                // Проверка на дубликат
+                const isDuplicate = settings.filters.patterns.some(
+                    p => p.operator === operator && p.value.toLowerCase() === value.toLowerCase()
+                );
+                if (!isDuplicate) {
+                    settings.filters.patterns.push({ operator, value });
+                    added = true;
+                }
+            }
+        });
+
+        if (added) {
+            addToHistory(rawValue);
+            saveSettings();
+            renderChips();
+            updatePreviewHighlight();
+            const input = document.getElementById('yd-pl-domain-input');
+            if (input) input.value = '';
+        }
+    }
+
+    // Закрытие истории и создание чипа при потере фокуса
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('yd-pl-history-dropdown');
+        const input = document.getElementById('yd-pl-domain-input');
+
+        // Закрытие истории
+        if (dropdown && dropdown.classList.contains('visible')) {
+            if (!dropdown.contains(e.target) && e.target !== input) {
+                dropdown.classList.remove('visible');
+            }
+        }
+
+        // Создание чипа при клике вне (аналог blur)
+        if (input && input.value.trim() !== '') {
+            const isClickInsideInput = e.target === input;
+            const isClickInsideHistory = dropdown && dropdown.contains(e.target);
+            const isClickRemove = e.target.closest('.yd-pl-chip-remove') || e.target.closest('.yd-pl-history-remove');
+            const isClickClear = e.target.closest('#yd-pl-clear-chips');
+
+            if (!isClickInsideInput && !isClickInsideHistory && !isClickRemove && !isClickClear) {
+                processInput(input.value.trim());
+            }
+        }
+    });
+
+    function setupEventListeners(panel, pill) {
+        // Toggle panel with animation — свернуть в правый нижний угол
+        document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
+            // Анимация сворачивания панели
+            panel.classList.add('yd-pl-panel-minimizing');
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.classList.remove('yd-pl-panel-minimizing');
+                // Показать pill с анимацией
+                pill.style.display = 'flex';
+                pill.classList.add('yd-pl-pill-appear');
+                setTimeout(() => pill.classList.remove('yd-pl-pill-appear'), 300);
+                updatePill();
+            }, 400);
+        });
+
+        pill.addEventListener('click', () => {
+            pill.style.display = 'none';
+            // Показать панель с анимацией
+            panel.style.display = 'flex';
+            panel.classList.add('yd-pl-panel-appearing');
+            setTimeout(() => panel.classList.remove('yd-pl-panel-appearing'), 400);
+        });
+
+        // Парсинг ввода с префиксом оператора
+
+
+        // Ввод домена с Enter для создания чипа
+        const domainInput = document.getElementById('yd-pl-domain-input');
+        const wrapper = document.getElementById('yd-pl-domain-wrapper');
+
+        if (domainInput) {
+            // Фокус на wrapper при клике
+            if (wrapper) {
+                wrapper.addEventListener('click', () => domainInput.focus());
+            }
+
+            // Показ истории при клике/фокусе
+            const showHistory = () => {
+                renderHistory();
+                const dropdown = document.getElementById('yd-pl-history-dropdown');
+                if (dropdown) dropdown.classList.add('visible');
+            };
+            domainInput.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showHistory();
+            });
+            domainInput.addEventListener('focus', showHistory);
+
+            domainInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    processInput(domainInput.value.trim());
+                }
+            });
+
+            // Также обрабатываем paste для множественного ввода
+            domainInput.addEventListener('paste', (e) => {
+                setTimeout(() => {
+                    const rawValue = domainInput.value.trim();
+                    // Если вставлено с запятыми или переносами — сразу создаём чипы
+                    if (rawValue.includes(',') || rawValue.includes('\n')) {
+                        const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+                        items.forEach(item => {
+                            const { operator, value } = parseInput(item);
+                            if (value) {
+                                settings.filters.patterns.push({ operator, value });
+                            }
+                        });
+                        saveSettings();
+                        renderChips();
+                        domainInput.value = '';
+                        updatePreviewHighlight();
+                    }
+                }, 0);
+            });
+        }
+
+        // Расширенные фильтры - toggle
+        const expandToggle = document.getElementById('yd-pl-expand-toggle');
+        if (expandToggle) {
+            expandToggle.addEventListener('click', () => {
+                const expand = document.querySelector('.yd-pl-expand');
+                expand.classList.toggle('open');
+                settings.filtersExpanded = expand.classList.contains('open');
+                saveSettings();
+            });
+        }
+
+        // Clear all chips button
+        const clearChipsBtn = document.getElementById('yd-pl-clear-chips');
+        if (clearChipsBtn) {
+            clearChipsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settings.filters.patterns = [];
+                isSelectMode = true; // Сброс в режим выделения
+                saveSettings();
+                renderChips();
+                updatePreviewHighlight();
+                showNotification('Фильтры очищены', 'info');
+            });
+        }
+
+        // Mode toggle (AND/OR)
+        document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                settings.mode = e.target.value;
+                saveSettings();
+                updatePreviewHighlight();
+            });
+        });
+
+        // Main button
+        document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
+
+        // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров
+        const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
+        if (resetFiltersBtn) {
+            resetFiltersBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Не открывать/закрывать expand
+                ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+                    'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                isSelectMode = true;
+                saveSettings();
+                updatePreviewHighlight();
+                showNotification('Фильтры сброшены', 'info');
+            });
+        }
+
+        // Live preview для числовых фильтров
+        const numericInputs = ['yd-pl-clicks-min', 'yd-pl-clicks-max', 'yd-pl-ctr-min', 'yd-pl-ctr-max',
+            'yd-pl-cpc-min', 'yd-pl-cpc-max', 'yd-pl-spend-min', 'yd-pl-spend-max'];
+        numericInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', debounce(updatePreviewHighlight, 300));
+        });
+
+        // Stats observer
+        const tbody = document.querySelector('tbody');
+        if (tbody) {
+            let observerTimeout = null;
+            const observer = new MutationObserver((mutations) => {
+                const isOurChange = mutations.every(m =>
+                    m.type === 'attributes' && m.attributeName === 'class' &&
+                    m.target.classList.contains('yd-pl-row-preview')
+                );
+                if (isOurChange) return;
+
+                if (observerTimeout) clearTimeout(observerTimeout);
+                observerTimeout = setTimeout(() => {
+                    updateStats();
+                    updatePreviewHighlight();
+                }, 100);
+            });
+            observer.observe(tbody, { childList: true, subtree: true });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Escape — свернуть панель
+            if (e.key === 'Escape' && panel.style.display !== 'none') {
+                // Анимация сворачивания панели
+                panel.classList.add('yd-pl-panel-minimizing');
+                setTimeout(() => {
+                    panel.style.display = 'none';
+                    panel.classList.remove('yd-pl-panel-minimizing');
+                    pill.style.display = 'flex';
+                    pill.classList.add('yd-pl-pill-appear');
+                    setTimeout(() => pill.classList.remove('yd-pl-pill-appear'), 300);
+                    updatePill();
+                }, 400);
+            }
+            // Ctrl+Enter — toggle выделения
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                togglePlacements();
+            }
+        });
+    }
+
+    // Показ/скрытие иконки сброса при активных фильтрах
+    function updateExpandBadge() {
+        const resetIcon = document.getElementById('yd-pl-reset-filters');
+        if (!resetIcon) return;
+
+        const filters = getFiltersFromUI();
+        const hasFilters = (filters.clicksMin || filters.clicksMax) ||
+            (filters.ctrMin || filters.ctrMax) ||
+            (filters.cpcMin || filters.cpcMax) ||
+            (filters.spendMin || filters.spendMax);
+
+        resetIcon.style.display = hasFilters ? 'flex' : 'none';
+    }
+
+    function updatePill() {
+        const checked = document.querySelectorAll('tbody tr input[type="checkbox"]:checked').length;
+        const countEl = document.getElementById('yd-pl-pill-count');
+        if (countEl) countEl.textContent = checked;
+
+        // Показать индикатор активных фильтров
+        const filters = getFiltersFromUI();
+        const hasFilters = filters.patterns.length > 0 ||
+            filters.clicksMin || filters.clicksMax ||
+            filters.ctrMin || filters.ctrMax ||
+            filters.cpcMin || filters.cpcMax ||
+            filters.spendMin || filters.spendMax;
+
+        const filtersEl = document.getElementById('yd-pl-pill-filters');
+        if (filtersEl) {
+            filtersEl.textContent = hasFilters ? '●' : '';
+            filtersEl.style.display = hasFilters ? 'inline' : 'none';
+        }
+    }
+
+    function makeDraggable(element, handle) {
+        let isDragging = false, startX, startY, startLeft, startTop;
+
+        handle.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button, input, select')) return;
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            startTop = panel.offsetTop;
-            startRight = window.innerWidth - panel.offsetLeft - panel.offsetWidth;
+            const rect = element.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            document.body.style.userSelect = 'none';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            panel.style.top = Math.max(0, startTop + dy) + 'px';
-            panel.style.right = Math.max(0, startRight - dx) + 'px';
+            element.style.left = (startLeft + e.clientX - startX) + 'px';
+            element.style.top = (startTop + e.clientY - startY) + 'px';
+            element.style.right = 'auto';
         });
 
         document.addEventListener('mouseup', () => {
             if (isDragging) {
-                isDragging = false;
-                settings.panelPosition.top = panel.style.top;
-                settings.panelPosition.right = panel.style.right;
+                settings.panelPosition = { top: element.style.top, right: 'auto', left: element.style.left };
                 saveSettings();
             }
+            isDragging = false;
+            document.body.style.userSelect = '';
         });
     }
 
-    function injectShieldsToTable() {
-        const observer = new MutationObserver(() => {
-            getTableRows().forEach(row => {
-                const domain = getDomainFromRow(row);
-                updateShieldIcon(row, isWhitelisted(domain));
+    function makeResizable(panel) {
+        const handles = panel.querySelectorAll('.yd-pl-resize-handle');
+        if (handles.length === 0) {
+            console.warn('[YD-PL] Resize handles not found');
+            return;
+        }
+
+        let isResizing = false;
+        let currentDir = '';
+        let startX, startY, startW, startH, startTop, startLeft;
+
+        handles.forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isResizing = true;
+                currentDir = handle.dataset.resize;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = panel.getBoundingClientRect();
+                startW = rect.width;
+                startH = rect.height;
+                startTop = rect.top;
+                startLeft = rect.left;
+                document.body.style.userSelect = 'none';
             });
         });
 
-        const table = document.querySelector('.b-stat-platform__table-wrap, .b-stat-table, table');
-        if (table) {
-            observer.observe(table, { childList: true, subtree: true });
-        }
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
 
-        // Initial injection
-        getTableRows().forEach(row => {
-            const domain = getDomainFromRow(row);
-            updateShieldIcon(row, isWhitelisted(domain));
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const minW = 320;
+            const minH = 350;
+
+            // Обработка по направлениям
+            if (currentDir.includes('e')) {
+                panel.style.width = Math.max(minW, startW + dx) + 'px';
+            }
+            if (currentDir.includes('w')) {
+                const newW = Math.max(minW, startW - dx);
+                if (newW > minW || dx < 0) {
+                    panel.style.width = newW + 'px';
+                    panel.style.left = (startLeft + dx) + 'px';
+                    panel.style.right = 'auto';
+                }
+            }
+            if (currentDir.includes('s')) {
+                panel.style.height = Math.max(minH, startH + dy) + 'px';
+            }
+            if (currentDir.includes('n')) {
+                const newH = Math.max(minH, startH - dy);
+                if (newH > minH || dy < 0) {
+                    panel.style.height = newH + 'px';
+                    panel.style.top = (startTop + dy) + 'px';
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                settings.panelSize = {
+                    width: parseInt(panel.style.width),
+                    height: parseInt(panel.style.height)
+                };
+                settings.panelPosition = {
+                    top: panel.style.top,
+                    left: panel.style.left,
+                    right: panel.style.right
+                };
+                saveSettings();
+            }
+            isResizing = false;
+            currentDir = '';
+            document.body.style.userSelect = '';
         });
     }
 
-    // ==================== STYLES ====================
+    // ==================== СТИЛИ ====================
     function injectStyles() {
-        if (document.getElementById('yd-pl-styles-v4')) return;
+        if (document.getElementById('yd-pl-styles')) return;
 
         const style = document.createElement('style');
-        style.id = 'yd-pl-styles-v4';
+        style.id = 'yd-pl-styles';
         style.textContent = `
+        /* CSS переменные */
+        #yd-pl-panel {
+            --yd-primary: #205598;
+            --yd-primary-light: #2a6bc0;
+            --yd-accent: #E46924;
+            --yd-bg: #ffffff;
+            --yd-bg-secondary: #F9FAFB;
+            --yd-border: #E5E7EB;
+            --yd-text: #1F2937;
+            --yd-text-secondary: #6B7280;
+            --yd-text-muted: #9CA3AF;
+            --yd-success: #10B981;
+            --yd-danger: #EF4444;
+        }
+
         #yd-pl-panel {
             position: fixed;
-            z-index: 100000;
-            background: #fff;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            top: 15px;
+            right: 15px;
+            z-index: 9999999;
+            width: 340px;
+            min-width: 320px;
+            min-height: 420px;
+            background: var(--yd-bg);
+            border-radius: 12px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            font-size: 13px;
+            color: var(--yd-text);
             display: flex;
             flex-direction: column;
+            max-height: 90vh;
             overflow: hidden;
-            transition: all 0.3s ease;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
         }
 
-        #yd-pl-panel.yd-pl-minimized .yd-pl-body,
-        #yd-pl-panel.yd-pl-minimized .yd-pl-footer {
+        /* Анимация сворачивания в правый нижний угол */
+        #yd-pl-panel.yd-pl-panel-minimizing {
+            transform: scale(0.3) translate(50%, 100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Анимация появления */
+        #yd-pl-panel.yd-pl-panel-appearing {
+            animation: yd-pl-panel-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes yd-pl-panel-appear {
+            from {
+                transform: scale(0.3) translate(50%, 100%);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
+        }
+
+        /* Дата последней отправки — компактная одна строка */
+        .yd-pl-last-send-info {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #666;
+            padding: 6px 10px;
+            background: linear-gradient(135deg, #f8fff8, #f0f8f0);
+            border-radius: 6px;
+            border-left: 3px solid #28a745;
+        }
+
+        .yd-pl-last-send-label {
+            color: #555;
+        }
+
+        .yd-pl-last-send-date {
+            font-weight: 600;
+            color: #28a745;
+            font-size: 12px;
+        }
+
+        /* Resize Handles — все стороны и углы */
+        .yd-pl-resize-handle {
+            position: absolute;
+            background: transparent;
+            z-index: 10;
+            transition: background 0.15s;
+        }
+        .yd-pl-resize-handle:hover { background: rgba(32, 85, 152, 0.15); }
+        .yd-pl-resize-n { top: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+        .yd-pl-resize-s { bottom: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+        .yd-pl-resize-e { top: 12px; bottom: 12px; right: -3px; width: 6px; cursor: ew-resize; }
+        .yd-pl-resize-w { top: 12px; bottom: 12px; left: -3px; width: 6px; cursor: ew-resize; }
+        .yd-pl-resize-ne { top: -3px; right: -3px; width: 12px; height: 12px; cursor: nesw-resize; border-radius: 0 12px 0 0; }
+        .yd-pl-resize-nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nwse-resize; border-radius: 12px 0 0 0; }
+        .yd-pl-resize-se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: nwse-resize; border-radius: 0 0 12px 0; }
+        .yd-pl-resize-sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: nesw-resize; border-radius: 0 0 0 12px; }
+
+        /* History Dropdown */
+        .yd-pl-history-dropdown {
+            position: absolute;
+            top: 100%; /* Relative to input wrapper if needed */
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
             display: none;
+            margin-top: 4px;
         }
+        .yd-pl-history-dropdown.visible { display: block; }
+        .yd-pl-history-item {
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--yd-text);
+            cursor: pointer;
+            border-bottom: 1px solid var(--yd-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .yd-pl-history-item:last-child { border-bottom: none; }
+        .yd-pl-history-item:hover { background: var(--yd-bg-secondary); }
+        .yd-pl-history-remove {
+            color: var(--yd-text-muted);
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .yd-pl-history-remove:hover { color: var(--yd-danger); background: rgba(255,0,0,0.05); }
 
+        #yd-pl-panel * { box-sizing: border-box; }
+
+        /* Header */
         .yd-pl-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 14px 16px;
-            background: linear-gradient(135deg, #205598, #2a6bc0);
-            color: #fff;
-            cursor: move;
+            padding: 12px 14px;
+            background: var(--yd-bg);
+            border-bottom: 1px solid var(--yd-border);
+            cursor: grab;
         }
+        .yd-pl-header:active { cursor: grabbing; }
 
-        .yd-pl-title {
-            font-weight: 600;
-            font-size: 15px;
-        }
+        .yd-pl-header-left { display: flex; align-items: center; gap: 8px; }
+        .yd-pl-title { font-weight: 600; font-size: 14px; color: var(--yd-primary); }
+        .yd-pl-header-right { display: flex; align-items: center; gap: 8px; }
 
-        .yd-pl-minimize {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: #fff;
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            line-height: 1;
-        }
-
-        .yd-pl-body {
-            padding: 16px;
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .yd-pl-mode-switcher {
-            display: flex;
-            background: #f0f2f5;
-            border-radius: 10px;
-            padding: 4px;
-            margin-bottom: 16px;
-        }
-
-        .yd-pl-mode-btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            background: transparent;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #666;
-            cursor: pointer;
-            transition: all 0.2s;
+        /* Help Icon с Tooltip */
+        .yd-pl-help-icon {
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            width: 24px;
+            height: 24px;
+            cursor: help;
+            color: var(--yd-text-muted);
+            border-radius: 50%;
+            transition: all 0.15s;
         }
-
-        .yd-pl-mode-btn.yd-pl-mode-active {
-            background: #fff;
-            color: #205598;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        .yd-pl-help-icon:hover { 
+            color: var(--yd-primary); 
+            background: var(--yd-bg-secondary);
         }
-
-        .yd-pl-mode-btn[data-mode="whitelist"].yd-pl-mode-active {
-            color: #28a745;
-        }
-
-        .yd-pl-badge {
-            background: #28a745;
+        .yd-pl-help-tooltip {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #1a1a1a;
             color: #fff;
+            padding: 10px 12px;
+            border-radius: 8px;
             font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-4px);
+            transition: all 0.15s;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .yd-pl-help-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 10px;
+            border: 6px solid transparent;
+            border-bottom-color: #1a1a1a;
+            border-top: none;
+        }
+        .yd-pl-help-icon:hover .yd-pl-help-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        .yd-pl-help-title { font-weight: 600; margin-bottom: 6px; color: #ccc; }
+        .yd-pl-help-row { padding: 2px 0; display: flex; align-items: center; gap: 8px; }
+        .yd-pl-help-row code {
+            font-family: 'SF Mono', Consolas, monospace;
+            background: rgba(255,255,255,0.15);
             padding: 2px 6px;
-            border-radius: 10px;
+            border-radius: 3px;
+            font-weight: 600;
             min-width: 18px;
             text-align: center;
         }
 
-        .yd-pl-input-wrap {
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 8px;
-            transition: border-color 0.2s;
+        .yd-pl-icon-btn {
+            background: none; border: none; padding: 4px; cursor: pointer;
+            color: var(--yd-text-muted); border-radius: 6px; transition: all 0.15s;
+            display: flex; align-items: center; justify-content: center;
         }
+        .yd-pl-icon-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--yd-text); }
 
-        .yd-pl-input-wrap:focus-within {
-            border-color: #205598;
-        }
-
-        .yd-pl-input-wrap.yd-pl-whitelist-mode {
-            border-color: #28a745;
-        }
-
-        .yd-pl-chips-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            max-height: 60px;
+        /* Body */
+        .yd-pl-body { 
+            flex: 1; 
+            padding: 12px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px;
             overflow-y: auto;
-            margin-bottom: 8px;
         }
 
-        .yd-pl-chips-container:empty {
-            display: none;
+        /* Section — единый блок с заголовком */
+        .yd-pl-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
-
-        .yd-pl-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            background: #e7f3ff;
-            color: #205598;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-
-        .yd-pl-chip-green {
-            background: #d4edda;
-            color: #28a745;
-        }
-
-        .yd-pl-chip-op {
-            background: rgba(0,0,0,0.1);
-            padding: 2px 4px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .yd-pl-chip-text {
-            cursor: pointer;
-        }
-
-        .yd-pl-chip-x {
-            cursor: pointer;
-            opacity: 0.6;
-            font-weight: bold;
-        }
-
-        .yd-pl-chip-x:hover {
-            opacity: 1;
-        }
-
-        .yd-pl-input-row {
+        .yd-pl-section-header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: space-between;
+            padding: 0 2px;
         }
-
-        .yd-pl-op-icon {
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f0f2f5;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            color: #666;
+        .yd-pl-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--yd-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-
-        #yd-pl-input {
-            flex: 1;
-            border: none;
-            outline: none;
-            font-size: 14px;
-            padding: 8px 0;
-        }
-
-        .yd-pl-clear-btn {
+        .yd-pl-section-action {
             background: none;
             border: none;
-            cursor: pointer;
-            opacity: 0.5;
             padding: 4px;
-            display: none;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            border-radius: 4px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+        }
+        .yd-pl-section-action:hover {
+            color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.1);
         }
 
-        .yd-pl-clear-btn:hover {
-            opacity: 1;
-        }
-
-        .yd-pl-hint {
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .yd-pl-hint-title {
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-        }
-
-        .yd-pl-hint-item {
+        /* Condition Row — И/Или переключатель */
+        .yd-pl-condition-row {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 8px;
+            padding: 8px 0 4px 0;
+            border-top: 1px solid var(--yd-border);
+        }
+        .yd-pl-condition-label {
+            font-size: 12px;
+            color: var(--yd-text-secondary);
+            white-space: nowrap;
+        }
+        .yd-pl-segmented-compact {
+            flex: 1;
+            max-width: 120px;
+        }
+        .yd-pl-segmented-compact label {
+            padding: 5px 16px !important;
+            font-size: 12px !important;
+        }
+
+        /* Domain Section */
+        .yd-pl-domain-section { }
+
+        /* Domain Wrapper — единый контейнер */
+        .yd-pl-domain-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 8px 10px;
+            background: var(--yd-bg);
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            cursor: text;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .yd-pl-domain-wrapper:focus-within {
+            border-color: var(--yd-primary);
+            box-shadow: 0 0 0 3px rgba(32, 85, 152, 0.1);
+        }
+        .yd-pl-domain-wrapper::-webkit-scrollbar { width: 4px; }
+        .yd-pl-domain-wrapper::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+        /* Chips container */
+        .yd-pl-chips-container { display: contents; }
+
+        /* Чипы — Apple-style */
+        .yd-pl-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+            padding: 0;
+            background: #f0f2f5;
             border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
+            color: var(--yd-text);
+            cursor: default;
+            transition: all 0.15s;
+            animation: yd-pl-chip-in 0.15s ease;
+            max-width: 180px;
+            overflow: hidden;
         }
-
-        .yd-pl-hint-item:hover, .yd-pl-hint-item.active {
-            background: #e7f3ff;
+        .yd-pl-chip:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-
-        .yd-pl-hint-icon {
-            width: 24px;
-            height: 24px;
+        .yd-pl-chip-exclude {
+            background: #fff1f0;
+            color: var(--yd-danger);
+        }
+        /* Оператор — кликабельный блок слева */
+        .yd-pl-chip-op {
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            min-width: 26px;
+            height: 100%;
+            padding: 6px 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #f0f2f5;
-            border-radius: 6px;
-            font-weight: bold;
-        }
-
-        .yd-pl-date-info {
-            margin-top: 16px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-size: 12px;
-            color: #666;
-            transition: all 0.3s;
-        }
-
-        .yd-pl-date-info.yd-pl-highlight {
-            background: #fff3cd;
-            box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3);
-        }
-
-        .yd-pl-footer {
-            padding: 16px;
-            border-top: 1px solid #e5e7eb;
-        }
-
-        .yd-pl-btn-primary {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
+            background: rgba(32, 85, 152, 0.1);
+            color: var(--yd-primary);
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
+            border-right: 1px solid rgba(32, 85, 152, 0.15);
         }
-
-        .yd-pl-btn-disabled {
-            background: #e5e7eb;
-            color: #999;
-            cursor: not-allowed;
+        .yd-pl-chip-op:hover { 
+            background: rgba(32, 85, 152, 0.2);
         }
-
-        .yd-pl-btn-danger {
-            background: linear-gradient(135deg, #dc3545, #c82333);
+        .yd-pl-chip-exclude .yd-pl-chip-op { 
+            color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.1);
+            border-right-color: rgba(239, 68, 68, 0.15);
+        }
+        .yd-pl-chip-exclude .yd-pl-chip-op:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        /* Текст */
+        .yd-pl-chip-text {
+            padding: 6px 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            max-width: 100px;
+        }
+        .yd-pl-chip-text:hover { text-decoration: underline; }
+        /* Крестик удаления — увеличенный */
+        .yd-pl-chip-remove {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 100%;
+            padding: 0 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--yd-text-muted);
+            transition: all 0.15s;
+            flex-shrink: 0;
+            border-left: 1px solid rgba(0,0,0,0.05);
+        }
+        .yd-pl-chip-remove:hover { 
+            background: var(--yd-danger); 
             color: #fff;
         }
+        @keyframes yd-pl-chip-in { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-        .yd-pl-btn-danger:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        /* Input внутри wrapper */
+        .yd-pl-domain-input {
+            flex: 1;
+            min-width: 80px;
+            padding: 4px 2px;
+            border: none;
+            background: transparent;
+            font-size: 12px;
+            outline: none;
+        }
+        .yd-pl-domain-input::placeholder { color: var(--yd-text-muted); }
+
+        /* Hint под input */
+        .yd-pl-hint {
+            font-size: 10px;
+            color: var(--yd-text-muted);
+            padding: 4px 2px 0;
+        }
+        .yd-pl-hint code {
+            font-family: 'SF Mono', Consolas, monospace;
+            background: rgba(0,0,0,0.05);
+            padding: 1px 3px;
+            border-radius: 3px;
+            font-size: 10px;
         }
 
-        .yd-pl-popover {
+        /* Operator Dropdown */
+        .yd-pl-op-dropdown {
             background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 6px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            border: 1px solid var(--yd-border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 4px;
+            min-width: 140px;
         }
-
-        .yd-pl-popover-item {
-            padding: 10px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
+        .yd-pl-op-item {
             display: flex;
             align-items: center;
             gap: 8px;
-        }
-
-        .yd-pl-popover-item:hover {
-            background: #f0f2f5;
-        }
-
-        /* Table styles */
-        .yd-pl-shield {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            opacity: 0.3;
+            padding: 6px 10px;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 12px;
+            color: var(--yd-text);
+            transition: background 0.1s;
+        }
+        .yd-pl-op-item:hover { 
+            background: rgba(32, 85, 152, 0.1);
+        }
+        .yd-pl-op-item.active { 
+            background: rgba(32, 85, 152, 0.15);
+            font-weight: 600;
+        }
+        .yd-pl-op-item.exclude:hover { 
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .yd-pl-op-item.exclude { color: var(--yd-danger); }
+        .yd-pl-op-item .op-icon {
+            font-family: 'SF Mono', Consolas, monospace;
+            font-weight: 600;
+            width: 16px;
+            text-align: center;
+        }
+
+
+        /* Расширяемая секция (Всегда открыта) */
+        .yd-pl-expand { margin-top: 8px; }
+        .yd-pl-expand-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .yd-pl-expand-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--yd-text);
+            cursor: default; /* Не кликабельно */
+        }
+        .yd-pl-expand-arrow { display: none; } /* Скрыть стрелку */
+        
+        .yd-pl-reset-icon {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: none;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            transition: all 0.15s;
+        }
+        .yd-pl-reset-icon:hover { 
+            color: var(--yd-danger); 
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .yd-pl-expand-content { 
+            display: block; /* Всегда видно */
+            padding: 12px;
+            background: var(--yd-bg-secondary);
+            border-radius: 10px;
+        }
+
+        /* External Clear Chips Button */
+        .yd-pl-clear-chips-external {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            margin-top: 6px;
+            background: none;
+            border: 1px solid var(--yd-border);
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--yd-text-muted);
+            font-size: 11px;
+            transition: all 0.15s;
+        }
+        .yd-pl-clear-chips-external:hover { 
+            color: var(--yd-danger); 
+            border-color: var(--yd-danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        /* Apple-style Segmented Control */
+        .yd-pl-logic-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            margin-top: 4px;
+        }
+        .yd-pl-logic-label {
+            font-size: 11px;
+            color: var(--yd-text-secondary);
+            flex-shrink: 0;
+        }
+        .yd-pl-segmented-apple {
+            position: relative;
+            display: flex;
+            background: #e5e5ea;
+            border-radius: 8px;
+            padding: 2px;
+            flex: 1;
+        }
+        .yd-pl-segmented-apple input { display: none; }
+        .yd-pl-segmented-apple label {
+            flex: 1;
+            text-align: center;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            z-index: 1;
+            position: relative;
+            transition: color 0.2s;
+            white-space: nowrap;
+        }
+        .yd-pl-segmented-apple input:checked + label {
+            color: var(--yd-primary);
+        }
+        .yd-pl-segmented-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: calc(50% - 2px);
+            height: calc(100% - 4px);
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .yd-pl-segmented-apple input#yd-pl-mode-or:checked ~ .yd-pl-segmented-slider {
+            transform: translateX(100%);
+        }
+
+        /* Фильтры — Grid Layout */
+        .yd-pl-filters-grid { 
+            display: grid;
+            grid-template-columns: 55px 1fr 1fr;
+            gap: 6px 4px;
+            align-items: center;
+        }
+        .yd-pl-filter-row {
+            display: contents;
+        }
+        .yd-pl-filter-label { 
+            font-size: 11px; 
+            color: var(--yd-text-secondary); 
+        }
+        .yd-pl-filter-row input[type="number"] {
+            width: 100%;
+            padding: 5px 4px;
+            border: 1px solid var(--yd-border);
+            border-radius: 5px;
+            font-size: 11px;
+            text-align: center;
+            background: var(--yd-bg);
+            color: var(--yd-text);
+        }
+        .yd-pl-filter-row input::placeholder { color: var(--yd-text-muted); }
+        .yd-pl-filter-row input:focus::placeholder { opacity: 0; }
+        .yd-pl-filter-row input:focus { outline: none; border-color: var(--yd-primary); }
+        .yd-pl-filter-row input::-webkit-inner-spin-button,
+        .yd-pl-filter-row input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .yd-pl-filter-row input[type="number"] { -moz-appearance: textfield; }
+
+        /* Footer — вертикальный layout */
+        .yd-pl-footer { 
+            display: flex; 
+            flex-direction: column;
+            gap: 8px; 
+            padding: 10px 12px; 
+            border-top: 1px solid var(--yd-border); 
+        }
+        .yd-pl-btn-primary { 
+            flex: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 6px; 
+            padding: 10px 12px; 
+            background: var(--yd-primary); 
+            color: #fff; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 13px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+        }
+        .yd-pl-btn-primary:hover:not(:disabled) { 
+            background: var(--yd-primary-light); 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 12px rgba(32, 85, 152, 0.25); 
+        }
+        .yd-pl-btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .yd-pl-btn-primary:disabled {
+            background: #ccc;
             color: #888;
-            transition: all 0.2s;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
-        tbody tr:hover .yd-pl-shield {
-            opacity: 0.7;
+        /* Кнопка снятия галочек */
+        .yd-pl-btn-deselect { 
+            flex: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 6px; 
+            padding: 10px 12px; 
+            background: #6B7280; 
+            color: #fff; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 13px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+        }
+        .yd-pl-btn-deselect:hover { 
+            background: #4B5563; 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.25); 
+        }
+        .yd-pl-btn-deselect:active { transform: translateY(0); }
+
+        /* Кнопка сброса */
+        .yd-pl-btn-reset { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 4px;
+            padding: 8px 12px;
+            background: var(--yd-bg-secondary); 
+            border: 1px solid var(--yd-border); 
+            border-radius: 8px; 
+            cursor: pointer; 
+            color: var(--yd-text-secondary); 
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s; 
+        }
+        .yd-pl-btn-reset:hover { 
+            background: rgba(239, 68, 68, 0.1); 
+            border-color: var(--yd-danger); 
+            color: var(--yd-danger); 
         }
 
-        .yd-pl-shield-active {
-            opacity: 1 !important;
-            color: #28a745;
+        .yd-pl-btn-icon { 
+            width: 36px; 
+            height: 36px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: var(--yd-bg-secondary); 
+            border: 1px solid var(--yd-border); 
+            border-radius: 8px; 
+            cursor: pointer; 
+            color: var(--yd-text-secondary); 
+            transition: all 0.15s; 
+        }
+        .yd-pl-btn-icon:hover { 
+            background: var(--yd-bg); 
+            border-color: var(--yd-danger); 
+            color: var(--yd-danger); 
         }
 
-        .yd-pl-shield-active svg {
-            fill: #28a745;
-        }
-
-        .yd-pl-row-protected {
-            background: rgba(40, 167, 69, 0.08) !important;
-        }
-
-        .yd-pl-row-preview {
+        /* Preview Highlight — подсветка строк в таблице площадок */
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview,
+        .b-stat-table tbody tr.yd-pl-row-preview,
+        tbody tr.yd-pl-row-preview {
             background: rgba(255, 235, 59, 0.15) !important;
             box-shadow: inset 3px 0 0 #FFEB3B;
         }
-
-        .yd-pl-row-auto td:first-child::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: #205598;
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview:hover,
+        .b-stat-table tbody tr.yd-pl-row-preview:hover,
+        tbody tr.yd-pl-row-preview:hover {
+            background: rgba(255, 235, 59, 0.25) !important;
+        }
+        .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td,
+        .b-stat-table tbody tr.yd-pl-row-preview td,
+        tbody tr.yd-pl-row-preview td {
+            background: transparent !important;
         }
 
-        .yd-pl-row-manual td:first-child::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: #28a745;
-        }
-
-        .yd-pl-row-manual-excluded input[type="checkbox"] {
-            outline: 2px solid #888;
-            outline-offset: 2px;
-        }
-
-        @keyframes yd-pl-notify-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        @keyframes yd-pl-notify-out { from { opacity: 1; } to { opacity: 0; transform: translateX(50px); } }
-
-        .yd-pl-resize {
-            position: absolute;
-            right: 0;
-            bottom: 0;
-            width: 16px;
-            height: 16px;
+        .yd-pl-resize-se { 
+            position: absolute; 
+            right: 2px; 
+            bottom: 2px; 
+            width: 14px; 
+            height: 14px; 
             cursor: se-resize;
+            opacity: 0;
         }
+        #yd-pl-panel:hover .yd-pl-resize-se { opacity: 0.3; }
+
+        /* Pill — правый нижний угол как модуль запросов */
+        .yd-pl-pill { 
+            position: fixed; 
+            bottom: 20px; 
+            right: 20px; 
+            z-index: 9999998; 
+            background: #fff; 
+            border: 1px solid var(--yd-border); 
+            border-radius: 25px; 
+            padding: 12px 16px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); 
+            cursor: pointer; 
+            font-size: 13px; 
+            font-weight: 600;
+            color: var(--yd-primary); 
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+            user-select: none;
+        }
+        .yd-pl-pill:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25); 
+        }
+        .yd-pl-pill.yd-pl-pill-appear {
+            animation: yd-pl-pill-appear 0.3s ease;
+        }
+        @keyframes yd-pl-pill-appear {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .yd-pl-pill-badge { 
+            background: var(--yd-primary); 
+            color: #fff; 
+            padding: 2px 7px; 
+            border-radius: 10px; 
+            font-size: 11px; 
+            font-weight: 600; 
+        }
+        .yd-pl-pill-filters { color: var(--yd-success); font-size: 11px; font-weight: 600; }
+
+
+        /* Notifications */
+        .yd-pl-notification { 
+            position: fixed; 
+            top: 80px; 
+            right: 20px; 
+            z-index: 999999999; 
+            padding: 12px 20px; 
+            border-radius: 10px; 
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            font-size: 13px; 
+            font-weight: 500; 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); 
+            animation: yd-pl-notify-in 0.3s ease; 
+            pointer-events: auto;
+        }
+        .yd-pl-notification-success { background: #10B981; color: #fff; }
+        .yd-pl-notification-error { background: #EF4444; color: #fff; }
+        .yd-pl-notification-info { background: #205598; color: #fff; }
+        .yd-pl-notification-hide { 
+            animation: yd-pl-notify-out 0.3s ease forwards; 
+        }
+        @keyframes yd-pl-notify-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes yd-pl-notify-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+        /* Scrollbar */
+        .yd-pl-body::-webkit-scrollbar { width: 5px; }
+        .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
+        .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
         `;
 
         document.head.appendChild(style);
     }
 
-    // ==================== INIT ====================
+    // ==================== ЗАПУСК ====================
     if (document.body) {
         createPanel();
-        console.log("[YD-PL] вњ… РњРѕРґСѓР»СЊ РїР»РѕС‰Р°РґРѕРє v4.0 Р·Р°РіСЂСѓР¶РµРЅ");
+        console.log("[YD-PL] ✅ Модуль площадок v3.0 загружен");
     } else {
-        document.addEventListener('DOMContentLoaded', createPanel);
+        document.addEventListener('DOMContentLoaded', () => {
+            createPanel();
+            console.log("[YD-PL] ✅ Модуль площадок v3.0 загружен");
+        });
     }
 
 })();
@@ -9142,10 +10203,6 @@
     init();
 
 })();
-
-
-
-
 
 
 
