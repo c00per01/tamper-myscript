@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 3.0.2
+// @version 3.0.3
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7972,6 +7972,15 @@
                     manualIncluded.set(domain, true);
                     manualExcluded.delete(domain);
                     autoSelected.delete(domain); // Теперь это ручное
+
+                    // ЛОГИКА: если домен был в вайтлисте — удаляем из защиты
+                    if (isInWhitelist(domain)) {
+                        removeFromWhitelist(domain);
+                        renderWhitelistChips();
+                        syncShieldsWithWhitelist();
+                        updateWhitelistBadge();
+                        showNotification(`«${domain}» удалён из защиты`, 'info');
+                    }
                 } else {
                     // Пользователь снял галочку
                     manualExcluded.set(domain, true);
@@ -7982,10 +7991,9 @@
                 // Сохраняем состояние
                 saveSmartState();
 
-                // Обновляем кнопку и визуальные маркеры
+                // Обновляем кнопку
                 setTimeout(() => {
                     updateButtonState();
-                    updateRowVisualMarkers();
                 }, 50);
             };
 
@@ -8486,46 +8494,60 @@
             }
         });
 
-        // Обновляем кнопку
-        if (totalChecked > 0) {
-            btn.classList.remove('yd-pl-btn-deselect');
-            btn.classList.add('yd-pl-btn-primary', 'yd-pl-btn-danger');
+        // Режим Whitelist — зелёная кнопка
+        if (settings.panelMode === 'whitelist') {
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>`;
 
-            // Если режим whitelist - кнопка другая (зеленая)
-            if (settings.panelMode === 'whitelist') {
-                // В режиме Whitelist кнопка должна быть "Защитить"
-                // Это обрабатывается в переключателе режимов
-            } else {
-                icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                </svg>`;
-
-                // Добавляем инфо о пагинации
-                const { current, total } = getPaginationInfo();
-                if (total > 1) {
-                    text.textContent = `Заблокировать (${totalChecked} на стр. ${current}/${total})`;
-                } else {
-                    text.textContent = `Заблокировать (${totalChecked})`;
-                }
-
+            if (totalChecked > 0) {
+                text.textContent = `Защитить выбранные (${totalChecked})`;
                 btn.disabled = false;
-                btn.style.background = '#EF4444';
-                btn.style.borderColor = '#EF4444';
-            }
-        } else {
-            // Если 0
-            if (settings.panelMode === 'whitelist') {
-                // ignored here usually
+                btn.style.background = 'var(--yd-green-light)';
+                btn.style.borderColor = 'var(--yd-green)';
+                btn.style.color = 'var(--yd-green-dark)';
             } else {
-                btn.classList.remove('yd-pl-btn-danger');
-                btn.classList.add('yd-pl-btn-primary');
-                icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
-                text.textContent = 'Выберите площадки';
+                text.textContent = 'Защитить выбранные';
                 btn.disabled = true;
-                btn.style.background = '';
-                btn.style.borderColor = '';
+                btn.style.background = '#F9FAFB';
+                btn.style.borderColor = 'var(--yd-border)';
+                btn.style.color = 'var(--yd-text-muted)';
             }
+            return;
+        }
+
+        // Обычный режим — блокировка
+        if (totalChecked > 0) {
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>`;
+
+            // Текст с количеством
+            const { current, total } = getPaginationInfo();
+            if (total > 1) {
+                text.textContent = `Исключить ${totalChecked} площадок (стр. ${current}/${total})`;
+            } else {
+                text.textContent = `Исключить ${totalChecked} площадок`;
+            }
+
+            btn.disabled = false;
+            btn.style.background = 'var(--yd-red-light)';
+            btn.style.borderColor = 'var(--yd-red)';
+            btn.style.color = 'var(--yd-red)';
+        } else {
+            // Нет выделения — серая неактивная кнопка
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>`;
+            text.textContent = 'Выберите площадки';
+            btn.disabled = true;
+            btn.style.background = '#F9FAFB';
+            btn.style.borderColor = 'var(--yd-border)';
+            btn.style.color = 'var(--yd-text-muted)';
         }
     }
 
@@ -8781,7 +8803,7 @@
                         <span class="yd-pl-section-title">По доменам</span>
                         <button id="yd-pl-clear-chips" class="yd-pl-section-action" title="Очистить" style="display: none;">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
                             </svg>
                         </button>
                     </div>
@@ -8801,7 +8823,7 @@
                         <span class="yd-pl-section-title">По показателям</span>
                         <button id="yd-pl-reset-filters" class="yd-pl-section-action" style="display: none;" title="Сбросить">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
                             </svg>
                         </button>
                     </div>
@@ -8866,7 +8888,7 @@
                             </span>
                             <button id="yd-pl-clear-whitelist" class="yd-pl-section-action" title="Очистить вайтлист" style="display: none;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
                                 </svg>
                             </button>
                         </div>
@@ -10124,22 +10146,24 @@
         const style = document.createElement('style');
         style.id = 'yd-pl-styles';
         style.textContent = `
-        /* CSS переменные */
+        /* CSS переменные — упрощённая палитра: только зелёный и красный */
         #yd-pl-panel {
-            --yd-primary: #205598;
-            --yd-primary-light: #2a6bc0;
-            --yd-accent: #E46924;
             --yd-bg: #ffffff;
             --yd-bg-secondary: #F9FAFB;
             --yd-border: #E5E7EB;
             --yd-text: #1F2937;
             --yd-text-secondary: #6B7280;
             --yd-text-muted: #9CA3AF;
-            --yd-success: #10B981;
-            --yd-danger: #EF4444;
+            /* Основные акценты */
             --yd-green: #10B981;
-            --yd-green-light: #D1FAE5;
+            --yd-green-light: #ECFDF5;
             --yd-green-dark: #059669;
+            --yd-red: #DC2626;
+            --yd-red-light: #FEF2F2;
+            --yd-red-dark: #B91C1C;
+            /* Legacy aliases */
+            --yd-success: var(--yd-green);
+            --yd-danger: var(--yd-red);
         }
 
         #yd-pl-panel {
@@ -10845,17 +10869,16 @@
             color: var(--yd-danger); 
         }
 
-        /* Preview Highlight — подсветка строк в таблице площадок */
+        /* Preview Highlight — лёгкая подсветка строк в таблице площадок */
         .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview,
         .b-stat-table tbody tr.yd-pl-row-preview,
         tbody tr.yd-pl-row-preview {
-            background: rgba(255, 235, 59, 0.15) !important;
-            box-shadow: inset 3px 0 0 #FFEB3B;
+            background: rgba(0, 0, 0, 0.02) !important;
         }
         .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview:hover,
         .b-stat-table tbody tr.yd-pl-row-preview:hover,
         tbody tr.yd-pl-row-preview:hover {
-            background: rgba(255, 235, 59, 0.25) !important;
+            background: rgba(0, 0, 0, 0.04) !important;
         }
         .b-stat-platform__table-wrap tbody tr.yd-pl-row-preview td,
         .b-stat-table tbody tr.yd-pl-row-preview td,
@@ -11201,21 +11224,8 @@
             color: var(--yd-text);
         }
         
-        /* ==================== Визуальное отличие авто-выделенных строк ==================== */
-        /* Авто-выделенные строки имеют голубую левую границу */
-        tbody tr.yd-pl-row-auto-selected {
-            background: rgba(32, 85, 152, 0.05) !important;
-        }
-        tbody tr.yd-pl-row-auto-selected td:first-child {
-            border-left: 3px solid var(--yd-primary) !important;
-        }
-        /* Ручные выделения имеют оранжевую левую границу */
-        tbody tr.yd-pl-row-manual-selected {
-            background: rgba(228, 105, 36, 0.05) !important;
-        }
-        tbody tr.yd-pl-row-manual-selected td:first-child {
-            border-left: 3px solid var(--yd-accent) !important;
-        }
+        /* Защищённые строки (Вайтлист) — только зелёная подсветка */
+        /* Удалены авто-выделение и ручное выделение ("светофор") */
         `;
 
         document.head.appendChild(style);
@@ -11634,6 +11644,7 @@
     init();
 
 })();
+
 
 
 
