@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 2.0.6
+// @version 3.0.1
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7540,8 +7540,10 @@
     function getDefaultSettings() {
         return {
             panelPosition: { top: '15px', right: '15px' },
-            panelSize: { width: 360, height: 480 },
+            panelSize: { width: 360, height: 520 },
             templatesCollapsed: true,
+            // Текущий режим панели: 'filter' или 'whitelist'
+            panelMode: 'filter',
             filters: {
                 patterns: [
                     { operator: '^', value: 'com.' },
@@ -7553,6 +7555,8 @@
                 cpcMin: '', cpcMax: '',
                 spendMin: '', spendMax: ''
             },
+            // Вайтлист — домены с иммунитетом от фильтрации
+            whitelist: [],
             history: [], // История ввода доменов
 
             templates: [
@@ -7588,7 +7592,9 @@
                 }
             ],
             currentTemplate: null,
-            mode: 'or'
+            mode: 'or',
+            // Дата последнего изменения (для проверки изменений)
+            lastKnownChangeDate: null
         };
     }
 
@@ -7703,6 +7709,213 @@
         window.scrollTo(scrollX, scrollY);
     }
 
+    // ==================== ВАЙТЛИСТ (ИММУНИТЕТ) ====================
+
+    // Получить домен из строки таблицы
+    function getDomainFromRow(row) {
+        const tds = row.querySelectorAll('td');
+        if (tds.length < 1) return null;
+        const domainCell = tds[0];
+        const domainEl = domainCell.querySelector('a') || domainCell;
+        return domainEl.textContent.trim().toLowerCase();
+    }
+
+    // Проверка: домен в вайтлисте?
+    function isInWhitelist(domain) {
+        if (!domain) return false;
+        const normalized = domain.toLowerCase().trim();
+        return (settings.whitelist || []).some(w => w.toLowerCase() === normalized);
+    }
+
+    // Добавить домен в вайтлист
+    function addToWhitelist(domain) {
+        if (!domain) return false;
+        const normalized = domain.toLowerCase().trim();
+        if (!settings.whitelist) settings.whitelist = [];
+        if (!isInWhitelist(normalized)) {
+            settings.whitelist.push(normalized);
+            saveSettings();
+            return true;
+        }
+        return false;
+    }
+
+    // Удалить домен из вайтлиста
+    function removeFromWhitelist(domain) {
+        if (!domain || !settings.whitelist) return false;
+        const normalized = domain.toLowerCase().trim();
+        const idx = settings.whitelist.findIndex(w => w.toLowerCase() === normalized);
+        if (idx !== -1) {
+            settings.whitelist.splice(idx, 1);
+            saveSettings();
+            return true;
+        }
+        return false;
+    }
+
+    // Обновить бейдж количества в вайтлисте
+    function updateWhitelistBadge() {
+        const badge = document.getElementById('yd-pl-whitelist-badge');
+        if (badge) {
+            const count = (settings.whitelist || []).length;
+            badge.textContent = count > 0 ? count : '';
+            badge.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
+    }
+
+    // ==================== ЩИТЫ В ТАБЛИЦЕ ====================
+
+    // Иконка щита (SVG)
+    const SHIELD_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>`;
+
+    // Инъекция щитов в строки таблицы
+    function injectShields() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        if (!tableWrap) return;
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            // Пропускаем если уже есть щит
+            if (row.querySelector('.yd-pl-shield')) return;
+
+            const domain = getDomainFromRow(row);
+            if (!domain) return;
+
+            const firstTd = row.querySelector('td');
+            if (!firstTd) return;
+
+            // Создаём щит
+            const shield = document.createElement('span');
+            shield.className = 'yd-pl-shield';
+            shield.innerHTML = SHIELD_ICON;
+            shield.title = 'Добавить в Вайтлист (иммунитет от фильтров)';
+
+            // Состояние щита
+            if (isInWhitelist(domain)) {
+                shield.classList.add('yd-pl-shield-active');
+                row.classList.add('yd-pl-row-protected');
+                shield.title = 'Удалить из Вайтлиста';
+            }
+
+            // Клик по щиту
+            shield.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+
+                if (isInWhitelist(domain)) {
+                    // Удаляем из вайтлиста
+                    removeFromWhitelist(domain);
+                    shield.classList.remove('yd-pl-shield-active');
+                    row.classList.remove('yd-pl-row-protected');
+                    shield.title = 'Добавить в Вайтлист (иммунитет от фильтров)';
+                    showNotification('Удалено из Вайтлиста', 'info');
+                } else {
+                    // Добавляем в вайтлист
+                    addToWhitelist(domain);
+                    shield.classList.add('yd-pl-shield-active');
+                    row.classList.add('yd-pl-row-protected');
+                    shield.title = 'Удалить из Вайтлиста';
+                    showNotification('Добавлено в Вайтлист', 'success');
+                }
+
+                updateWhitelistBadge();
+                renderWhitelistChips();
+                updatePreviewHighlight();
+            });
+
+            // Вставляем щит в начало первой ячейки
+            firstTd.insertBefore(shield, firstTd.firstChild);
+        });
+    }
+
+    // Синхронизация щитов с вайтлистом
+    function syncShieldsWithWhitelist() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        if (!tableWrap) return;
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const domain = getDomainFromRow(row);
+            if (!domain) return;
+
+            const shield = row.querySelector('.yd-pl-shield');
+            if (!shield) return;
+
+            if (isInWhitelist(domain)) {
+                shield.classList.add('yd-pl-shield-active');
+                row.classList.add('yd-pl-row-protected');
+            } else {
+                shield.classList.remove('yd-pl-shield-active');
+                row.classList.remove('yd-pl-row-protected');
+            }
+        });
+    }
+
+    // MutationObserver для динамически подгружаемых строк
+    function setupTableObserver() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        if (!tableWrap) return;
+
+        const observer = new MutationObserver((mutations) => {
+            let needsUpdate = false;
+            mutations.forEach(mutation => {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    needsUpdate = true;
+                }
+            });
+            if (needsUpdate) {
+                injectShields();
+                setupManualCheckboxTracking();
+                updatePreviewHighlight();
+            }
+        });
+
+        observer.observe(tableWrap, { childList: true, subtree: true });
+    }
+
+    // Отслеживание ручных действий пользователя на чекбоксах (Smart State)
+    function setupManualCheckboxTracking() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        if (!tableWrap) return;
+
+        const checkboxes = tableWrap.querySelectorAll('tbody tr input[type="checkbox"]');
+
+        checkboxes.forEach(checkbox => {
+            // Пропускаем если уже отслеживается
+            if (checkbox.dataset.ydTracked) return;
+            checkbox.dataset.ydTracked = 'true';
+
+            checkbox.addEventListener('change', (e) => {
+                const row = checkbox.closest('tr');
+                if (!row) return;
+
+                const domain = getDomainFromRow(row);
+                if (!domain) return;
+
+                // Определяем тип действия
+                if (checkbox.checked) {
+                    // Пользователь поставил галочку
+                    manualIncluded.set(domain, true);
+                    manualExcluded.delete(domain);
+                    autoSelected.delete(domain); // Теперь это ручное
+                } else {
+                    // Пользователь снял галочку
+                    manualExcluded.set(domain, true);
+                    manualIncluded.delete(domain);
+                    autoSelected.delete(domain);
+                }
+
+                // Обновляем кнопку и визуальные маркеры
+                setTimeout(() => {
+                    updateButtonState();
+                    updateRowVisualMarkers();
+                }, 50);
+            });
+        });
+    }
+
     // ==================== ЛОГИКА ФИЛЬТРАЦИИ ====================
     function getFiltersFromUI() {
         // Patterns берём напрямую из settings (чипы)
@@ -7760,6 +7973,12 @@
         if (isGreyElement(domainEl)) return false;
 
         const domain = domainEl.textContent.trim().toLowerCase();
+
+        // ВАЙТЛИСТ: Защищённые домены ИГНОРИРУЮТ фильтры
+        if (isInWhitelist(domain)) {
+            return false; // Никогда не выделяем защищённые домены автоматически
+        }
+
 
         const clicks = parseNumber(tds[2].textContent);
         const ctr = parseNumber(tds[3].textContent);
@@ -7877,13 +8096,11 @@
         const matching = getAllMatchingRows();
         matching.forEach(row => row.classList.add('yd-pl-row-preview'));
 
-        // LIVE-РЕЖИМ: если мы в режиме "Снять" — автоматически:
-        // 1) Снимаем галочки со строк, которые НЕ соответствуют фильтрам
-        // 2) Ставим галочки на строки, которые соответствуют фильтрам
-        if (!isSelectMode) {
-            autoDeselectNonMatching();
-            autoSelectMatching(); // Live-выделение галочками
-        }
+        // LIVE-РЕЖИМ: Автоматическое выделение всегда активно
+        // 1) Снимаем галочки со строк, которые были auto и перестали соответствовать
+        autoDeselectNonMatchingAuto();
+        // 2) Ставим галочки на строки, которые соответствуют фильтрам (кроме ручных исключений)
+        autoSelectMatchingLive();
 
         // Обновить состояние кнопки и badge
         updateButtonState();
@@ -7893,52 +8110,92 @@
         saveCurrentFilters();
     }
 
-    // Live-выделение галочками всех подходящих строк (режим "Снять")
-    function autoSelectMatching() {
+    // Live-выделение галочками всех подходящих строк (Smart State)
+    function autoSelectMatchingLive() {
         const matching = getAllMatchingRows();
         let selectedCount = 0;
 
         matching.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
+            const domain = getDomainFromRow(row);
+
+            // Smart State: Не выделяем если пользователь вручную снял галочку
+            if (domain && manualExcluded.has(domain)) {
+                return; // Пропускаем защищённый от автовыделения домен
+            }
+
             if (checkbox && !checkbox.checked && !checkbox.disabled) {
                 // Клик БЕЗ скролла
                 clickWithoutScroll(checkbox);
+                if (domain) autoSelected.add(domain); // Помечаем как авто
+                // Визуальное отличие
+                row.classList.add('yd-pl-row-auto-selected');
+                row.classList.remove('yd-pl-row-manual-selected');
                 selectedCount++;
             }
         });
 
-        if (selectedCount > 0) {
-            showNotification(`Авто-выделено: ${selectedCount}`, 'success');
-        }
+        // Не показываем уведомление при каждом изменении (слишком частое)
+
+        // Обновление визуального отличия для всех строк
+        updateRowVisualMarkers();
     }
 
-    // Автоматическое снятие галочек со строк, которые НЕ соответствуют текущим фильтрам
-    function autoDeselectNonMatching() {
-        const filters = getFiltersFromUI();
-        const mode = document.querySelector('input[name="yd-pl-mode"]:checked')?.value || 'or';
+    // Обновление визуальных маркеров строк (авто vs ручное выделение)
+    function updateRowVisualMarkers() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        if (!tableWrap) return;
+
+        const rows = tableWrap.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            const domain = getDomainFromRow(row);
+
+            // Сбрасываем классы
+            row.classList.remove('yd-pl-row-auto-selected', 'yd-pl-row-manual-selected');
+
+            if (checkbox && checkbox.checked && domain) {
+                if (manualIncluded.has(domain)) {
+                    // Ручное выделение (оранжевая граница)
+                    row.classList.add('yd-pl-row-manual-selected');
+                } else if (autoSelected.has(domain)) {
+                    // Авто выделение (голубая граница)
+                    row.classList.add('yd-pl-row-auto-selected');
+                }
+            }
+        });
+    }
+
+    // Автоматическое снятие галочек со строк, которые были AUTO и перестали соответствовать
+    function autoDeselectNonMatchingAuto() {
         const matchingSet = new Set(getAllMatchingRows());
 
-        let deselectedCount = 0;
-
-        // Ищем таблицу площадок, фоллбэк на любую таблицу
+        // Ищем таблицу площадок
         const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
         const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
 
         rows.forEach(row => {
             const checkbox = row.querySelector('input[type="checkbox"]');
+            const domain = getDomainFromRow(row);
+
             if (checkbox && checkbox.checked && !checkbox.disabled) {
-                // Если строка выделена, но НЕ соответствует фильтрам — снять галочку
-                if (!matchingSet.has(row)) {
+                // Smart State: Не снимаем если пользователь вручную поставил галочку
+                if (domain && manualIncluded.has(domain)) {
+                    return; // Пропускаем защищённое ручное выделение
+                }
+
+                // Снимаем только если это было АВТО и перестало соответствовать
+                if (domain && autoSelected.has(domain) && !matchingSet.has(row)) {
                     clickWithoutScroll(checkbox);
-                    deselectedCount++;
+                    autoSelected.delete(domain);
                 }
             }
         });
-
-        if (deselectedCount > 0) {
-            showNotification(`Авто-снято: ${deselectedCount}`, 'info');
-        }
     }
+
+    // Legacy функции для совместимости
+    function autoSelectMatching() { autoSelectMatchingLive(); }
+    function autoDeselectNonMatching() { autoDeselectNonMatchingAuto(); }
 
     function updateStats() {
         // Статистика больше не отображается в UI
@@ -7953,50 +8210,94 @@
     // ==================== ДЕЙСТВИЯ ====================
     let isSelectMode = true; // true = выделить, false = снять
 
-    function togglePlacements() {
-        const matching = getMatchingRows();
+    // === SMART STATE: Отслеживание ручных действий пользователя ===
+    // Ключ = домен (lowercase), значение = true
+    const manualIncluded = new Map(); // Ручные галочки пользователя
+    const manualExcluded = new Map(); // Ручные снятия галочек пользователя
+    const autoSelected = new Set();   // Автоматически выделенные скриптом (по домену)
 
-        if (isSelectMode) {
-            // Режим выделения
-            if (matching.length === 0) {
-                showNotification('Нет площадок для выделения', 'info');
-                return;
+    function togglePlacements() {
+        // Теперь это кнопка "Заблокировать" — выполняет блокировку через UI Яндекса
+        executeBlockAction();
+    }
+
+    // Выполнение блокировки через UI Яндекса
+    function executeBlockAction() {
+        // Проверяем есть ли выделенные чекбоксы
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+
+        let totalChecked = 0;
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                totalChecked++;
             }
-            let selected = 0;
-            matching.forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && !checkbox.checked && !checkbox.disabled) {
-                    clickWithoutScroll(checkbox);
-                    selected++;
-                }
-            });
-            showNotification(`Выделено: ${selected}`, 'success');
-            isSelectMode = false;
-        } else {
-            // Режим снятия — снимаем только строки соответствующие фильтрам
-            const checkedMatching = getCheckedMatchingRows();
-            if (checkedMatching.length === 0) {
-                showNotification('Нет выделенных площадок по фильтрам', 'info');
-                isSelectMode = true;
-                updateButtonState();
-                return;
-            }
-            let count = 0;
-            checkedMatching.forEach(row => {
-                const checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox && checkbox.checked && !checkbox.disabled) {
-                    clickWithoutScroll(checkbox);
-                    count++;
-                }
-            });
-            if (count > 0) {
-                showNotification(`Снято: ${count}`, 'info');
-            }
-            isSelectMode = true;
+        });
+
+        if (totalChecked === 0) {
+            showNotification('Нет выбранных площадок', 'info');
+            return;
         }
 
-        updateButtonState();
-        updatePreviewHighlight();
+        // Ищем нативную кнопку "выполнить" Яндекса
+        const executeBtn = document.querySelector('.b-mass-actions__button .button__text');
+        const executeBtnParent = executeBtn ? executeBtn.closest('button') : null;
+
+        if (!executeBtnParent) {
+            showNotification('Кнопка "Выполнить" не найдена', 'error');
+            return;
+        }
+
+        // Кликаем на кнопку выполнить
+        executeBtnParent.click();
+
+        // Ждём появления popup и кликаем "Да"
+        setTimeout(() => {
+            const confirmYesBtn = document.querySelector('.b-confirm__yes');
+            if (confirmYesBtn) {
+                confirmYesBtn.click();
+                showNotification(`Отправлено на блокировку: ${totalChecked}`, 'success');
+
+                // Сброс после блокировки
+                setTimeout(() => {
+                    manualIncluded.clear();
+                    manualExcluded.clear();
+                    autoSelected.clear();
+                    updateButtonState();
+                }, 1000);
+            } else {
+                showNotification('Подтверждение не найдено', 'error');
+            }
+        }, 500);
+    }
+
+    // Старая логика выделения (для Live-режима)
+    function selectMatchingRows() {
+        const matching = getMatchingRows();
+
+        if (matching.length === 0) {
+            return 0;
+        }
+
+        let selected = 0;
+        matching.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            const domain = getDomainFromRow(row);
+
+            // Проверяем Smart State — не выделяем если пользователь вручную снял галочку
+            if (domain && manualExcluded.has(domain)) {
+                return; // Пропускаем
+            }
+
+            if (checkbox && !checkbox.checked && !checkbox.disabled) {
+                clickWithoutScroll(checkbox);
+                if (domain) autoSelected.add(domain);
+                selected++;
+            }
+        });
+
+        return selected;
     }
 
     function updateButtonState() {
@@ -8006,25 +8307,38 @@
 
         if (!btn || !icon || !text) return;
 
-        if (isSelectMode) {
-            // Режим выделения — показываем сколько будет выделено
-            const matching = getMatchingRows();
-            const count = matching.length;
+        // Считаем ОБЩЕЕ количество выделенных чекбоксов
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+
+        let totalChecked = 0;
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                totalChecked++;
+            }
+        });
+
+        // Обновляем кнопку
+        if (totalChecked > 0) {
             btn.classList.remove('yd-pl-btn-deselect');
+            btn.classList.add('yd-pl-btn-primary', 'yd-pl-btn-danger');
+            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>`;
+            text.textContent = `Заблокировать (${totalChecked})`;
+            btn.disabled = false;
+            btn.style.background = '#EF4444';
+            btn.style.borderColor = '#EF4444';
+        } else {
+            btn.classList.remove('yd-pl-btn-danger');
             btn.classList.add('yd-pl-btn-primary');
             icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
-            text.textContent = count > 0 ? `Выделить (${count})` : 'Ничего не найдено';
-            btn.disabled = count === 0;
-        } else {
-            // Режим снятия — показываем сколько выделено ПО ФИЛЬТРАМ
-            const checkedMatching = getCheckedMatchingRows();
-            const checkedCount = checkedMatching.length;
-
-            btn.classList.remove('yd-pl-btn-primary');
-            btn.classList.add('yd-pl-btn-deselect');
-            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
-            text.textContent = checkedCount > 0 ? `Снять (${checkedCount})` : 'Снять';
-            btn.disabled = checkedCount === 0;
+            text.textContent = 'Выберите площадки';
+            btn.disabled = true;
+            btn.style.background = '';
+            btn.style.borderColor = '';
         }
     }
 
@@ -8244,6 +8558,30 @@
 
             <!-- Body -->
             <div class="yd-pl-body">
+                <!-- Переключатель режимов: Фильтр / Вайтлист (iOS Segmented Control) -->
+                <div class="yd-pl-mode-switcher">
+                    <div class="yd-pl-segmented-ios" id="yd-pl-mode-tabs">
+                        <input type="radio" name="yd-pl-panel-mode" id="yd-pl-mode-filter" value="filter" ${settings.panelMode !== 'whitelist' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-filter" class="yd-pl-tab-filter">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                            </svg>
+                            Фильтр
+                        </label>
+                        <input type="radio" name="yd-pl-panel-mode" id="yd-pl-mode-whitelist" value="whitelist" ${settings.panelMode === 'whitelist' ? 'checked' : ''}>
+                        <label for="yd-pl-mode-whitelist" class="yd-pl-tab-whitelist">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                            Вайтлист
+                            <span id="yd-pl-whitelist-badge" class="yd-pl-whitelist-badge" style="display:none;"></span>
+                        </label>
+                        <div class="yd-pl-segmented-slider-ios"></div>
+                    </div>
+                </div>
+
+                <!-- Контент режима Фильтр -->
+                <div id="yd-pl-filter-content" class="yd-pl-tab-content">
                 <!-- Секция: По доменам -->
                 <div class="yd-pl-section">
                     <div class="yd-pl-section-header">
@@ -8309,18 +8647,54 @@
                         <div class="yd-pl-segmented-slider"></div>
                     </div>
                 </div>
+                </div><!-- Конец filter-content -->
+
+                <!-- Контент режима Вайтлист -->
+                <div id="yd-pl-whitelist-content" class="yd-pl-tab-content" style="display: none;">
+                    <div class="yd-pl-section yd-pl-whitelist-section">
+                        <div class="yd-pl-section-header">
+                            <span class="yd-pl-section-title" style="color: #10B981;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                                Домены с иммунитетом
+                            </span>
+                            <button id="yd-pl-clear-whitelist" class="yd-pl-section-action" title="Очистить вайтлист" style="display: none;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="yd-pl-domain-section yd-pl-whitelist-input-section" style="position: relative;">
+                            <div class="yd-pl-domain-wrapper yd-pl-whitelist-wrapper" id="yd-pl-whitelist-wrapper">
+                                <div id="yd-pl-whitelist-chips" class="yd-pl-chips-container yd-pl-whitelist-chips"></div>
+                                <input type="text" id="yd-pl-whitelist-input" class="yd-pl-domain-input yd-pl-whitelist-input" 
+                                    placeholder="Добавить в исключения...">
+                            </div>
+                        </div>
+                        <p class="yd-pl-whitelist-hint">Домены с иммунитетом защищены от автоматического выделения фильтрами. Кликните на щит в таблице для быстрого добавления.</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Footer -->
             <div class="yd-pl-footer">
-                <button id="yd-pl-apply" class="yd-pl-btn-primary">
-                    <span id="yd-pl-apply-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="20 6 9 17 4 12"/>
+                <div class="yd-pl-footer-buttons">
+                    <button id="yd-pl-apply" class="yd-pl-btn-primary">
+                        <span id="yd-pl-apply-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </span>
+                        <span id="yd-pl-apply-text">Заблокировать (0)</span>
+                    </button>
+                    <button id="yd-pl-hard-reset" class="yd-pl-btn-reset" title="Сбросить все выделения и очистить память">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
                         </svg>
-                    </span>
-                    <span id="yd-pl-apply-text">Выделить (0)</span>
-                </button>
+                    </button>
+                </div>
                 <!-- Компактная строка даты последней отправки -->
                 <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
                     <span class="yd-pl-last-send-label">Последняя отправка:</span>
@@ -8357,13 +8731,88 @@
 
         // Инициализация
         renderChips();
+        renderWhitelistChips();
         setupEventListeners(panel, pill);
         makeDraggable(panel, document.getElementById('yd-pl-panel-header'));
         makeResizable(panel);
+
+        // Инициализация режима панели
+        initPanelMode();
+
+        // Инъекция щитов в таблицу
+        setTimeout(() => {
+            injectShields();
+            setupTableObserver();
+            setupManualCheckboxTracking();
+        }, 500);
+
         setTimeout(updatePreviewHighlight, 100);
 
         // Инициализация блока даты последней отправки
         updateLastSendInfo();
+
+        // Синхронизация даты
+        syncDateAndNotify();
+    }
+
+    // Инициализация режима панели (Фильтр/Вайтлист)
+    function initPanelMode() {
+        const mode = settings.panelMode || 'filter';
+        const filterContent = document.getElementById('yd-pl-filter-content');
+        const whitelistContent = document.getElementById('yd-pl-whitelist-content');
+        const panel = document.getElementById('yd-pl-panel');
+
+        if (mode === 'whitelist') {
+            filterContent.style.display = 'none';
+            whitelistContent.style.display = 'block';
+            panel.classList.add('yd-pl-panel-whitelist-mode');
+        } else {
+            filterContent.style.display = 'block';
+            whitelistContent.style.display = 'none';
+            panel.classList.remove('yd-pl-panel-whitelist-mode');
+        }
+    }
+
+    // Синхронизация даты и уведомление пользователя
+    function syncDateAndNotify() {
+        const period = calculateRecommendedPeriod();
+
+        if (period && period.lastChange) {
+            const currentDateStr = formatDateRu(period.lastChange);
+            const savedDateStr = settings.lastKnownChangeDate;
+
+            const isFirstLoad = !savedDateStr;
+            const dateChanged = savedDateStr !== currentDateStr;
+
+            if (isFirstLoad || dateChanged) {
+                // Сохраняем новую дату
+                settings.lastKnownChangeDate = currentDateStr;
+                saveSettings();
+
+                // Уведомление
+                showNotification(`Синхронизация: дата изменений ${currentDateStr}`, 'info');
+
+                // Highlight эффект для блока даты
+                setTimeout(() => {
+                    const dateInfo = document.getElementById('yd-pl-last-send-info');
+                    if (dateInfo) {
+                        dateInfo.classList.add('yd-pl-highlight-pulse');
+                        setTimeout(() => dateInfo.classList.remove('yd-pl-highlight-pulse'), 2000);
+                    }
+                }, 500);
+            }
+        } else {
+            // Нет изменений
+            const dateInfo = document.getElementById('yd-pl-last-send-info');
+            if (dateInfo) {
+                dateInfo.style.display = 'flex';
+                const dateEl = document.getElementById('yd-pl-last-send-date');
+                if (dateEl) {
+                    dateEl.textContent = 'Изменений нет';
+                    dateEl.style.color = '#9CA3AF';
+                }
+            }
+        }
     }
 
     // Обновление блока информации о дате последней отправки
@@ -8459,6 +8908,69 @@
         if (clearBtn) {
             clearBtn.style.display = settings.filters.patterns.length > 0 ? 'flex' : 'none';
         }
+    }
+
+    // Рендер чипов вайтлиста (зелёные, без операторов)
+    function renderWhitelistChips() {
+        const container = document.getElementById('yd-pl-whitelist-chips');
+        if (!container) return;
+        container.innerHTML = '';
+
+        (settings.whitelist || []).forEach((domain, index) => {
+            const chip = document.createElement('div');
+            chip.className = 'yd-pl-chip yd-pl-chip-whitelist';
+            chip.dataset.index = index;
+
+            chip.innerHTML = `
+                <span class="yd-pl-chip-icon">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </span>
+                <span class="yd-pl-chip-text">${domain}</span>
+                <span class="yd-pl-chip-remove">×</span>
+            `;
+
+            // Удаление чипа
+            chip.querySelector('.yd-pl-chip-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeFromWhitelist(domain);
+                renderWhitelistChips();
+                updateWhitelistBadge();
+                syncShieldsWithWhitelist();
+                updatePreviewHighlight();
+                showNotification('Удалено из Вайтлиста', 'info');
+            });
+
+            // Редактирование чипа при клике на текст
+            chip.querySelector('.yd-pl-chip-text').addEventListener('click', () => {
+                const input = document.getElementById('yd-pl-whitelist-input');
+                if (input) {
+                    input.value = domain;
+                    input.focus();
+                    removeFromWhitelist(domain);
+                    renderWhitelistChips();
+                    updateWhitelistBadge();
+                    syncShieldsWithWhitelist();
+                }
+            });
+
+            container.appendChild(chip);
+        });
+
+        // Автоскролл к input
+        const wrapper = document.getElementById('yd-pl-whitelist-wrapper');
+        if (wrapper) {
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
+        // Показать/скрыть кнопку очистки
+        const clearBtn = document.getElementById('yd-pl-clear-whitelist');
+        if (clearBtn) {
+            clearBtn.style.display = (settings.whitelist || []).length > 0 ? 'flex' : 'none';
+        }
+
+        updateWhitelistBadge();
     }
 
     // Dropdown для смены оператора
@@ -8736,6 +9248,79 @@
             });
         }
 
+        // === Переключение режимов Фильтр / Вайтлист ===
+        document.querySelectorAll('input[name="yd-pl-panel-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const mode = e.target.value;
+                settings.panelMode = mode;
+                saveSettings();
+
+                const filterContent = document.getElementById('yd-pl-filter-content');
+                const whitelistContent = document.getElementById('yd-pl-whitelist-content');
+                const panel = document.getElementById('yd-pl-panel');
+
+                if (mode === 'whitelist') {
+                    filterContent.style.display = 'none';
+                    whitelistContent.style.display = 'block';
+                    panel.classList.add('yd-pl-panel-whitelist-mode');
+                } else {
+                    filterContent.style.display = 'block';
+                    whitelistContent.style.display = 'none';
+                    panel.classList.remove('yd-pl-panel-whitelist-mode');
+                }
+            });
+        });
+
+        // === Ввод в вайтлист ===
+        const whitelistInput = document.getElementById('yd-pl-whitelist-input');
+        const whitelistWrapper = document.getElementById('yd-pl-whitelist-wrapper');
+
+        if (whitelistInput) {
+            if (whitelistWrapper) {
+                whitelistWrapper.addEventListener('click', () => whitelistInput.focus());
+            }
+
+            whitelistInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const value = whitelistInput.value.trim();
+                    if (value) {
+                        // Добавить все домены (разделённые запятыми)
+                        const items = value.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+                        let addedCount = 0;
+                        items.forEach(domain => {
+                            if (addToWhitelist(domain)) {
+                                addedCount++;
+                            }
+                        });
+                        if (addedCount > 0) {
+                            showNotification(`Добавлено в Вайтлист: ${addedCount}`, 'success');
+                        }
+                        whitelistInput.value = '';
+                        renderWhitelistChips();
+                        syncShieldsWithWhitelist();
+                        updatePreviewHighlight();
+                    }
+                }
+            });
+        }
+
+        // === Очистка вайтлиста ===
+        const clearWhitelistBtn = document.getElementById('yd-pl-clear-whitelist');
+        if (clearWhitelistBtn) {
+            clearWhitelistBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm('Очистить весь Вайтлист?')) {
+                    settings.whitelist = [];
+                    saveSettings();
+                    renderWhitelistChips();
+                    syncShieldsWithWhitelist();
+                    updatePreviewHighlight();
+                    showNotification('Вайтлист очищен', 'info');
+                }
+            });
+        }
+
         // Mode toggle (AND/OR)
         document.querySelectorAll('input[name="yd-pl-mode"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -8745,8 +9330,35 @@
             });
         });
 
-        // Main button
+        // Main button (Заблокировать)
         document.getElementById('yd-pl-apply').addEventListener('click', togglePlacements);
+
+        // Hard Reset — Сбросить всё
+        const hardResetBtn = document.getElementById('yd-pl-hard-reset');
+        if (hardResetBtn) {
+            hardResetBtn.addEventListener('click', () => {
+                // Снять все галочки
+                const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+                const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : document.querySelectorAll('tbody tr');
+
+                let uncheckedCount = 0;
+                rows.forEach(row => {
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox && checkbox.checked && !checkbox.disabled) {
+                        clickWithoutScroll(checkbox);
+                        uncheckedCount++;
+                    }
+                });
+
+                // Очистка Smart State
+                manualIncluded.clear();
+                manualExcluded.clear();
+                autoSelected.clear();
+
+                updateButtonState();
+                showNotification(`Сброшено: ${uncheckedCount}`, 'info');
+            });
+        }
 
         // Reset кнопка в расширенных фильтрах - очистка ТОЛЬКО числовых фильтров
         const resetFiltersBtn = document.getElementById('yd-pl-reset-filters');
@@ -8980,6 +9592,9 @@
             --yd-text-muted: #9CA3AF;
             --yd-success: #10B981;
             --yd-danger: #EF4444;
+            --yd-green: #10B981;
+            --yd-green-light: #D1FAE5;
+            --yd-green-dark: #059669;
         }
 
         #yd-pl-panel {
@@ -9785,6 +10400,208 @@
         .yd-pl-body::-webkit-scrollbar { width: 5px; }
         .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
         .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
+
+        /* ==================== iOS Segmented Control — Фильтр / Вайтлист ==================== */
+        .yd-pl-mode-switcher {
+            padding: 0 12px 12px;
+        }
+        .yd-pl-segmented-ios {
+            display: flex;
+            position: relative;
+            background: var(--yd-bg-secondary);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .yd-pl-segmented-ios input[type="radio"] {
+            display: none;
+        }
+        .yd-pl-segmented-ios label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--yd-text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 1;
+            position: relative;
+        }
+        .yd-pl-segmented-ios label svg {
+            width: 14px;
+            height: 14px;
+            stroke-width: 2;
+        }
+        .yd-pl-segmented-ios input[type="radio"]:checked + label {
+            color: var(--yd-text);
+            background: var(--yd-bg);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        /* Цвет активной вкладки Вайтлист */
+        .yd-pl-segmented-ios input#yd-pl-mode-whitelist:checked + label {
+            color: var(--yd-green);
+            background: var(--yd-green-light);
+        }
+        
+        /* Badge количества в вайтлисте */
+        .yd-pl-whitelist-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            background: var(--yd-green);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 9px;
+            margin-left: 4px;
+        }
+        
+        /* Контент вкладок */
+        .yd-pl-tab-content {
+            animation: yd-pl-tab-fade 0.2s ease;
+        }
+        @keyframes yd-pl-tab-fade {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* ==================== Чипы Вайтлиста (зелёные) ==================== */
+        .yd-pl-chip-whitelist {
+            background: var(--yd-green-light) !important;
+            border-color: var(--yd-green) !important;
+            color: var(--yd-green-dark) !important;
+        }
+        .yd-pl-chip-whitelist .yd-pl-chip-icon {
+            display: flex;
+            align-items: center;
+            color: var(--yd-green);
+        }
+        .yd-pl-chip-whitelist .yd-pl-chip-remove:hover {
+            color: var(--yd-danger);
+        }
+        
+        /* Подсказка вайтлиста */
+        .yd-pl-whitelist-hint {
+            font-size: 11px;
+            color: var(--yd-text-muted);
+            margin: 8px 0 0;
+            line-height: 1.4;
+        }
+        
+        /* Wrapper вайтлиста */
+        .yd-pl-whitelist-wrapper {
+            border-color: var(--yd-green) !important;
+        }
+        .yd-pl-whitelist-wrapper:focus-within {
+            border-color: var(--yd-green) !important;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+        }
+        .yd-pl-whitelist-input::placeholder {
+            color: var(--yd-green);
+            opacity: 0.5;
+        }
+        
+        /* ==================== Щиты в таблице ==================== */
+        .yd-pl-shield {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: 6px;
+            color: #9CA3AF;
+            opacity: 0.3;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            vertical-align: middle;
+        }
+        .yd-pl-shield:hover {
+            opacity: 1;
+            color: var(--yd-green);
+            transform: scale(1.1);
+        }
+        .yd-pl-shield-active {
+            opacity: 1 !important;
+            color: var(--yd-green) !important;
+        }
+        .yd-pl-shield-active svg {
+            fill: var(--yd-green-light);
+        }
+        
+        /* Защищённые строки (Вайтлист) */
+        .yd-pl-row-protected {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.08), transparent) !important;
+        }
+        .yd-pl-row-protected td:first-child {
+            border-left: 3px solid var(--yd-green) !important;
+        }
+        
+        /* ==================== Highlight эффект при синхронизации ==================== */
+        .yd-pl-highlight-pulse {
+            animation: yd-pl-highlight 2s ease-out;
+        }
+        @keyframes yd-pl-highlight {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.2); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        
+        /* Режим Вайтлист — зелёная тема панели */
+        .yd-pl-panel-whitelist-mode {
+            --yd-primary: #10B981;
+            --yd-primary-light: #34D399;
+        }
+        
+        /* ==================== Footer с кнопками ==================== */
+        .yd-pl-footer-buttons {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        .yd-pl-footer-buttons .yd-pl-btn-primary {
+            flex: 1;
+        }
+        .yd-pl-btn-reset {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: var(--yd-bg-secondary);
+            border: 1px solid var(--yd-border);
+            border-radius: 10px;
+            color: var(--yd-text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .yd-pl-btn-reset:hover {
+            background: var(--yd-border);
+            color: var(--yd-text);
+        }
+        
+        /* ==================== Визуальное отличие авто-выделенных строк ==================== */
+        /* Авто-выделенные строки имеют голубую левую границу */
+        tbody tr.yd-pl-row-auto-selected {
+            background: rgba(32, 85, 152, 0.05) !important;
+        }
+        tbody tr.yd-pl-row-auto-selected td:first-child {
+            border-left: 3px solid var(--yd-primary) !important;
+        }
+        /* Ручные выделения имеют оранжевую левую границу */
+        tbody tr.yd-pl-row-manual-selected {
+            background: rgba(228, 105, 36, 0.05) !important;
+        }
+        tbody tr.yd-pl-row-manual-selected td:first-child {
+            border-left: 3px solid var(--yd-accent) !important;
+        }
         `;
 
         document.head.appendChild(style);
@@ -10203,6 +11020,7 @@
     init();
 
 })();
+
 
 
 
