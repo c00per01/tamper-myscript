@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 3.0.1
+// @version 3.0.2
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -7559,6 +7559,15 @@
             whitelist: [],
             history: [], // История ввода доменов
 
+            // Smart State Persistence
+            smartState: {
+                manualIncluded: [],
+                manualExcluded: []
+            },
+
+            compactMode: false,
+            onboardingShown: false,
+
             templates: [
                 {
                     name: 'Мобильные приложения',
@@ -7758,8 +7767,13 @@
         const badge = document.getElementById('yd-pl-whitelist-badge');
         if (badge) {
             const count = (settings.whitelist || []).length;
-            badge.textContent = count > 0 ? count : '';
-            badge.style.display = count > 0 ? 'inline-flex' : 'none';
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-flex';
+                badge.title = `${count} защищённых площадок`;
+            } else {
+                badge.style.display = 'none';
+            }
         }
     }
 
@@ -7817,12 +7831,26 @@
                     shield.classList.add('yd-pl-shield-active');
                     row.classList.add('yd-pl-row-protected');
                     shield.title = 'Удалить из Вайтлиста';
-                    showNotification('Добавлено в Вайтлист', 'success');
+
+                    // Снять галочку если стояла
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox && checkbox.checked && !checkbox.disabled) {
+                        clickWithoutScroll(checkbox);
+                        // Удаляем из авто-выделенных и ручных
+                        autoSelected.delete(domain);
+                        manualIncluded.delete(domain);
+                        showNotification('Добавлено в Вайтлист, галочка снята', 'success');
+                    } else {
+                        showNotification('Добавлено в Вайтлист', 'success');
+                    }
                 }
 
                 updateWhitelistBadge();
                 renderWhitelistChips();
+                // Также синхронизируем щиты (если домен встречается несколько раз)
+                syncShieldsWithWhitelist();
                 updatePreviewHighlight();
+                updateButtonState(); // Обновить счётчик кнопок
             });
 
             // Вставляем щит в начало первой ячейки
@@ -7855,24 +7883,63 @@
 
     // MutationObserver для динамически подгружаемых строк
     function setupTableObserver() {
-        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
-        if (!tableWrap) return;
+        // Наблюдаем за контейнером таблицы
+        const tableContainer = document.querySelector('.b-stat-platform__table-wrap')
+            || document.querySelector('.b-stat-table')
+            || document.querySelector('.b-campaign-stat');
 
-        const observer = new MutationObserver((mutations) => {
-            let needsUpdate = false;
-            mutations.forEach(mutation => {
-                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                    needsUpdate = true;
+        if (!tableContainer) {
+            // Fallback: наблюдаем за body и ищем таблицу
+            const bodyObserver = new MutationObserver(() => {
+                const table = document.querySelector('.b-stat-platform__table-wrap');
+                if (table && !table.dataset.ydObserved) {
+                    table.dataset.ydObserved = 'true';
+                    setupTableObserverInternal(table);
+                    reinitializeTable();
                 }
             });
-            if (needsUpdate) {
-                injectShields();
-                setupManualCheckboxTracking();
-                updatePreviewHighlight();
+            bodyObserver.observe(document.body, { childList: true, subtree: true });
+            return;
+        }
+
+        setupTableObserverInternal(tableContainer);
+    }
+
+    function setupTableObserverInternal(container) {
+        if (container.dataset.ydObserved) return;
+        container.dataset.ydObserved = 'true';
+
+        const observer = new MutationObserver((mutations) => {
+            let needsReinit = false;
+
+            mutations.forEach(mutation => {
+                // Проверяем добавление новых строк (смена страницы или подгрузка)
+                if (mutation.type === 'childList') {
+                    const addedRows = [...mutation.addedNodes].filter(
+                        n => n.nodeType === 1 && (n.tagName === 'TR' || n.querySelector?.('tr'))
+                    );
+                    if (addedRows.length > 0) needsReinit = true;
+                }
+            });
+
+            if (needsReinit) {
+                // Debounce реинициализации
+                clearTimeout(window.ydReinitTimeout);
+                window.ydReinitTimeout = setTimeout(reinitializeTable, 100);
             }
         });
 
-        observer.observe(tableWrap, { childList: true, subtree: true });
+        observer.observe(container, { childList: true, subtree: true });
+    }
+
+    function reinitializeTable() {
+        // console.log('[YD-PL] Реинициализация таблицы...');
+        injectShields();
+        setupManualCheckboxTracking();
+        // Восстанавливаем стейт? У нас он в переменных, но можно подтянуть из настроек на всякий
+        loadSmartState();
+        updatePreviewHighlight();
+        updateButtonState();
     }
 
     // Отслеживание ручных действий пользователя на чекбоксах (Smart State)
@@ -7883,11 +7950,16 @@
         const checkboxes = tableWrap.querySelectorAll('tbody tr input[type="checkbox"]');
 
         checkboxes.forEach(checkbox => {
-            // Пропускаем если уже отслеживается
-            if (checkbox.dataset.ydTracked) return;
+            // Удаляем старый слушатель если есть, чтобы не было дублей
+            if (checkbox._ydChangeHandler) {
+                checkbox.removeEventListener('change', checkbox._ydChangeHandler);
+            }
+            // Пропускаем если уже отслеживается (но лучше обновить хандлер)
+            // if (checkbox.dataset.ydTracked) return;
+
             checkbox.dataset.ydTracked = 'true';
 
-            checkbox.addEventListener('change', (e) => {
+            checkbox._ydChangeHandler = (e) => {
                 const row = checkbox.closest('tr');
                 if (!row) return;
 
@@ -7907,12 +7979,17 @@
                     autoSelected.delete(domain);
                 }
 
+                // Сохраняем состояние
+                saveSmartState();
+
                 // Обновляем кнопку и визуальные маркеры
                 setTimeout(() => {
                     updateButtonState();
                     updateRowVisualMarkers();
                 }, 50);
-            });
+            };
+
+            checkbox.addEventListener('change', checkbox._ydChangeHandler);
         });
     }
 
@@ -8216,6 +8293,81 @@
     const manualExcluded = new Map(); // Ручные снятия галочек пользователя
     const autoSelected = new Set();   // Автоматически выделенные скриптом (по домену)
 
+    // Загрузка Smart State из настроек
+    function loadSmartState() {
+        const state = settings.smartState || { manualIncluded: [], manualExcluded: [] };
+        manualIncluded.clear();
+        manualExcluded.clear();
+
+        if (Array.isArray(state.manualIncluded)) {
+            state.manualIncluded.forEach(d => manualIncluded.set(d, true));
+        }
+        if (Array.isArray(state.manualExcluded)) {
+            state.manualExcluded.forEach(d => manualExcluded.set(d, true));
+        }
+    }
+
+    // Сохранение Smart State
+    function saveSmartState() {
+        settings.smartState = {
+            manualIncluded: [...manualIncluded.keys()],
+            manualExcluded: [...manualExcluded.keys()]
+        };
+        saveSettings();
+    }
+
+    // === Helpers for Date ===
+    function getLastChangeDate() {
+        return settings.lastChangeDate || null;
+    }
+
+    function saveLastChangeDate() {
+        settings.lastChangeDate = new Date().getTime();
+        saveSettings();
+        updateLastSendInfo();
+    }
+
+    function formatDateRu(dateInput) {
+        if (!dateInput) return '';
+        const date = new Date(dateInput);
+        return date.toLocaleString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    // Получение информации о пагинации
+    function getPaginationInfo() {
+        const paginationLinks = document.querySelectorAll('.b-pager__item:not(.b-pager__item_state_disabled)');
+        const currentPageEl = document.querySelector('.b-pager__item_current');
+
+        let current = 1;
+        let total = 1;
+
+        if (currentPageEl) {
+            current = parseInt(currentPageEl.textContent, 10) || 1;
+        }
+
+        // Попытка определить общее кол-во страниц
+        // Собираем все числа из пагинатора
+        const numbers = [];
+        if (currentPageEl) numbers.push(current);
+
+        document.querySelectorAll('.b-pager__item').forEach(el => {
+            const num = parseInt(el.textContent, 10);
+            if (!isNaN(num)) numbers.push(num);
+        });
+
+        if (numbers.length > 0) {
+            total = Math.max(...numbers);
+        }
+
+        return { current, total };
+    }
+
     function togglePlacements() {
         // Теперь это кнопка "Заблокировать" — выполняет блокировку через UI Яндекса
         executeBlockAction();
@@ -8238,6 +8390,19 @@
         if (totalChecked === 0) {
             showNotification('Нет выбранных площадок', 'info');
             return;
+        }
+
+        // ПРОВЕРКА ПАГИНАЦИИ
+        const { current, total } = getPaginationInfo();
+        if (total > 1) {
+            const confirmed = confirm(
+                `⚠️ Внимание!\n\n` +
+                `Вы блокируете ${totalChecked} площадок на странице ${current} из ${total}.\n\n` +
+                `Площадки на других страницах НЕ будут заблокированы.\n\n` +
+                `Для полной блокировки пройдите по всем страницам или используйте массовую блокировку в интерфейсе Директа.\n\n` +
+                `Продолжить?`
+            );
+            if (!confirmed) return;
         }
 
         // Ищем нативную кнопку "выполнить" Яндекса
@@ -8264,6 +8429,8 @@
                     manualIncluded.clear();
                     manualExcluded.clear();
                     autoSelected.clear();
+                    saveSmartState(); // Сохраняем очищенный стейт
+                    saveLastChangeDate(); // Сохраняем дату отправки
                     updateButtonState();
                 }, 1000);
             } else {
@@ -8323,22 +8490,42 @@
         if (totalChecked > 0) {
             btn.classList.remove('yd-pl-btn-deselect');
             btn.classList.add('yd-pl-btn-primary', 'yd-pl-btn-danger');
-            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-            </svg>`;
-            text.textContent = `Заблокировать (${totalChecked})`;
-            btn.disabled = false;
-            btn.style.background = '#EF4444';
-            btn.style.borderColor = '#EF4444';
+
+            // Если режим whitelist - кнопка другая (зеленая)
+            if (settings.panelMode === 'whitelist') {
+                // В режиме Whitelist кнопка должна быть "Защитить"
+                // Это обрабатывается в переключателе режимов
+            } else {
+                icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                </svg>`;
+
+                // Добавляем инфо о пагинации
+                const { current, total } = getPaginationInfo();
+                if (total > 1) {
+                    text.textContent = `Заблокировать (${totalChecked} на стр. ${current}/${total})`;
+                } else {
+                    text.textContent = `Заблокировать (${totalChecked})`;
+                }
+
+                btn.disabled = false;
+                btn.style.background = '#EF4444';
+                btn.style.borderColor = '#EF4444';
+            }
         } else {
-            btn.classList.remove('yd-pl-btn-danger');
-            btn.classList.add('yd-pl-btn-primary');
-            icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
-            text.textContent = 'Выберите площадки';
-            btn.disabled = true;
-            btn.style.background = '';
-            btn.style.borderColor = '';
+            // Если 0
+            if (settings.panelMode === 'whitelist') {
+                // ignored here usually
+            } else {
+                btn.classList.remove('yd-pl-btn-danger');
+                btn.classList.add('yd-pl-btn-primary');
+                icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+                text.textContent = 'Выберите площадки';
+                btn.disabled = true;
+                btn.style.background = '';
+                btn.style.borderColor = '';
+            }
         }
     }
 
@@ -8548,6 +8735,12 @@
                             <div class="yd-pl-help-row"><code>=</code> равно</div>
                         </div>
                     </div>
+                    <button id="yd-pl-compact-toggle" class="yd-pl-icon-btn" title="Компактный режим">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <line x1="9" y1="3" x2="9" y2="21"/>
+                        </svg>
+                    </button>
                     <button id="yd-pl-panel-toggle" class="yd-pl-icon-btn" title="Свернуть">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -8646,6 +8839,18 @@
                         <label for="yd-pl-mode-or">Или</label>
                         <div class="yd-pl-segmented-slider"></div>
                     </div>
+                    <div class="yd-pl-condition-help" title="И — строка должна соответствовать ВСЕМ условиям одновременно.
+ИЛИ — строка выделяется если соответствует ЛЮБОМУ условию.
+
+Пример с «И»: *game + Клики от 5 → только площадки содержащие «game» И имеющие ≥5 кликов.
+
+Пример с «ИЛИ»: *game + Клики от 5 → площадки содержащие «game» ИЛИ имеющие ≥5 кликов.">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </div>
                 </div>
                 </div><!-- Конец filter-content -->
 
@@ -8699,6 +8904,32 @@
                 <div id="yd-pl-last-send-info" class="yd-pl-last-send-info" style="display: none;">
                     <span class="yd-pl-last-send-label">Последняя отправка:</span>
                     <span id="yd-pl-last-send-date" class="yd-pl-last-send-date">—</span>
+                </div>
+                
+                <!-- Легенда -->
+                <div class="yd-pl-legend" id="yd-pl-legend">
+                    <div class="yd-pl-legend-toggle" id="yd-pl-legend-toggle">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        Легенда
+                    </div>
+                    <div class="yd-pl-legend-content" style="display: none;">
+                        <div class="yd-pl-legend-item">
+                            <span class="yd-pl-legend-color" style="background: var(--yd-primary);"></span>
+                            Авто-выделено фильтром (голубой)
+                        </div>
+                        <div class="yd-pl-legend-item">
+                            <span class="yd-pl-legend-color" style="background: var(--yd-accent);"></span>
+                            Выделено вручную (оранжевый)
+                        </div>
+                        <div class="yd-pl-legend-item">
+                            <span class="yd-pl-legend-color" style="background: var(--yd-green);"></span>
+                            Защищено (зелёный щит)
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -9145,6 +9376,76 @@
         }
     });
 
+    // === Onboarding ===
+    function showOnboarding() {
+        if (settings.onboardingShown) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'yd-pl-onboarding-overlay';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;transition:opacity 0.3s ease;';
+
+        const modal = document.createElement('div');
+        modal.className = 'yd-pl-onboarding-modal';
+        modal.style.cssText = 'background:#fff;padding:30px;border-radius:12px;width:500px;max-width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.3);transform:translateY(20px);transition:transform 0.3s ease;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#333;';
+
+        modal.innerHTML = `
+            <div style="text-align:center;margin-bottom:20px;">
+                <h2 style="margin:0 0 10px;font-size:24px;color:#333;">Добро пожаловать в YD Helper! 👋</h2>
+                <p style="color:#666;font-size:15px;line-height:1.5;">Ваш помощник для работы с площадками Яндекс.Директ обновился.</p>
+            </div>
+            
+            <div style="margin-bottom:25px;text-align:left;">
+                <div style="display:flex;align-items:start;margin-bottom:15px;">
+                    <div style="background:#e3f2fd;color:#1e88e5;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0;font-weight:bold;">1</div>
+                    <div>
+                        <strong style="display:block;margin-bottom:4px;color:#333;">Умное выделение</strong>
+                        <span style="color:#555;font-size:13px;">Скрипт запоминает ручные галочки. Вы не потеряете выбор при переключении страниц.</span>
+                    </div>
+                </div>
+                
+                <div style="display:flex;align-items:start;margin-bottom:15px;">
+                    <div style="background:#e8f5e9;color:#43a047;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0;font-weight:bold;">2</div>
+                    <div>
+                        <strong style="display:block;margin-bottom:4px;color:#333;">Белый список (Щиты)</strong>
+                        <span style="color:#555;font-size:13px;">Нажмите на щит 🛡️ в таблице или переключите режим, чтобы защитить площадки от блокировки.</span>
+                    </div>
+                </div>
+                
+                <div style="display:flex;align-items:start;margin-bottom:15px;">
+                    <div style="background:#fff3e0;color:#f57c00;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0;font-weight:bold;">3</div>
+                    <div>
+                        <strong style="display:block;margin-bottom:4px;color:#333;">Пакетная вставка</strong>
+                        <span style="color:#555;font-size:13px;">Вставляйте список доменов (Excel, Word) прямо в поле фильтра.</span>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="yd-pl-onboarding-close" style="width:100%;padding:12px;background:#ffdb4d;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:15px;color:#000;transition:background 0.2s;box-shadow:0 2px 5px rgba(0,0,0,0.1);">Понятно, начать работу</button>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // Animation
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            modal.style.transform = 'translateY(0)';
+        });
+
+        const closeBtn = document.getElementById('yd-pl-onboarding-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                overlay.style.opacity = '0';
+                modal.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                    settings.onboardingShown = true;
+                    saveSettings();
+                }, 300);
+            });
+        }
+    }
+
     function setupEventListeners(panel, pill) {
         // Toggle panel with animation — свернуть в правый нижний угол
         document.getElementById('yd-pl-panel-toggle').addEventListener('click', () => {
@@ -9203,23 +9504,47 @@
 
             // Также обрабатываем paste для множественного ввода
             domainInput.addEventListener('paste', (e) => {
-                setTimeout(() => {
-                    const rawValue = domainInput.value.trim();
+                const pastedData = (e.clipboardData || window.clipboardData).getData('text');
+                e.preventDefault();
+
+                if (pastedData) {
+                    const rawValue = pastedData.trim();
                     // Если вставлено с запятыми или переносами — сразу создаём чипы
                     if (rawValue.includes(',') || rawValue.includes('\n')) {
                         const items = rawValue.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
-                        items.forEach(item => {
-                            const { operator, value } = parseInput(item);
-                            if (value) {
-                                settings.filters.patterns.push({ operator, value });
+
+                        showNotification(`Обработка ${items.length} доменов...`, 'info');
+
+                        setTimeout(() => {
+                            let addedCount = 0;
+                            items.forEach(item => {
+                                const { operator, value } = parseInput(item);
+                                if (value) {
+                                    const isDuplicate = settings.filters.patterns.some(
+                                        p => p.operator === operator && p.value.toLowerCase() === value.toLowerCase()
+                                    );
+                                    if (!isDuplicate) {
+                                        settings.filters.patterns.push({ operator, value });
+                                        addedCount++;
+                                    }
+                                }
+                            });
+
+                            if (addedCount > 0) {
+                                saveSettings();
+                                renderChips();
+                                domainInput.value = '';
+                                updatePreviewHighlight();
+                                showNotification(`Добавлено: ${addedCount} фильтров`, 'success');
+                            } else {
+                                showNotification('Ничего нового не добавлено (дубликаты)', 'info');
                             }
-                        });
-                        saveSettings();
-                        renderChips();
-                        domainInput.value = '';
-                        updatePreviewHighlight();
+                        }, 50);
+                    } else {
+                        // Обычная вставка одного значения
+                        domainInput.value = rawValue;
                     }
-                }, 0);
+                }
             });
         }
 
@@ -9426,6 +9751,100 @@
                 togglePlacements();
             }
         });
+
+        // Compact mode toggle
+        const compactToggle = document.getElementById('yd-pl-compact-toggle');
+        if (compactToggle) {
+            compactToggle.addEventListener('click', () => {
+                const panel = document.getElementById('yd-pl-panel');
+                panel.classList.toggle('yd-pl-compact');
+                settings.compactMode = panel.classList.contains('yd-pl-compact');
+                saveSettings();
+            });
+        }
+
+        // Legend toggle
+        const legendToggle = document.getElementById('yd-pl-legend-toggle');
+        if (legendToggle) {
+            legendToggle.addEventListener('click', () => {
+                const content = document.querySelector('.yd-pl-legend-content');
+                if (content) {
+                    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+        }
+
+        // Validation for numeric inputs
+        numericInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', debounce(() => {
+                    if (validateNumericFilters()) {
+                        throttledUpdatePreview();
+                    }
+                }, 300));
+            }
+        });
+
+        // Initial init
+        updateLastSendInfo();
+        setTimeout(showOnboarding, 1000);
+    }
+
+    // Throttled update
+    // Simple throttle implementation
+    function throttle(func, limit) {
+        let inThrottle;
+        return function (...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+    const throttledUpdatePreview = throttle(updatePreviewHighlight, 100);
+
+    function validateNumericFilters() {
+        const pairs = [
+            ['yd-pl-clicks-min', 'yd-pl-clicks-max'],
+            ['yd-pl-ctr-min', 'yd-pl-ctr-max'],
+            ['yd-pl-cpc-min', 'yd-pl-cpc-max'],
+            ['yd-pl-spend-min', 'yd-pl-spend-max']
+        ];
+
+        let isValid = true;
+
+        pairs.forEach(([minId, maxId]) => {
+            const minEl = document.getElementById(minId);
+            const maxEl = document.getElementById(maxId);
+
+            const minVal = parseFloat(minEl?.value);
+            const maxVal = parseFloat(maxEl?.value);
+
+            // Сбросить ошибки
+            minEl?.classList.remove('yd-pl-input-error');
+            maxEl?.classList.remove('yd-pl-input-error');
+
+            // Проверка отрицательных
+            if (minVal < 0) {
+                minEl?.classList.add('yd-pl-input-error');
+                isValid = false;
+            }
+            if (maxVal < 0) {
+                maxEl?.classList.add('yd-pl-input-error');
+                isValid = false;
+            }
+
+            // Проверка от > до
+            if (!isNaN(minVal) && !isNaN(maxVal) && minVal > maxVal) {
+                minEl?.classList.add('yd-pl-input-error');
+                maxEl?.classList.add('yd-pl-input-error');
+                isValid = false;
+            }
+        });
+
+        return isValid;
     }
 
     // Показ/скрытие иконки сброса при активных фильтрах
@@ -9460,6 +9879,132 @@
             filtersEl.textContent = hasFilters ? '●' : '';
             filtersEl.style.display = hasFilters ? 'inline' : 'none';
         }
+    }
+
+    function protectSelectedRows() {
+        const tableWrap = document.querySelector('.b-stat-platform__table-wrap') || document.querySelector('.b-stat-table');
+        const rows = tableWrap ? tableWrap.querySelectorAll('tbody tr') : [];
+
+        let protectedCount = 0;
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked && !checkbox.disabled) {
+                const domain = getDomainFromRow(row);
+                if (domain && !isInWhitelist(domain)) {
+                    addToWhitelist(domain);
+                    // Снять галочку
+                    clickWithoutScroll(checkbox);
+                    // Удалить из отслеживания
+                    manualIncluded.delete(domain);
+                    autoSelected.delete(domain);
+                    protectedCount++;
+                }
+            }
+        });
+
+        if (protectedCount > 0) {
+            renderWhitelistChips();
+            syncShieldsWithWhitelist();
+            updateWhitelistBadge();
+            updatePreviewHighlight();
+            showNotification(`Защищено: ${protectedCount} площадок`, 'success');
+        } else {
+            showNotification('Нет выбранных площадок для защиты', 'info');
+        }
+    }
+
+    function updateLastSendInfo() {
+        const container = document.getElementById('yd-pl-last-send-info');
+        const dateEl = document.getElementById('yd-pl-last-send-date');
+
+        if (!container || !dateEl) return;
+
+        const lastChange = getLastChangeDate();
+
+        if (lastChange) {
+            const formatted = formatDateRu(lastChange);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const changeDay = new Date(lastChange);
+            changeDay.setHours(0, 0, 0, 0);
+
+            const diffDays = Math.floor((today - changeDay) / (1000 * 60 * 60 * 24));
+
+            let relativeText = '';
+            if (diffDays === 0) relativeText = 'сегодня';
+            else if (diffDays === 1) relativeText = 'вчера';
+            else if (diffDays < 7) relativeText = `${diffDays} дн. назад`;
+            else relativeText = formatted;
+
+            dateEl.textContent = relativeText;
+            dateEl.title = `Точная дата: ${formatted}`;
+            container.style.display = 'flex';
+
+            // Подсветить если давно не отправляли
+            if (diffDays > 7) {
+                container.classList.add('yd-pl-last-send-warning');
+            } else {
+                container.classList.remove('yd-pl-last-send-warning');
+            }
+        } else {
+            container.style.display = 'none';
+        }
+    }
+
+    function showOnboarding() {
+        // Показываем только при первом запуске
+        if (settings.onboardingShown) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'yd-pl-onboarding-overlay';
+        overlay.innerHTML = `
+            <div class="yd-pl-onboarding-modal">
+                <div class="yd-pl-onboarding-header">
+                    <svg class="yd-pl-logo" width="32" height="32" viewBox="0 0 100 100">
+                        <circle cx="38" cy="38" r="28" fill="none" stroke="#205598" stroke-width="8"/>
+                        <line x1="58" y1="58" x2="85" y2="85" stroke="#205598" stroke-width="10" stroke-linecap="round"/>
+                        <rect x="22" y="28" width="32" height="6" rx="2" fill="#E46924"/>
+                        <rect x="22" y="42" width="24" height="6" rx="2" fill="#205598"/>
+                    </svg>
+                    <h2>Добро пожаловать в YD Helper!</h2>
+                </div>
+                <div class="yd-pl-onboarding-body">
+                    <div class="yd-pl-onboarding-step">
+                        <span class="yd-pl-onboarding-num">1</span>
+                        <div>
+                            <strong>Фильтруйте площадки</strong>
+                            <p>Введите паттерн домена (например, <code>*game</code>) и нажмите Enter.</p>
+                        </div>
+                    </div>
+                    <div class="yd-pl-onboarding-step">
+                        <span class="yd-pl-onboarding-num">2</span>
+                        <div>
+                            <strong>Используйте операторы</strong>
+                            <p><code>*</code> содержит, <code>!</code> не содержит, <code>^</code> начало, <code>$</code> конец</p>
+                        </div>
+                    </div>
+                    <div class="yd-pl-onboarding-step">
+                        <span class="yd-pl-onboarding-num">3</span>
+                        <div>
+                            <strong>Защищайте хорошие площадки</strong>
+                            <p>Кликните на щит 🛡️ рядом с площадкой, чтобы добавить её в Вайтлист.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="yd-pl-onboarding-footer">
+                    <button class="yd-pl-btn-primary" id="yd-pl-onboarding-close">Понятно, начать работу</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        document.getElementById('yd-pl-onboarding-close').addEventListener('click', () => {
+            overlay.remove();
+            settings.onboardingShown = true;
+            saveSettings();
+        });
     }
 
     function makeDraggable(element, handle) {
@@ -10401,6 +10946,75 @@
         .yd-pl-body::-webkit-scrollbar-track { background: transparent; }
         .yd-pl-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
 
+        /* Chip styles improvement */
+        .yd-pl-chip-remove { opacity: 0; transition: opacity 0.15s ease; margin-left: 4px; color: rgba(0,0,0,0.4); cursor: pointer; padding: 2px; }
+        .yd-pl-chip:hover .yd-pl-chip-remove { opacity: 1; }
+        .yd-pl-chip-remove:hover { color: var(--yd-danger); }
+
+        /* Whitelist badge */
+        .yd-pl-whitelist-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            background: var(--yd-green-light);
+            color: var(--yd-green-dark);
+            font-size: 9px;
+            font-weight: 600;
+            border-radius: 8px;
+            margin-left: 4px;
+            border: 1px solid var(--yd-green);
+        }
+
+        /* Shield visibility */
+        .yd-pl-shield { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 6px; color: #9CA3AF; opacity: 0.5; cursor: pointer; transition: all 0.2s ease; vertical-align: middle; border-radius: 4px; }
+        .yd-pl-shield:hover { opacity: 1; color: var(--yd-green); background: rgba(16, 185, 129, 0.1); transform: scale(1.1); }
+        .yd-pl-shield-active { opacity: 1 !important; color: var(--yd-green) !important; background: rgba(16, 185, 129, 0.15); }
+
+        /* Compact mode */
+        .yd-pl-panel.yd-pl-compact { width: 280px !important; }
+        .yd-pl-compact .yd-pl-section-title { font-size: 10px; }
+        .yd-pl-compact .yd-pl-filters-grid { gap: 4px; }
+        .yd-pl-compact .yd-pl-filter-row { gap: 4px; }
+        .yd-pl-compact .yd-pl-filter-row input { padding: 4px 6px; font-size: 11px; }
+        .yd-pl-compact .yd-pl-chip { padding: 2px 6px; font-size: 10px; }
+
+        /* Legend */
+        .yd-pl-legend { font-size: 10px; color: var(--yd-text-muted); margin-top: 8px; border-top: 1px dashed var(--yd-border); padding-top: 5px; }
+        .yd-pl-legend-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s; }
+        .yd-pl-legend-toggle:hover { background: var(--yd-bg-secondary); }
+        .yd-pl-legend-content { margin-top: 6px; padding: 8px; background: var(--yd-bg-secondary); border-radius: 6px; }
+        .yd-pl-legend-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+        .yd-pl-legend-color { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+        /* Last send info */
+        .yd-pl-last-send-info { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--yd-text-muted); padding: 6px 0; border-top: 1px solid var(--yd-border); margin-top: 8px; }
+        .yd-pl-last-send-warning { color: var(--yd-warning); }
+        .yd-pl-last-send-warning::before { content: '⚠️'; margin-right: 4px; }
+
+        /* Onboarding */
+        .yd-pl-onboarding-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .yd-pl-onboarding-modal { background: #fff; border-radius: 12px; padding: 30px; width: 400px; max-width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; animation: yd-pl-fade-in 0.3s ease-out; }
+        .yd-pl-onboarding-header { text-align: center; margin-bottom: 24px; }
+        .yd-pl-onboarding-header h2 { font-size: 20px; color: #111827; margin: 12px 0 0; }
+        .yd-pl-onboarding-step { display: flex; gap: 16px; margin-bottom: 20px; }
+        .yd-pl-onboarding-num { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #205598; color: #fff; border-radius: 50%; font-weight: bold; flex-shrink: 0; }
+        .yd-pl-onboarding-step strong { display: block; color: #111827; margin-bottom: 4px; }
+        .yd-pl-onboarding-step p { margin: 0; color: #6B7280; font-size: 13px; line-height: 1.5; }
+        .yd-pl-onboarding-footer { margin-top: 24px; text-align: center; }
+        .yd-pl-onboarding-footer button { width: 100%; padding: 10px; font-size: 15px; }
+        
+        @keyframes yd-pl-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Validation error */
+        .yd-pl-input-error { border-color: var(--yd-danger) !important; background: rgba(239, 68, 68, 0.05) !important; }
+
+        /* Condition help */
+        .yd-pl-condition-help { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 8px; color: var(--yd-text-muted); cursor: help; transition: color 0.2s; }
+        .yd-pl-condition-help:hover { color: var(--yd-primary); }
+
         /* ==================== iOS Segmented Control — Фильтр / Вайтлист ==================== */
         .yd-pl-mode-switcher {
             padding: 0 12px 12px;
@@ -11020,6 +11634,7 @@
     init();
 
 })();
+
 
 
 
