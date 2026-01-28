@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         My Tamper Script
 // @namespace    https://example.com/
-// @version 3.0.4
+// @version 3.0.5
 // @description  Пример userscript — меняй в Antigravity, нажимай Deploy
 // @match        https://*/*
 // @grant        none
@@ -9408,10 +9408,9 @@
 
         const modal = document.createElement('div');
         modal.className = 'yd-pl-onboarding-modal';
-        modal.style.cssText = 'background:#fff;padding:30px;border-radius:12px;width:500px;max-width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.3);transform:translateY(20px);transition:transform 0.3s ease;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#333;position:relative;';
+        modal.style.cssText = 'background:#fff;padding:30px;border-radius:12px;width:500px;max-width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.3);transform:translateY(20px);transition:transform 0.3s ease;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#333;';
 
         modal.innerHTML = `
-            <div style="position:absolute;top:10px;right:10px;cursor:pointer;padding:5px;color:#999;font-size:20px;line-height:1;" id="yd-pl-onboarding-x">×</div>
             <div style="text-align:center;margin-bottom:20px;">
                 <h2 style="margin:0 0 10px;font-size:24px;color:#333;">Добро пожаловать в YD Helper! 👋</h2>
                 <p style="color:#666;font-size:15px;line-height:1.5;">Ваш помощник для работы с площадками Яндекс.Директ обновился.</p>
@@ -9455,29 +9454,18 @@
             modal.style.transform = 'translateY(0)';
         });
 
-        // Close logic
-        const closeOnboarding = () => {
-            overlay.style.opacity = '0';
-            modal.style.transform = 'translateY(20px)';
-            setTimeout(() => {
-                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-                settings.onboardingShown = true;
-                saveSettings();
-            }, 300);
-        };
-
         const closeBtn = document.getElementById('yd-pl-onboarding-close');
-        if (closeBtn) closeBtn.addEventListener('click', closeOnboarding);
-
-        const xBtn = document.getElementById('yd-pl-onboarding-x');
-        if (xBtn) xBtn.addEventListener('click', closeOnboarding);
-
-        // Close on overlay click
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeOnboarding();
-            }
-        });
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                overlay.style.opacity = '0';
+                modal.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                    settings.onboardingShown = true;
+                    saveSettings();
+                }, 300);
+            });
+        }
     }
 
     function setupEventListeners(panel, pill) {
